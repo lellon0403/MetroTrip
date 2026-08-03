@@ -23,7 +23,6 @@ backend/
 ├─ .env.example
 ├─ Dockerfile
 ├─ pyproject.toml
-├─ requirements.txt
 └─ README.md
 ```
 
@@ -198,7 +197,6 @@ tests/test_community_service.py
 | `.dockerignore` | Docker 빌드 컨텍스트 제외 대상 정의 |
 | `Dockerfile` | 백엔드 컨테이너 이미지 정의 |
 | `pyproject.toml` | Python 버전, 의존성, Pytest와 Ruff 설정 |
-| `requirements.txt` | 백엔드 실행에 필요한 런타임 의존성 |
 | `README.md` | 설치, 실행, Swagger와 DB 초기화 안내 |
 
 `.env`, `.venv`, `__pycache__`, `.pytest_cache`, `.ruff_cache`,

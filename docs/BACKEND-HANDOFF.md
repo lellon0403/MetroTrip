@@ -134,7 +134,7 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 역·노선 정보는 데이터베이스 명세서 V1.8 구조를 기준으로 합니다.
 
 | 테이블 | 역할 |
-|---|---|---|
+|---|---|
 | `subway_lines` | 노선 마스터 |
 | `stations` | 역명·좌표·주소 |
 | `line_stations` | 노선과 역의 N:M 관계 및 노선 내 순서 |
