@@ -1,0 +1,1 @@
+"""MetroTrip backend application."""

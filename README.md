@@ -5,7 +5,7 @@
 
 **배포 주소: https://lellon0403.github.io/MetroTrip/** (`main` 푸시 시 자동 배포)
 
-> 현재 단계: **발표용 MVP (프론트엔드 단독, 백엔드 없음)**
+> 현재 단계: **프론트엔드 MVP + 백엔드 기본 골격 구성**
 > 대상 노선: **1호선 천안·아산 구간** 우선 (전체 노선은 최종 목표)
 > 만들 범위는 [docs/SPEC.md](docs/SPEC.md)에 정의되어 있습니다. 여기 없는 기능은 지금 만들지 않습니다.
 
@@ -31,11 +31,9 @@
 
 - React + Vite + TypeScript
 - 카카오맵 JavaScript SDK + 카카오 로컬(Places) API
-- 백엔드 없음 (MVP 한정)
+- FastAPI + SQLAlchemy + MySQL (백엔드 기본 골격)
 
 ## 시작하기
-
-> 아직 프로젝트 코드가 세팅되지 않았습니다. 세팅 후 아래 내용이 실제로 동작합니다.
 
 ```bash
 cd frontend
@@ -48,6 +46,8 @@ npm install
 ```bash
 npm run dev
 ```
+
+백엔드 실행 방법은 [backend/README.md](backend/README.md)를 참고하세요.
 
 ### 카카오 API 키 설정
 
