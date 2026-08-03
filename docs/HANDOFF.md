@@ -26,7 +26,7 @@
 ### 만들어져 있는 것
 
 ```
-src/
+frontend/src/
 ├─ api/stations.ts             역 데이터 접근 계층 (async, 나중에 fetch로 교체)
 ├─ api/places.ts               역 주변 장소 접근 계층 (지금은 탕정역 2곳만)
 ├─ data/stations.json          1호선 천안·아산 11개 역 (배열 순서 = 노선 순서)
@@ -44,7 +44,7 @@ src/
 ├─ components/RoutePlan/       경로 프리뷰
 ├─ components/Timetable/       시간표 프리뷰
 ├─ components/MyPage/          마이페이지 프리뷰
-├─ lib/asset.ts                public/ 파일 주소 만들기 (배포 경로 대응)
+├─ lib/asset.ts                frontend/public/ 파일 주소 만들기 (배포 경로 대응)
 └─ App.tsx                     화면 전환 + 선택 역 상태
 ```
 
@@ -71,14 +71,14 @@ cd MetroTrip
 
 ### ② 최신 코드 받기
 
-앱 코드는 이제 `main`에 있습니다. 새 작업은 `main`에서 브랜치를 따서 시작하세요.
+앱 코드는 이제 `main`에 있습니다. 새 작업은 `develop`에서 브랜치를 따서 시작하세요.
 
 ```bash
 git fetch origin
 ```
 
 ```bash
-git checkout main
+git checkout develop
 ```
 
 ```bash
@@ -88,18 +88,22 @@ git pull
 ### ③ 패키지 설치
 
 ```bash
+cd frontend
+```
+
+```bash
 npm install
 ```
 
-### ④ `.env` 만들기 ← 이걸 빼먹으면 지도가 안 뜹니다
+### ④ `frontend/.env` 만들기 ← 이걸 빼먹으면 지도가 안 뜹니다
 
-`.env`는 GitHub에 올라가지 않습니다. **노트북에서 직접 만들어야 합니다.**
+`frontend/.env`는 GitHub에 올라가지 않습니다. **노트북에서 직접 만들어야 합니다.**
 
 ```bash
 cp .env.example .env
 ```
 
-그다음 `.env` 파일을 열어 값을 채웁니다.
+그다음 `frontend/.env` 파일을 열어 값을 채웁니다.
 
 ```
 VITE_KAKAO_MAP_KEY=여기에_JavaScript_키
@@ -154,7 +158,7 @@ Git 규칙·검증 규칙·한국어 응답 같은 팀 규칙은 **노트북에�
 | `http://192.168.x.x:5173` (LAN) | ❌ 401 |
 
 - **반드시 `localhost`로 접속**하세요. `127.0.0.1`은 안 됩니다
-- 포트는 `vite.config.ts`에서 5173으로 고정해 뒀습니다 (`strictPort`).
+- 포트는 `frontend/vite.config.ts`에서 5173으로 고정해 뒀습니다 (`strictPort`).
   5173이 사용 중이면 서버가 **에러를 내고 멈춥니다.** 이건 의도한 동작입니다 —
   조용히 다른 포트로 옮겨가면 원인을 못 찾기 때문입니다.
   이때는 5173을 쓰는 다른 프로그램을 끄세요
@@ -181,7 +185,7 @@ Git 규칙·검증 규칙·한국어 응답 같은 팀 규칙은 **노트북에�
 
 무료 쿼터: 지도 SDK 30만건/일, 장소 검색 10만건/일 — 데모에는 충분합니다.
 
-### ⑤ `public/` 이미지는 `asset()` 을 거쳐서 쓴다
+### ⑤ `frontend/public/` 이미지는 `asset()` 을 거쳐서 쓴다
 
 GitHub Pages 는 `https://lellon0403.github.io/MetroTrip/` 하위로 서비스됩니다.
 그래서 `<img src="/logo.png">` 처럼 슬래시로 시작하는 주소를 쓰면
@@ -194,7 +198,7 @@ import { asset } from '../../lib/asset';
 
 ### ⑥ `max-w-md` 같은 클래스는 쓰면 안 된다
 
-`src/index.css`의 `@theme`에서 `--spacing-md: 16px`를 정의해 뒀기 때문에,
+`frontend/src/index.css`의 `@theme`에서 `--spacing-md: 16px`를 정의해 뒀기 때문에,
 같은 이름을 쓰는 `max-w-md` / `w-lg` 등이 **28rem이 아니라 16px로 계산**됩니다.
 글자가 한 줄에 하나씩 떨어지면 이 문제입니다. `max-w-[28rem]`처럼 값을 직접 적으세요.
 (`max-w-4xl`처럼 이름이 겹치지 않는 것은 정상 동작합니다)
@@ -222,7 +226,7 @@ import { asset } from '../../lib/asset';
 ### 이미 되어 있는 것 (코드)
 
 - `.github/workflows/deploy.yml` — `main`에 푸시되면 자동 빌드·배포
-- `vite.config.ts` — 빌드 시에만 `base: '/MetroTrip/'` 적용
+- `frontend/vite.config.ts` — 빌드 시에만 `base: '/MetroTrip/'` 적용
   (개발 서버는 `/` 그대로라 `localhost:5173` 접속 방식은 바뀌지 않음)
 
 ### 저장소 설정 (완료됨 — 재설정 시 참고)
@@ -264,7 +268,7 @@ import { asset } from '../../lib/asset';
 ## 6. 팀원이 로컬에서 실행해보고 싶다고 할 때
 
 배포 전이라면 위 **2번 세팅 절차**를 그대로 전달하면 됩니다.
-`.env`의 키는 GitHub에 없으므로 **Discord DM 등으로 따로** 전달해야 합니다.
+`frontend/.env`의 키는 GitHub에 없으므로 **Discord DM 등으로 따로** 전달해야 합니다.
 (채팅방이나 스크린샷으로 키를 공유하지 마세요)
 
 카카오에 `http://localhost:5173`이 등록되어 있고, 팀원 PC에서도 주소가 같으므로

@@ -35,9 +35,9 @@
 
 ## 2026-07-29 — 로고 · 실제 노선도 이미지 적용 (브랜치: `feat/fe-logo-metromap-image`)
 - 한 것:
-  - **로고 적용** — `public/logo.png`. 받은 원본은 흰 여백이 크고 780KB 였어서,
+  - **로고 적용** — `frontend/public/logo.png`. 받은 원본은 흰 여백이 크고 780KB 였어서,
     여백을 잘라내고 배경을 투명하게 만든 뒤 200px 높이로 줄였다 (→ 76KB)
-  - **수도권 전체 노선도를 실제 이미지로 교체** — `public/metro-map.png`.
+  - **수도권 전체 노선도를 실제 이미지로 교체** — `frontend/public/metro-map.png`.
     `seoulSubway.png` 를 팔레트 PNG 로 압축 (2.8MB → 631KB, 2800px 폭).
     글자 선명도는 확인함
   - 직접 그린 SVG 노선도는 **`노선 강조 보기` 버튼으로 남겨 뒀다.**
@@ -46,10 +46,10 @@
   - 노선도가 화면 폭에 맞추면 글씨가 작아서 **`크게 보기` 버튼** 추가
 - 다음 할 것: 장소 마커를 카테고리 검색으로 확장 (SPEC 6단계 나머지)
 - 막힌 것 / 공유할 것:
-  - **`public/` 이미지는 반드시 `asset()` 을 거쳐 쓸 것.** 슬래시로 시작하는 주소를 쓰면
+  - **`frontend/public/` 이미지는 반드시 `asset()` 을 거쳐 쓸 것.** 슬래시로 시작하는 주소를 쓰면
     로컬에서는 되는데 배포본에서만 404 가 난다 (HANDOFF ⑤ 참고)
   - 프로젝트 루트에 원본 이미지 3개(`ChatGPT_Image_...png`, `seoulSubway.png`,
-    `nuua_metro_seoul_korean.png`)가 남아 있다. 가공본이 `public/` 에 들어갔으니 지워도 된다.
+    `nuua_metro_seoul_korean.png`)가 남아 있다. 가공본이 `frontend/public/`에 들어갔으니 지워도 된다.
     용량이 커서 커밋에는 넣지 않았다
   - 로고 워드마크는 `metrop` 인데 앱 이름·저장소명은 `MetroTrip` 그대로 두기로 함
 
@@ -59,13 +59,13 @@
 - 한 것:
   - **좌측 사이드바 → 상단 가로 내비게이션**. 지도를 훨씬 넓게 쓰게 됨
   - **마이페이지 프리뷰** 추가 (프로필·즐겨찾기·후기·계정 관리, 전부 예시)
-  - **수도권 간략 노선도를 SVG로 직접 제작** (`src/data/metroLines.ts`).
+  - **수도권 간략 노선도를 SVG로 직접 제작** (`frontend/src/data/metroLines.ts`).
     공식 이미지를 쓰지 않았고, 노선에 마우스를 올리면 그 노선만 강조되고
     나머지는 흐려진다. 역 이름은 강조된 노선에만 뜬다 (안 그러면 도심에서 글자가 겹침)
   - **탕정역 장소 마커 2곳** (써브웨이 아산탕정점 / 매화공원) → 클릭 시 인포윈도우.
     좌표·주소는 카카오 로컬 검색으로 실제 값 확인해서 넣음
 - 다음 할 것: 장소 마커를 카테고리 검색으로 확장 (SPEC 6단계 나머지).
-  건드릴 파일: `src/api/places.ts`, `src/components/MapView/MapView.tsx`
+  건드릴 파일: `frontend/src/api/places.ts`, `frontend/src/components/MapView/MapView.tsx`
 - 막힌 것 / 공유할 것:
   - **지도에 원래 보이는 상점 아이콘은 카카오가 그린 것이라 클릭 이벤트를 붙일 수 없다.**
     클릭이 되는 건 우리가 직접 찍은 마커뿐. 그래서 두 곳을 직접 마커로 찍었다
@@ -86,9 +86,9 @@
   - `docs/SPEC.md`에 **2-1 발표용 프리뷰 화면** 절 추가 (범위 확장을 문서에 먼저 반영)
   - 버그 2건 수정 — 아래 참고
 - 다음 할 것: SPEC 6단계 (반경 1km 장소 검색 → 마커 표시).
-  건드릴 파일: `src/api/places.ts`(신규), `src/components/MapView/MapView.tsx`
+  건드릴 파일: `frontend/src/api/places.ts`(신규), `frontend/src/components/MapView/MapView.tsx`
 - 막힌 것 / 공유할 것:
-  - **`max-w-md` 같은 클래스를 쓰면 안 됨** — `index.css`에서 `--spacing-md`를 정의해 둔 탓에
+  - **`max-w-md` 같은 클래스를 쓰면 안 됨** — `frontend/src/index.css`에서 `--spacing-md`를 정의해 둔 탓에
     `max-w-md`가 28rem이 아니라 **16px**로 계산된다. `max-w-[28rem]`처럼 값을 직접 적을 것.
     (`MapView`의 카카오 에러 문구가 이 버그로 한 글자씩 줄바꿈되고 있었음 — 같이 고침)
   - 지도 확대/축소 시 "탕정역"이 깜빡이는 현상은 **우리 코드 문제가 아님**.
@@ -101,10 +101,10 @@
 ## 2026-07-23 — 프론트 4~5단계 (브랜치: `feat/fe-station-list`)
 - 한 것: SPEC 4~5단계 — `StationList` 컴포넌트(검색+목록), 역 클릭 시 `MapView` 중심 이동 연결
 - 다음 할 것: SPEC 6단계 (반경 1km 장소 검색 → 마커 표시).
-  건드릴 파일: `src/api/places.ts`(신규), `src/components/MapView/MapView.tsx`
+  건드릴 파일: `frontend/src/api/places.ts`(신규), `frontend/src/components/MapView/MapView.tsx`
 - 막힌 것 / 공유할 것: 없음
 
-> 집 PC에는 `.env`가 없어 지도 연동을 확인하지 못했으나,
+> 집 PC에는 `frontend/.env`가 없어 지도 연동을 확인하지 못했으나,
 > 이후 데스크톱에서 검증 완료 — 역 클릭 시 지도 중심이 해당 역 좌표로 이동,
 > 검색/빈 결과/검색어 삭제 동작 정상, 콘솔 에러 없음, 빌드 통과.
 
@@ -113,7 +113,7 @@
 ## 2026-07-23 — GitHub Pages 배포 완료
 - 한 것:
   - Vercel은 로그인(복구 코드 요구)이 막혀 **GitHub Pages로 전환**
-  - `.github/workflows/deploy.yml` + `vite.config.ts` base 설정
+  - `.github/workflows/deploy.yml` + `frontend/vite.config.ts` base 설정
   - 배포 성공 확인 → **https://lellon0403.github.io/MetroTrip/**
   - `feat/fe-project-setup` 브랜치 main 병합 (PR #3)
 - 다음 할 것: SPEC 4~5단계 (역 목록 UI + 클릭 시 지도 이동) — 위 항목에서 완료됨
@@ -129,13 +129,13 @@
 - 한 것:
   - SPEC 1단계 — Vite + React 19 + TypeScript 세팅
   - SPEC 2단계 — 카카오맵 SDK 연동, 탕정역 기준 지도 표시 (브라우저 확인 완료)
-  - SPEC 3단계 — 1호선 천안·아산 구간 11개 역 데이터 + `src/api/stations.ts`
+  - SPEC 3단계 — 1호선 천안·아산 구간 11개 역 데이터 + `frontend/src/api/stations.ts`
 - 다음 할 것: SPEC 4~5단계 (역 목록 UI + 클릭 시 지도 이동).
-  건드릴 파일: `src/components/StationList/*`, `src/App.tsx`
+  건드릴 파일: `frontend/src/components/StationList/*`, `frontend/src/App.tsx`
 - 막힌 것 / 공유할 것: 아래 카카오 설정 참고
 
 ### 카카오 설정 (팀원 각자 필요)
-1. `.env.example`을 복사해 `.env` 생성 → `VITE_KAKAO_MAP_KEY`에 **JavaScript 키** 입력
+1. `frontend/.env.example`을 복사해 `frontend/.env` 생성 → `VITE_KAKAO_MAP_KEY`에 **JavaScript 키** 입력
    (REST API 키 아님)
 2. 키는 팀에서 공유받아 쓸 것. **각자 새 앱을 만들지 말 것** —
    카카오맵 무료 쿼터는 계정당 **첫 번째로 활성화한 앱에만** 제공되며,

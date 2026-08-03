@@ -38,6 +38,10 @@
 > 아직 프로젝트 코드가 세팅되지 않았습니다. 세팅 후 아래 내용이 실제로 동작합니다.
 
 ```bash
+cd frontend
+```
+
+```bash
 npm install
 ```
 
@@ -52,13 +56,13 @@ npm run dev
 3. **플랫폼 → Web 플랫폼 등록**에 사용할 도메인 추가
    - 로컬 개발: `http://localhost:5173`
    - 배포 시: 배포 URL도 함께 등록
-4. 프로젝트 루트에 `.env` 파일 생성 후 아래 내용 작성
+4. `frontend/.env.example`을 복사해 `frontend/.env` 파일을 만든 후 아래 내용 작성
 
 ```
 VITE_KAKAO_MAP_KEY=발급받은_JavaScript_키
 ```
 
-> `.env`는 `.gitignore`에 포함되어 있습니다. **절대 커밋하지 마세요.**
+> `frontend/.env`는 `.gitignore`에 포함되어 있습니다. **절대 커밋하지 마세요.**
 > 키가 커밋되면 즉시 팀에 알리고 카카오 콘솔에서 키를 재발급해야 합니다.
 
 ## 팀

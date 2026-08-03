@@ -43,8 +43,8 @@ F1~F5와 달리 **실제로 동작하지 않아도 됩니다.** 정지된 화면
 
 ### 수도권 노선도 — 이미지 + 끌어보는 뷰어
 
-`public/metro-map.png` 한 장을 지도처럼 **끌어서 움직이고 휠로 확대**해서 봅니다
-(`src/components/LineMap/MetroMapPanel.tsx`).
+`frontend/public/metro-map.png` 한 장을 지도처럼 **끌어서 움직이고 휠로 확대**해서 봅니다
+(`frontend/src/components/LineMap/MetroMapPanel.tsx`).
 
 - 스크롤바 대신 **잡아 끌기**로 움직입니다. 노선도는 세로로도 길어서
   가로 스크롤바만으로는 아래쪽을 보기 어려웠습니다.
@@ -54,7 +54,7 @@ F1~F5와 달리 **실제로 동작하지 않아도 됩니다.** 정지된 화면
   **최소 900px 폭은 유지**하고 화면 밖으로 나가는 부분은 끌어서 봅니다.
 - 확대 한계는 원본 크기(100%)입니다. 그 이상은 뭉개집니다.
 - 이미지는 **팔레트 PNG로 압축**해서 넣습니다 (2.8MB → 631KB). 원본을 그대로 올리면 느립니다.
-- 이미지 경로는 반드시 `src/lib/asset.ts`의 `asset()`을 거칩니다.
+- 이미지 경로는 반드시 `frontend/src/lib/asset.ts`의 `asset()`을 거칩니다.
   GitHub Pages가 `/MetroTrip/` 하위로 서비스되기 때문에 `/metro-map.png`로 적으면 배포본에서 404가 납니다.
 
 > 이전에 직접 그린 SVG 도식 노선도(`metroLines.ts` / `MetroMap.tsx`)가 있었으나,
@@ -89,17 +89,17 @@ F1~F5와 달리 **실제로 동작하지 않아도 됩니다.** 정지된 화면
 - 검색 결과를 마커로 표시, 마커 클릭 시 인포윈도우로 장소명/주소 노출
 
 > **지금 상태(발표용)**: 카카오 검색을 매번 호출하지 않고, 탕정역 두 곳
-> (써브웨이 아산탕정점 / 매화공원)만 `src/data/places.json`에 넣어 두고 마커로 찍습니다.
+> (써브웨이 아산탕정점 / 매화공원)만 `frontend/src/data/places.json`에 넣어 두고 마커로 찍습니다.
 > 좌표·주소는 카카오 로컬 검색으로 실제 값을 확인해 넣었습니다.
 > 데이터 형태는 **나중에 백엔드가 내려줄 응답에 맞춰** 잡아 뒀으므로
-> (`src/types/place.ts`), 연동 시 `src/api/places.ts` 내부만 fetch로 바꾸면 됩니다.
+> (`frontend/src/types/place.ts`), 연동 시 `frontend/src/api/places.ts` 내부만 fetch로 바꾸면 됩니다.
 >
 > 참고: 지도에 원래 보이는 상점 아이콘들은 **카카오가 그린 것이라 우리가 클릭 이벤트를
 > 붙일 수 없습니다.** 클릭이 되는 건 우리가 직접 찍은 마커뿐입니다.
 
 ## 6. 역 데이터
 
-- 백엔드/DB 없이 프론트에 **정적 JSON**으로 둔다 (`src/data/stations.json`)
+- 백엔드/DB 없이 프론트에 **정적 JSON**으로 둔다 (`frontend/src/data/stations.json`)
 - **수도권 전철 1호선** 중에서도 **충남권(천안·아산 구간)** 을 우선 채운다
 - 최종 목표는 전체 노선이지만, 프로젝트 기간이 3주이므로 **1호선 → 그중 충남권 구간** 순으로 좁힌다
 
@@ -142,14 +142,14 @@ Stitch 디자인 적용 후 구조 (2026-07-26 갱신):
   - 좁은 화면(`sm` 미만)에서는 글자를 숨기고 아이콘만 남깁니다
 - **지도 화면**: 지도가 전체를 채우고, 그 위에 검색창 + 역 목록 카드가 떠 있는 형태
   - 역 클릭 → 지도 중심 이동 + 주변 장소 마커 갱신
-- 스타일은 **Stitch 디자인 토큰**(`src/index.css`의 `@theme`)을 그대로 사용합니다.
+- 스타일은 **Stitch 디자인 토큰**(`frontend/src/index.css`의 `@theme`)을 그대로 사용합니다.
   새 화면을 만들 때 색·폰트·간격을 새로 정의하지 말고 기존 토큰을 재사용하세요.
 
 ## 8. API 키 관리
 
-- 카카오 JavaScript 키는 `.env`에 `VITE_KAKAO_MAP_KEY`로 넣고 코드에서 참조
-- `.env`는 `.gitignore`에 포함 (**절대 커밋 금지**)
-- 저장소에는 `.env.example`만 커밋
+- 카카오 JavaScript 키는 `frontend/.env`에 `VITE_KAKAO_MAP_KEY`로 넣고 코드에서 참조
+- `frontend/.env`는 `.gitignore`에 포함 (**절대 커밋 금지**)
+- 저장소에는 `frontend/.env.example`만 커밋
 - 키 발급 방법과 설정법은 루트 [README.md](../README.md)에 기재
 
 ## 9. 구현 순서

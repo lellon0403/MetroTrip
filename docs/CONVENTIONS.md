@@ -75,13 +75,13 @@ docs: MVP 범위에서 다크모드 제외 명시
 
 | 영역 | 파일/폴더 | 주의사항 |
 |---|---|---|
-| 지도 | `src/components/MapView/*` | |
-| 역 목록/검색 | `src/components/StationList/*` | |
-| 역 데이터 | `src/data/stations.json` | **수정 전 공지** — 모두가 참조 |
-| 공통 타입 | `src/types/*` | **단독 수정 금지**, PR 필수 |
-| 전역 스타일 | `src/index.css`, `src/App.css` | 수정 전 공지 |
+| 지도 | `frontend/src/components/MapView/*` | |
+| 역 목록/검색 | `frontend/src/components/StationList/*` | |
+| 역 데이터 | `frontend/src/data/stations.json` | **수정 전 공지** — 모두가 참조 |
+| 공통 타입 | `frontend/src/types/*` | **단독 수정 금지**, PR 필수 |
+| 전역 스타일 | `frontend/src/index.css` | 수정 전 공지 |
 
-> `src/types/*` 와 `stations.json` 은 **모두가 참조하는 공용 파일**입니다.
+> `frontend/src/types/*` 와 `frontend/src/data/stations.json`은 **모두가 참조하는 공용 파일**입니다.
 > 여기를 바꾸면 남의 코드가 깨집니다. 바꾸기 전에 반드시 알리세요.
 
 ## 6. 문서화 규칙
@@ -120,6 +120,6 @@ docs: MVP 범위에서 다크모드 제외 명시
 
 ## 8. 환경변수
 
-- `.env`는 **절대 커밋하지 않습니다.** (`.gitignore`에 포함되어 있음)
-- 새 환경변수를 추가하면 `.env.example`에 **키 이름만** 추가하고 Discord에 공유.
+- `frontend/.env`는 **절대 커밋하지 않습니다.** (`.gitignore`에 포함되어 있음)
+- 새 프런트엔드 환경변수를 추가하면 `frontend/.env.example`에 **키 이름만** 추가하고 Discord에 공유.
 - 카카오 키가 커밋된 걸 발견하면 즉시 Discord에 알리고 **키를 재발급**합니다.
