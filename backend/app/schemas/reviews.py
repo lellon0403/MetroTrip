@@ -2,9 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-
 from pydantic import Field
-
 from app.schemas.common import ApiSchema, Pagination
 
 
@@ -23,7 +21,7 @@ class ReviewCreateRequest(ApiSchema):
     content: str = Field(min_length=1)
     start_station_id: int
     end_station_id: int
-    rating: int = Field(ge=1, le=10)
+    rating: int = Field(ge=1, le=10)    # 별점 등의 범위를 1~10으로 제한
     travel_cost: int | None = Field(default=None, ge=0)
     plan_id: int | None = None
     tags: list[str] = Field(default_factory=list)
@@ -74,7 +72,7 @@ class MediaUploadRequest(ApiSchema):
     file_name: str = Field(min_length=1, max_length=255)
     content_type: str = Field(examples=["image/jpeg"])
 
-
+# Presigned URL 등 클라이언트가 직접 S3 등에 업로드하기 위한 메타데이터 규격
 class MediaUploadResponse(ApiSchema):
     upload_url: str
     media_url: str

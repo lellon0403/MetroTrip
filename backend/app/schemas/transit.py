@@ -2,9 +2,7 @@
 
 from datetime import datetime, time
 from enum import Enum
-
 from pydantic import Field
-
 from app.schemas.common import ApiSchema, Pagination
 
 
@@ -95,7 +93,7 @@ class PlaceResponse(ApiSchema):
 class PlaceListResponse(Pagination):
     items: list[PlaceResponse]
 
-
+# 위도와 경도의 실제 지리적 범위를 Pydantic 레벨에서 제한하여 잘못된 좌표계의 삽입을 방지
 class PlaceUpsertRequest(ApiSchema):
     place_name: str = Field(min_length=1, max_length=100)
     category: PlaceCategory
@@ -106,7 +104,6 @@ class PlaceUpsertRequest(ApiSchema):
     phone: str | None = Field(default=None, max_length=20)
     station_ids: list[int] = Field(min_length=1)
     image_urls: list[str] = Field(default_factory=list)
-
 
 class PlaceUpdateRequest(ApiSchema):
     place_name: str | None = Field(default=None, min_length=1, max_length=100)

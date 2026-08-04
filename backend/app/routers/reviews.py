@@ -1,10 +1,8 @@
 """Travel review API contracts."""
 
 from typing import Annotated
-
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse
-
 from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, not_implemented
 from app.schemas.reviews import (
     MediaUploadRequest,
@@ -15,14 +13,11 @@ from app.schemas.reviews import (
     ReviewUpdateRequest,
 )
 
+
 router = APIRouter(prefix="/reviews", tags=["여행 후기"])
-media_router = APIRouter(
-    prefix="/review-media",
-    tags=["여행 후기"],
-    dependencies=AUTH_REQUIRED,
-)
+media_router = APIRouter(prefix="/review-media", tags=["여행 후기"], dependencies=AUTH_REQUIRED)
 
-
+# 후기 목록 조회
 @router.get(
     "",
     response_model=ReviewListResponse,
@@ -38,7 +33,7 @@ def list_reviews(
 ) -> JSONResponse:
     return not_implemented()
 
-
+# 후기 작성
 @router.post(
     "",
     response_model=ReviewResponse,
@@ -50,7 +45,7 @@ def list_reviews(
 def create_review(_: ReviewCreateRequest) -> JSONResponse:
     return not_implemented()
 
-
+# 후기 상세 조회
 @router.get(
     "/{review_id}",
     response_model=ReviewResponse,
@@ -60,7 +55,7 @@ def create_review(_: ReviewCreateRequest) -> JSONResponse:
 def get_review(review_id: int) -> JSONResponse:
     return not_implemented()
 
-
+# 후기 수정
 @router.patch(
     "/{review_id}",
     response_model=ReviewResponse,
@@ -71,7 +66,7 @@ def get_review(review_id: int) -> JSONResponse:
 def update_review(review_id: int, _: ReviewUpdateRequest) -> JSONResponse:
     return not_implemented()
 
-
+# 후기 삭제
 @router.delete(
     "/{review_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -82,7 +77,7 @@ def update_review(review_id: int, _: ReviewUpdateRequest) -> JSONResponse:
 def delete_review(review_id: int) -> JSONResponse:
     return not_implemented()
 
-
+# 후기 미디어 업로드 URL 발급
 @media_router.post(
     "",
     response_model=MediaUploadResponse,
@@ -91,5 +86,7 @@ def delete_review(review_id: int) -> JSONResponse:
     description="파일 URI를 경로 변수로 받지 않고 업로드용 URL을 발급합니다.",
     responses=ERROR_RESPONSES,
 )
+# API 서버가 대용량 바이너리 파일을 직접 처리하는 병목을 피하기 위해, 
+# 클라이언트가 S3 등 스토리지에 직접 업로드할 수 있는 Presigned URL 방식을 의도한 설계
 def create_media_upload(_: MediaUploadRequest) -> JSONResponse:
     return not_implemented()

@@ -1,12 +1,10 @@
 """User and favorite API contract models."""
 
 from datetime import datetime
-
 from pydantic import Field
-
 from app.schemas.common import ApiSchema
 
-
+# 열거형 대신 정규식을 통해 역할 필드를 USER나 ADMIN 문자열로만 제한하는 방식을 사용
 class UserProfileResponse(ApiSchema):
     user_id: int
     email: str
@@ -17,7 +15,6 @@ class UserProfileResponse(ApiSchema):
     created_at: datetime
     updated_at: datetime
 
-
 class UserProfileUpdateRequest(ApiSchema):
     email: str | None = Field(default=None, max_length=255)
     password: str | None = Field(default=None, min_length=8, max_length=72)
@@ -25,10 +22,8 @@ class UserProfileUpdateRequest(ApiSchema):
     nickname: str | None = Field(default=None, min_length=1, max_length=30)
     phone: str | None = Field(default=None, max_length=20)
 
-
 class WithdrawRequest(ApiSchema):
     password: str = Field(min_length=1, max_length=72)
-
 
 class FavoriteResponse(ApiSchema):
     favorite_id: int
@@ -36,7 +31,5 @@ class FavoriteResponse(ApiSchema):
     station_name: str
     created_at: datetime
 
-
 class FavoriteListResponse(ApiSchema):
     items: list[FavoriteResponse]
-

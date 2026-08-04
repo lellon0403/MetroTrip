@@ -1,47 +1,32 @@
 """Environment-based application settings."""
 
 from functools import lru_cache
-from pathlib import Path
-
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-ENV_FILE = BACKEND_DIR / ".env"
-
-
+# pydantic_settings를 사용하여 환경 변수를 검증하고 로드하는 클래스
+# .env 파일에서 설정값을 읽어오며, 'METROTRIP_' 접두사가 붙은 환경변수와 자동으로 매핑됨.
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=ENV_FILE,
+        env_file=".env",
         env_file_encoding="utf-8",
         env_prefix="METROTRIP_",
-        extra="ignore",
+        extra="ignore" # 모델에 정의되지 않은 환경변수가 들어오면 오류를 내지 않고 무시
     )
 
+    # 애플리케이션 기본 설정값
     app_name: str = "MetroTrip API"
-    app_env: str = "local"
+    app_env: str = "local"              # 현재 실행 환경
     debug: bool = False
-    api_v1_prefix: str = "/api/v1"
-    database_url: str
-    ssl_ca_path: str | None = Field(
-        default=None,
-        validation_alias="SSL_CA_PATH",
-    )
-    cors_origins: list[str] = ["http://localhost:5173"]
-    jwt_secret: str = "local-only-change-this-secret"
-    access_token_expire_minutes: int = 30
-    refresh_token_expire_days: int = 14
-    verification_code_expire_minutes: int = 5
-    verification_max_attempts: int = 5
-    email_mode: str = "console"
-    smtp_host: str | None = None
-    smtp_port: int = 587
-    smtp_username: str | None = None
-    smtp_password: str | None = None
-    smtp_from: str | None = None
-    smtp_use_tls: bool = True
+    api_v1_prefix: str = "/api/v1"      # API 버전 관리를 위한 공통 URL 라우터 접두사
+    database_url: str = (
+        "mysql+pymysql://metrotrip:metrotrip@localhost:3306/"
+        "metrotrip_db?charset=utf8mb4"
+    )                                   # 테스트 DB 연결 
+    cors_origins: list[str] = ["http://localhost:5173"]     # CORS 허용 출처
 
 
 @lru_cache
 def get_settings() -> Settings:
+    # lru_cache 데코레이터를 사용하여 Settings 인스턴스를 메모리에 캐싱(싱글톤 패턴처럼 동작)을 함
+    # 매 요청마다 파일 시스템(.env)에 접근하는 오버헤드를 줄여 성능을 최적화
     return Settings()

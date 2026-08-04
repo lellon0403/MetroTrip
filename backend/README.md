@@ -58,6 +58,12 @@ Copy-Item .env.example .env
 uvicorn app.main:app --reload
 ```
 
+런타임 의존성만 설치하려면 다음 명령을 사용할 수 있습니다.
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
 서버 확인:
 
 ```text

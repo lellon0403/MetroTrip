@@ -1,10 +1,8 @@
 """Line, station, timetable, and place API contracts."""
 
 from typing import Annotated
-
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse
-
 from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, not_implemented
 from app.schemas.common import MessageResponse
 from app.schemas.transit import (
@@ -23,23 +21,20 @@ from app.schemas.transit import (
 )
 
 router = APIRouter(tags=["노선·역·장소"])
-admin_router = APIRouter(
-    prefix="/admin/places",
-    tags=["관리자"],
-    dependencies=AUTH_REQUIRED,
-)
+admin_router = APIRouter(prefix="/admin/places", tags=["관리자"], dependencies=AUTH_REQUIRED)
 
-
+# 노선 목록 조회
 @router.get(
     "/lines",
     response_model=LineListResponse,
     summary="노선 목록 조회",
     responses=ERROR_RESPONSES,
 )
+# 지하철 노선(Line) 객체 리스트를 반환
 def list_lines() -> JSONResponse:
     return not_implemented()
 
-
+# 노선 추천 조회
 @router.get(
     "/lines/suggestions",
     response_model=LineSuggestionResponse,
@@ -50,7 +45,7 @@ def list_lines() -> JSONResponse:
 def suggest_lines() -> JSONResponse:
     return not_implemented()
 
-
+# 노선 조회 기록
 @router.post(
     "/lines/{line_id}/views",
     response_model=MessageResponse,
@@ -58,10 +53,11 @@ def suggest_lines() -> JSONResponse:
     summary="노선 조회 기록",
     responses=ERROR_RESPONSES,
 )
+# 특정 노선이 조회되었음을 기록(Telemetry/Analytics)하는 엔드포인트
 def record_line_view(line_id: int) -> JSONResponse:
     return not_implemented()
 
-
+# 역 목록 및 이름 검색
 @router.get(
     "/stations",
     response_model=StationListResponse,
@@ -76,7 +72,7 @@ def list_stations(
 ) -> JSONResponse:
     return not_implemented()
 
-
+# 역 상세 조회
 @router.get(
     "/stations/{station_id}",
     response_model=StationDetailResponse,
@@ -86,7 +82,7 @@ def list_stations(
 def get_station(station_id: int) -> JSONResponse:
     return not_implemented()
 
-
+# 역 시간표 조회
 @router.get(
     "/stations/{station_id}/timetables",
     response_model=TimetableListResponse,
@@ -97,18 +93,19 @@ def get_station(station_id: int) -> JSONResponse:
 def list_timetables(
     station_id: int,
     line_id: Annotated[int, Query()],
-    day_type: Annotated[DayType, Query()],
-    direction: Annotated[Direction, Query()],
+    day_type: Annotated[DayType, Query()],          # 평일, 주말, 공휴일 등 Enum 기반 상태값 활용
+    direction: Annotated[Direction, Query()],       # 상행/하행 방향 열거형
 ) -> JSONResponse:
     return not_implemented()
 
-
+# 역 주변 장소 조회
 @router.get(
     "/stations/{station_id}/places",
     response_model=PlaceListResponse,
     summary="역 주변 장소 조회",
     responses=ERROR_RESPONSES,
 )
+# 역과 장소 객체 간의 관계를 조회
 def list_station_places(
     station_id: int,
     category: Annotated[PlaceCategory | None, Query()] = None,
@@ -117,7 +114,7 @@ def list_station_places(
 ) -> JSONResponse:
     return not_implemented()
 
-
+# 장소 추가
 @admin_router.post(
     "",
     response_model=PlaceAdminResponse,
@@ -128,7 +125,7 @@ def list_station_places(
 def create_place(_: PlaceUpsertRequest) -> JSONResponse:
     return not_implemented()
 
-
+# 장소 수정
 @admin_router.patch(
     "/{place_id}",
     response_model=PlaceAdminResponse,
@@ -138,7 +135,7 @@ def create_place(_: PlaceUpsertRequest) -> JSONResponse:
 def update_place(place_id: int, _: PlaceUpdateRequest) -> JSONResponse:
     return not_implemented()
 
-
+# 장소 삭제
 @admin_router.delete(
     "/{place_id}",
     status_code=status.HTTP_204_NO_CONTENT,
