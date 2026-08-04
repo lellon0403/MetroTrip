@@ -1,342 +1,346 @@
-"""DB V1.8 기반 인증 서비스."""
+"""인증 비즈니스 로직."""
 
-import base64
-import hashlib
 import hmac
-import json
-import logging
 import secrets
-import smtplib
-from datetime import UTC, datetime, timedelta
-from email.message import EmailMessage
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings
-
-logger = logging.getLogger(__name__)
+from app.integrations.email import EmailDeliveryError, EmailSender
+from app.integrations.security import (
+    decode_token,
+    hash_code,
+    hash_password,
+    hash_value,
+    sign_token,
+    verify_password,
+)
+from app.models.auth import EmailVerification
+from app.repositories.auth import AuthRepository
+from app.schemas.auth import (
+    EmailVerificationConfirmRequest,
+    PasswordResetConfirmRequest,
+    RegisterRequest,
+)
 
 
 def _error(code: str, message: str, status_code: int) -> HTTPException:
-    return HTTPException(status_code, detail=message, headers={"X-Error-Code": code})
+    """인증 오류를 공통 API 오류 형식으로 만든다."""
+    return HTTPException(
+        status_code,
+        detail=message,
+        headers={"X-Error-Code": code},
+    )
 
 
-def _hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    derived = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
-    return "scrypt$16384$8$1$" + salt.hex() + "$" + derived.hex()
+def _now() -> datetime:
+    """현재 UTC 시각을 반환한다."""
+    return datetime.now(timezone.utc)
 
 
-def _verify_password(password: str, stored: str) -> bool:
+def _read_token(token: str, secret: str) -> dict[str, object]:
+    """토큰의 서명과 만료 시간을 검증한다."""
     try:
-        _, n, r, p, salt_hex, digest_hex = stored.split("$")
-        derived = hashlib.scrypt(
-            password.encode(),
-            salt=bytes.fromhex(salt_hex),
-            n=int(n),
-            r=int(r),
-            p=int(p),
-        )
-        return hmac.compare_digest(derived.hex(), digest_hex)
-    except (ValueError, TypeError):
-        return False
-
-
-def _hash_code(code: str, settings: Settings) -> str:
-    return hmac.new(
-        settings.jwt_secret.encode(), code.encode(), hashlib.sha256
-    ).hexdigest()
-
-
-def _sign_token(payload: dict[str, object], secret: str) -> str:
-    header = {"alg": "HS256", "typ": "JWT"}
-
-    def encode(value: object) -> str:
-        return (
-            base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode())
-            .rstrip(b"=")
-            .decode()
-        )
-
-    body = encode(header) + "." + encode(payload)
-    signature = hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest()
-    return body + "." + base64.urlsafe_b64encode(signature).rstrip(b"=").decode()
-
-
-def _decode_token(token: str, secret: str) -> dict[str, object]:
-    try:
-        header, body, signature = token.split(".")
-        signed = header + "." + body
-        expected = (
-            base64.urlsafe_b64encode(
-                hmac.new(secret.encode(), signed.encode(), hashlib.sha256).digest()
-            )
-            .rstrip(b"=")
-            .decode()
-        )
-        if not hmac.compare_digest(signature, expected):
-            raise ValueError
-        body += "=" * (-len(body) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(body))
-        if int(payload["exp"]) <= int(datetime.now(UTC).timestamp()):
-            raise ValueError
-        return payload
-    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return decode_token(token, secret)
+    except ValueError:
         raise _error(
-            "INVALID_TOKEN", "유효하지 않거나 만료된 인증 토큰입니다.", 401
+            "INVALID_TOKEN",
+            "유효하지 않거나 만료된 인증 토큰입니다.",
+            401,
         ) from None
-
-
-def _send_code(email: str, code: str, settings: Settings) -> None:
-    if settings.email_mode == "console":
-        logger.warning("[MetroTrip] 이메일 인증 코드 recipient=%s code=%s", email, code)
-        return
-    if not all(
-        (
-            settings.smtp_host,
-            settings.smtp_username,
-            settings.smtp_password,
-            settings.smtp_from,
-        )
-    ):
-        raise _error("EMAIL_CONFIG_MISSING", "이메일 발송 설정이 없습니다.", 500)
-    message = EmailMessage()
-    message["Subject"] = "MetroTrip 이메일 인증 코드"
-    message["From"] = settings.smtp_from
-    message["To"] = email
-    message.set_content(f"MetroTrip 인증 코드는 {code}입니다. 5분 이내에 입력해주세요.")
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-        if settings.smtp_use_tls:
-            smtp.starttls()
-        smtp.login(settings.smtp_username, settings.smtp_password)
-        smtp.send_message(message)
 
 
 def request_verification(
-    db: Session, email: str, purpose: str, settings: Settings
+    db: Session,
+    email: str,
+    purpose: str,
+    settings: Settings,
 ) -> None:
+    """이메일 인증 코드를 생성하고 발송한다."""
+    repository = AuthRepository(db)
     email = email.strip().lower()
-    user = db.execute(
-        text("SELECT user_id FROM users WHERE email = :email"), {"email": email}
-    ).first()
-    if purpose == "PASSWORD_RESET" and user is None:
+    user = repository.find_user_by_email(email)
+
+    # 존재하지 않는 계정도 같은 응답을 주어 가입 여부 노출을 막는다.
+    if purpose == "PASSWORD_RESET" and not user:
         return
+
     code = f"{secrets.randbelow(1_000_000):06d}"
-    expires = datetime.now(UTC).replace(tzinfo=None) + timedelta(
-        minutes=settings.verification_code_expire_minutes
+    repository.create_verification(
+        user_id=user.user_id if user else None,
+        email=email,
+        purpose=purpose,
+        code_hash=hash_code(code, settings.jwt_secret),
+        expires_at=_now().replace(tzinfo=None)
+        + timedelta(minutes=settings.verification_code_expire_minutes),
     )
-    db.execute(
-        text("""
-        INSERT INTO email_verifications (user_id, email, purpose, code_hash, expires_at)
-        VALUES (:user_id, :email, :purpose, :code_hash, :expires_at)
-    """),
-        {
-            "user_id": user.user_id if user else None,
-            "email": email,
-            "purpose": purpose,
-            "code_hash": _hash_code(code, settings),
-            "expires_at": expires,
-        },
-    )
-    db.commit()
     try:
-        _send_code(email, code, settings)
-    except Exception:
-        db.rollback()
-        raise
-
-
-def confirm_verification(db: Session, request, settings: Settings) -> str:
-    email = request.email.strip().lower()
-    row = (
-        db.execute(
-            text("""
-        SELECT verification_id, code_hash, expires_at, attempt_count
-        FROM email_verifications
-        WHERE email = :email AND purpose = :purpose AND verified_at IS NULL
-        ORDER BY verification_id DESC LIMIT 1
-    """),
-            {"email": email, "purpose": request.purpose},
-        )
-        .mappings()
-        .first()
-    )
-    if not row or row["attempt_count"] >= settings.verification_max_attempts:
-        raise _error("INVALID_VERIFICATION_CODE", "인증 코드가 유효하지 않습니다.", 400)
-    if row["expires_at"] < datetime.now(UTC).replace(tzinfo=None):
-        raise _error("VERIFICATION_CODE_EXPIRED", "인증 코드가 만료되었습니다.", 400)
-    if not hmac.compare_digest(row["code_hash"], _hash_code(request.code, settings)):
-        db.execute(
-            text(
-                "UPDATE email_verifications SET attempt_count = attempt_count + 1 WHERE verification_id = :id"
-            ),
-            {"id": row["verification_id"]},
-        )
+        EmailSender(settings).send_verification_code(email, code)
         db.commit()
-        raise _error("INVALID_VERIFICATION_CODE", "인증 코드가 유효하지 않습니다.", 400)
-    db.execute(
-        text(
-            "UPDATE email_verifications SET verified_at = NOW() WHERE verification_id = :id"
-        ),
-        {"id": row["verification_id"]},
-    )
-    db.commit()
-    exp = int((datetime.now(UTC) + timedelta(minutes=10)).timestamp())
-    return _sign_token(
-        {"email": email, "purpose": request.purpose, "exp": exp}, settings.jwt_secret
-    )
-
-
-def register(db: Session, request, settings: Settings):
-    if request.password != request.password_confirm:
-        raise _error("PASSWORD_MISMATCH", "비밀번호가 일치하지 않습니다.", 400)
-    if not request.terms_agreed or not request.privacy_agreed:
-        raise _error("REQUIRED_AGREEMENT", "필수 약관에 동의해야 합니다.", 400)
-    verification = _decode_token(request.email_verification_token, settings.jwt_secret)
-    email = request.email.strip().lower()
-    if verification.get("email") != email or verification.get("purpose") != "SIGNUP":
-        raise _error("EMAIL_NOT_VERIFIED", "이메일 인증이 필요합니다.", 400)
-    if db.execute(
-        text("SELECT 1 FROM users WHERE email = :email"), {"email": email}
-    ).first():
-        raise _error("EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다.", 409)
-    if db.execute(
-        text("SELECT 1 FROM users WHERE nickname = :nickname"),
-        {"nickname": request.nickname},
-    ).first():
-        raise _error("NICKNAME_ALREADY_EXISTS", "이미 사용 중인 닉네임입니다.", 409)
-    try:
-        result = db.execute(
-            text("""
-            INSERT INTO users (email, password, name, nickname, phone)
-            VALUES (:email, :password, :name, :nickname, :phone)
-        """),
-            {
-                "email": email,
-                "password": _hash_password(request.password),
-                "name": request.name,
-                "nickname": request.nickname,
-                "phone": request.phone.replace("-", "") if request.phone else None,
-            },
-        )
-        user_id = result.lastrowid
-        for agreement in ("TERMS", "PRIVACY"):
-            db.execute(
-                text(
-                    "INSERT INTO user_agreements (user_id, agreement_type, is_agreed) VALUES (:user_id, :type, 1)"
-                ),
-                {"user_id": user_id, "type": agreement},
-            )
-        db.execute(
-            text(
-                "UPDATE email_verifications SET user_id = :user_id WHERE email = :email AND purpose = 'SIGNUP' AND verified_at IS NOT NULL AND user_id IS NULL"
-            ),
-            {"user_id": user_id, "email": email},
-        )
-        db.commit()
-    except IntegrityError:
+    except EmailDeliveryError as error:
         db.rollback()
         raise _error(
-            "DUPLICATE_USER", "이미 사용 중인 이메일 또는 닉네임입니다.", 409
-        ) from None
-    return {"user_id": user_id, "email": email, "nickname": request.nickname}
+            "EMAIL_DELIVERY_FAILED",
+            "인증 메일을 전송하지 못했습니다.",
+            500,
+        ) from error
 
 
-def _tokens(db: Session, user_id: int, settings: Settings) -> dict[str, object]:
-    now = datetime.now(UTC)
-    access = _sign_token(
+def _find_verification(
+    db: Session,
+    email: str,
+    purpose: str,
+    code: str,
+    settings: Settings,
+) -> EmailVerification:
+    """사용 가능한 이메일 인증 내역을 찾아 반환한다."""
+    repository = AuthRepository(db)
+    verification = repository.find_latest_pending_verification(
+        email.strip().lower(), purpose
+    )
+    if (
+        not verification
+        or verification.attempt_count >= settings.verification_max_attempts
+    ):
+        raise _error(
+            "INVALID_VERIFICATION_CODE",
+            "이메일 인증 코드가 유효하지 않습니다.",
+            400,
+        )
+    if verification.expires_at < _now().replace(tzinfo=None):
+        raise _error(
+            "VERIFICATION_EXPIRED",
+            "이메일 인증 코드가 만료되었습니다.",
+            400,
+        )
+    if not hmac.compare_digest(
+        verification.code_hash, hash_code(code, settings.jwt_secret)
+    ):
+        repository.increment_verification_attempt(verification)
+        db.commit()
+        raise _error(
+            "INVALID_VERIFICATION_CODE",
+            "이메일 인증 코드가 올바르지 않습니다.",
+            400,
+        )
+    return verification
+
+
+def confirm_verification(
+    db: Session,
+    request: EmailVerificationConfirmRequest,
+    settings: Settings,
+) -> str:
+    """인증 코드를 확인하고 이메일 인증 토큰을 발급한다."""
+    verification = _find_verification(
+        db, request.email, request.purpose, request.code, settings
+    )
+    AuthRepository(db).mark_verification_complete(
+        verification, _now().replace(tzinfo=None)
+    )
+    db.commit()
+
+    now = _now()
+    return sign_token(
         {
-            "sub": str(user_id),
-            "exp": int(
-                (
-                    now + timedelta(minutes=settings.access_token_expire_minutes)
-                ).timestamp()
-            ),
+            "type": "email_verification",
+            "email": request.email.strip().lower(),
+            "purpose": request.purpose,
+            "iat": int(now.timestamp()),
+            "exp": int((now + timedelta(minutes=10)).timestamp()),
         },
         settings.jwt_secret,
     )
-    refresh = secrets.token_urlsafe(64)
-    db.execute(
-        text(
-            "INSERT INTO auth_tokens (user_id, refresh_token, issued_at, expires_at) VALUES (:user_id, :token, :issued, :expires)"
-        ),
+
+
+def register(
+    db: Session,
+    request: RegisterRequest,
+    settings: Settings,
+) -> dict[str, object]:
+    """인증과 필수 약관을 확인하고 회원을 생성한다."""
+    if request.password != request.password_confirm:
+        raise _error(
+            "PASSWORD_MISMATCH",
+            "비밀번호와 비밀번호 확인이 일치하지 않습니다.",
+            400,
+        )
+    if not request.terms_agreed or not request.privacy_agreed:
+        raise _error(
+            "REQUIRED_AGREEMENT_MISSING",
+            "필수 약관에 동의해야 합니다.",
+            400,
+        )
+
+    email = request.email.strip().lower()
+    verified = _read_token(request.email_verification_token, settings.jwt_secret)
+    if (
+        verified.get("type") not in (None, "email_verification")
+        or verified.get("email") != email
+        or verified.get("purpose") != "SIGNUP"
+    ):
+        raise _error(
+            "INVALID_VERIFICATION_TOKEN",
+            "회원가입용 이메일 인증 토큰이 아닙니다.",
+            400,
+        )
+
+    repository = AuthRepository(db)
+    if repository.find_user_by_email(email):
+        raise _error("EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다.", 409)
+    if repository.nickname_exists(request.nickname):
+        raise _error(
+            "NICKNAME_ALREADY_EXISTS",
+            "이미 사용 중인 닉네임입니다.",
+            409,
+        )
+
+    try:
+        user = repository.create_user(
+            email=email,
+            password=hash_password(request.password),
+            name=request.name,
+            nickname=request.nickname,
+            phone=request.phone.replace("-", "") if request.phone else None,
+        )
+        repository.add_required_agreements(user.user_id)
+        repository.attach_signup_verifications(user.user_id, email)
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise _error(
+            "DUPLICATE_USER",
+            "이메일 또는 닉네임이 이미 사용 중입니다.",
+            409,
+        ) from error
+
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "nickname": user.nickname,
+    }
+
+
+def _issue_tokens(
+    db: Session,
+    user_id: int,
+    settings: Settings,
+) -> dict[str, object]:
+    """액세스 토큰과 리프레시 토큰을 발급한다."""
+    now = _now()
+    access_expires = now + timedelta(minutes=settings.access_token_expire_minutes)
+    refresh_expires = now + timedelta(days=settings.refresh_token_expire_days)
+    access_token = sign_token(
         {
-            "user_id": user_id,
-            "token": hashlib.sha256(refresh.encode()).hexdigest(),
-            "issued": now.replace(tzinfo=None),
-            "expires": (
-                now + timedelta(days=settings.refresh_token_expire_days)
-            ).replace(tzinfo=None),
+            "sub": str(user_id),
+            "type": "access",
+            "iat": int(now.timestamp()),
+            "exp": int(access_expires.timestamp()),
         },
+        settings.jwt_secret,
+    )
+    refresh_token = secrets.token_urlsafe(48)
+    AuthRepository(db).create_refresh_token(
+        user_id=user_id,
+        token_hash=hash_value(refresh_token),
+        issued_at=now.replace(tzinfo=None),
+        expires_at=refresh_expires.replace(tzinfo=None),
     )
     db.commit()
     return {
-        "access_token": access,
-        "refresh_token": refresh,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": settings.access_token_expire_minutes * 60,
     }
 
 
-def login(db: Session, request, settings: Settings) -> dict[str, object]:
-    email = request.email.strip().lower()
-    row = (
-        db.execute(
-            text("SELECT user_id, password FROM users WHERE email = :email"),
-            {"email": email},
-        )
-        .mappings()
-        .first()
-    )
-    if (
-        not row
-        or not row["password"]
-        or not _verify_password(request.password, row["password"])
-    ):
+def login(
+    db: Session,
+    email: str,
+    password: str,
+    settings: Settings,
+) -> dict[str, object]:
+    """계정 정보를 확인하고 인증 토큰을 발급한다."""
+    user = AuthRepository(db).find_user_by_email(email.strip().lower())
+    if not user or not user.password or not verify_password(password, user.password):
         raise _error(
-            "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.", 401
+            "INVALID_CREDENTIALS",
+            "이메일 또는 비밀번호가 올바르지 않습니다.",
+            401,
         )
-    return _tokens(db, row["user_id"], settings)
+    return _issue_tokens(db, user.user_id, settings)
+
+
+def refresh(
+    db: Session,
+    refresh_token: str,
+    settings: Settings,
+) -> dict[str, object]:
+    """기존 리프레시 토큰을 폐기하고 새 토큰을 발급한다."""
+    repository = AuthRepository(db)
+    token = repository.find_active_refresh_token(
+        hash_value(refresh_token), _now().replace(tzinfo=None)
+    )
+    if not token:
+        raise _error(
+            "INVALID_REFRESH_TOKEN",
+            "유효하지 않은 리프레시 토큰입니다.",
+            401,
+        )
+    repository.revoke_refresh_token(token, _now().replace(tzinfo=None))
+    return _issue_tokens(db, token.user_id, settings)
 
 
 def authenticate_access(token: str, settings: Settings) -> int:
-    payload = _decode_token(token, settings.jwt_secret)
+    """액세스 토큰을 검증하고 사용자 식별자를 반환한다."""
+    payload = _read_token(token, settings.jwt_secret)
+    if payload.get("type") not in (None, "access"):
+        raise _error("INVALID_TOKEN", "유효하지 않은 액세스 토큰입니다.", 401)
     try:
         return int(payload["sub"])
-    except (KeyError, ValueError):
-        raise _error("INVALID_TOKEN", "유효하지 않은 인증 토큰입니다.", 401) from None
+    except (KeyError, TypeError, ValueError):
+        raise _error(
+            "INVALID_TOKEN",
+            "유효하지 않은 액세스 토큰입니다.",
+            401,
+        ) from None
 
 
-def refresh(db: Session, refresh_token: str, settings: Settings) -> dict[str, object]:
-    token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-    row = (
-        db.execute(
-            text(
-                "SELECT user_id FROM auth_tokens WHERE refresh_token = :token AND revoked_at IS NULL AND expires_at > NOW()"
-            ),
-            {"token": token_hash},
-        )
-        .mappings()
-        .first()
-    )
-    if not row:
-        raise _error("INVALID_REFRESH_TOKEN", "유효하지 않은 갱신 토큰입니다.", 401)
-    db.execute(
-        text("UPDATE auth_tokens SET revoked_at = NOW() WHERE refresh_token = :token"),
-        {"token": token_hash},
+def logout(db: Session, user_id: int) -> None:
+    """사용자의 모든 리프레시 토큰을 폐기한다."""
+    AuthRepository(db).revoke_all_refresh_tokens(
+        user_id, _now().replace(tzinfo=None)
     )
     db.commit()
-    return _tokens(db, row["user_id"], settings)
 
 
-def logout(db: Session, user_id: int, settings: Settings) -> None:
-    db.execute(
-        text(
-            "UPDATE auth_tokens SET revoked_at = NOW() WHERE user_id = :user_id AND revoked_at IS NULL"
-        ),
-        {"user_id": user_id},
+def reset_password(
+    db: Session,
+    request: PasswordResetConfirmRequest,
+    settings: Settings,
+) -> None:
+    """인증 코드를 확인하고 비밀번호를 변경한다."""
+    if request.new_password != request.new_password_confirm:
+        raise _error(
+            "PASSWORD_MISMATCH",
+            "새 비밀번호와 비밀번호 확인이 일치하지 않습니다.",
+            400,
+        )
+
+    verification = _find_verification(
+        db, request.email, "PASSWORD_RESET", request.code, settings
     )
+    repository = AuthRepository(db)
+    user = repository.find_user_by_email(request.email.strip().lower())
+    if not user:
+        raise _error("USER_NOT_FOUND", "사용자를 찾을 수 없습니다.", 404)
+
+    now = _now().replace(tzinfo=None)
+    repository.mark_verification_complete(verification, now)
+    repository.update_password(user, hash_password(request.new_password))
+    repository.revoke_all_refresh_tokens(user.user_id, now)
     db.commit()
