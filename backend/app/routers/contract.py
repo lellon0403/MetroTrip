@@ -6,7 +6,9 @@ from fastapi import Depends
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.config import get_settings
 from app.schemas.common import ErrorResponse
+from app.services import auth as auth_service
 
 bearer_scheme = HTTPBearer(description="로그인 시 발급된 Access Token")
 
@@ -16,8 +18,19 @@ def require_auth(
 ) -> HTTPAuthorizationCredentials:
     return credentials
 
+""" 
+공통 인프라
+get_current_user_id 의존성 추가
+"""
+def get_current_user_id(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> int:
+    """Bearer 토큰을 검증하고 현재 로그인한 사용자의 ID를 반환한다."""
+    return auth_service.authenticate_access(credentials.credentials, get_settings())
+
 
 AUTH_REQUIRED = [Depends(require_auth)]
+CurrentUserId = Annotated[int, Depends(get_current_user_id)]
 
 ERROR_RESPONSES = {
     400: {"model": ErrorResponse, "description": "요청 규칙 위반"},
