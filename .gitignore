@@ -19,6 +19,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+certs/
 
 # 에디터 / 툴
 .claude/
