@@ -73,7 +73,11 @@
   --radius-md: 0.625rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+<<<<<<< HEAD
   --shadow-card: 0 4px 16px rgb(24 34 48 / 6%);
+=======
+  --shadow-card: 0 8px 24px rgb(29 37 44 / 8%);
+>>>>>>> 373b569 (feat: 후기 목록과 상세 화면 개선)
   --animate-dropdown-in: dropdown-in 180ms ease-out;
 }
 
@@ -113,6 +117,7 @@
   --auth-title-size: clamp(1.25rem, 3vw, 1.5rem);
   --auth-label-size: clamp(0.8125rem, 1.5vw, 0.875rem);
   --auth-logo-height: clamp(3rem, 8vw, 5rem);
+<<<<<<< HEAD
   --review-editor-min-height: clamp(16rem, 34dvh, 28rem);
   --review-editor-content-min-height: clamp(14rem, 28dvh, 24rem);
   --review-grid-gap: clamp(0.75rem, 1vw, 1.25rem);
@@ -121,6 +126,16 @@
   --review-detail-gutter: clamp(1rem, 1.5vw, 1.5rem);
   --review-detail-gap: clamp(1.25rem, 2vw, 2rem);
   --review-detail-title-size: clamp(2rem, 3vw, 2.5rem);
+=======
+  --review-editor-min-height: clamp(20rem, 42dvh, 34rem);
+  --review-editor-content-min-height: clamp(18rem, 36dvh, 30rem);
+  --review-grid-gap: clamp(0.75rem, 1vw, 1.25rem);
+  --review-card-padding: clamp(0.75rem, 0.9vw, 1rem);
+  --review-detail-width: 52rem;
+  --review-detail-gutter: clamp(1rem, 1.5vw, 1.5rem);
+  --review-detail-gap: clamp(1.25rem, 2vw, 2rem);
+  --review-detail-title-size: clamp(1.75rem, 2.6vw, 2.75rem);
+>>>>>>> 373b569 (feat: 후기 목록과 상세 화면 개선)
 }
 
 :root.dark {
