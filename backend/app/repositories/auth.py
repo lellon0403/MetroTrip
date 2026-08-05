@@ -32,7 +32,6 @@ class AuthRepository:
         password: str,
         name: str,
         nickname: str,
-        phone: str | None,
     ) -> User:
         """새 사용자를 추가하고 식별자를 할당한다."""
         user = User(
@@ -40,7 +39,6 @@ class AuthRepository:
             password=password,
             name=name,
             nickname=nickname,
-            phone=phone,
         )
         self.session.add(user)
         self.session.flush()

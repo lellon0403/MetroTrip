@@ -1,10 +1,17 @@
 """인증 API 요청 및 응답 모델."""
 
 import re
+from typing import Literal
 
 from pydantic import Field, field_validator
 
 from app.schemas.common import ApiSchema
+
+ReauthenticationPurpose = Literal[
+    "PROFILE_UPDATE",
+    "PASSWORD_CHANGE",
+    "WITHDRAWAL",
+]
 
 
 class AgreementInput(ApiSchema):
@@ -21,7 +28,6 @@ class RegisterRequest(ApiSchema):
     password_confirm: str = Field(min_length=8, max_length=72)
     name: str = Field(min_length=1, max_length=50)
     nickname: str = Field(min_length=2, max_length=20)
-    phone: str | None = Field(default=None, max_length=20)
     terms_agreed: bool
     privacy_agreed: bool
     email_verification_token: str = Field(min_length=1, max_length=1024)
@@ -72,6 +78,21 @@ class PasswordResetConfirmRequest(EmailVerificationConfirmRequest):
 class LoginRequest(ApiSchema):
     email: str = Field(max_length=255)
     password: str = Field(min_length=1, max_length=72)
+
+
+class ReauthenticationRequest(ApiSchema):
+    """로그인 사용자의 현재 비밀번호 재인증 요청."""
+
+    password: str = Field(min_length=1, max_length=72)
+    purpose: ReauthenticationPurpose
+
+
+class ReauthenticationResponse(ApiSchema):
+    """회원 정보 수정에 사용할 단기 재인증 토큰 응답."""
+
+    verification_token: str
+    expires_in: int = Field(gt=0, description="재인증 토큰 만료 시간(초)")
+    purpose: ReauthenticationPurpose
 
 
 class RefreshRequest(ApiSchema):

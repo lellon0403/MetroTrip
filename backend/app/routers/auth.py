@@ -8,13 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
-from app.routers.contract import ERROR_RESPONSES, bearer_scheme
+from app.routers.contract import ERROR_RESPONSES, CurrentUserId, bearer_scheme
 from app.schemas.auth import (
     EmailVerificationConfirmRequest,
     EmailVerificationConfirmResponse,
     EmailVerificationRequest,
     LoginRequest,
     PasswordResetConfirmRequest,
+    ReauthenticationRequest,
+    ReauthenticationResponse,
     RefreshRequest,
     RegisteredUserResponse,
     RegisterRequest,
@@ -49,6 +51,27 @@ def register(request: RegisterRequest, db: DatabaseSession) -> RegisteredUserRes
 def login(request: LoginRequest, db: DatabaseSession) -> TokenResponse:
     """이메일과 비밀번호로 로그인한다."""
     return auth.login(db, request.email, request.password, get_settings())
+
+
+@router.post(
+    "/reauthenticate",
+    response_model=ReauthenticationResponse,
+    summary="회원 정보 수정 전 비밀번호 재인증",
+    responses=ERROR_RESPONSES,
+)
+def reauthenticate(
+    request: ReauthenticationRequest,
+    current_user_id: CurrentUserId,
+    db: DatabaseSession,
+) -> ReauthenticationResponse:
+    """현재 비밀번호를 확인하고 단기 재인증 토큰을 발급한다."""
+    return auth.reauthenticate(
+        db,
+        current_user_id,
+        request.password,
+        request.purpose,
+        get_settings(),
+    )
 
 
 @router.post(

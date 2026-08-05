@@ -20,9 +20,11 @@ from app.integrations.security import (
 )
 from app.models.auth import EmailVerification
 from app.repositories.auth import AuthRepository
+from app.repositories.users import UserRepository
 from app.schemas.auth import (
     EmailVerificationConfirmRequest,
     PasswordResetConfirmRequest,
+    ReauthenticationPurpose,
     RegisterRequest,
 )
 
@@ -204,7 +206,6 @@ def register(
             password=hash_password(request.password),
             name=request.name,
             nickname=request.nickname,
-            phone=request.phone.replace("-", "") if request.phone else None,
         )
         repository.add_required_agreements(user.user_id)
         repository.attach_signup_verifications(user.user_id, email)
@@ -310,11 +311,72 @@ def authenticate_access(token: str, settings: Settings) -> int:
         ) from None
 
 
+def reauthenticate(
+    db: Session,
+    user_id: int,
+    password: str,
+    purpose: ReauthenticationPurpose,
+    settings: Settings,
+) -> dict[str, object]:
+    """현재 비밀번호를 확인하고 지정된 목적의 5분짜리 재인증 토큰을 발급한다."""
+    user = UserRepository(db).find_user_by_id(user_id)
+    if not user or not user.password:
+        raise _error("USER_NOT_FOUND", "사용자를 찾을 수 없습니다.", 404)
+    if not verify_password(password, user.password):
+        raise _error(
+            "INVALID_PASSWORD",
+            "비밀번호가 올바르지 않습니다.",
+            401,
+        )
+
+    now = _now()
+    expires_in = 5 * 60
+    token = sign_token(
+        {
+            "sub": str(user_id),
+            "type": "reauthentication",
+            "purpose": purpose,
+            "iat": int(now.timestamp()),
+            "exp": int(now.timestamp()) + expires_in,
+        },
+        settings.jwt_secret,
+    )
+    return {
+        "verification_token": token,
+        "expires_in": expires_in,
+        "purpose": purpose,
+    }
+
+
+def authenticate_reauthentication(
+    token: str,
+    purpose: ReauthenticationPurpose,
+    settings: Settings,
+) -> int:
+    """재인증 토큰의 서명, 사용자 ID와 요청 목적을 검증한다."""
+    payload = _read_token(token, settings.jwt_secret)
+    if (
+        payload.get("type") != "reauthentication"
+        or payload.get("purpose") != purpose
+    ):
+        raise _error(
+            "INVALID_REAUTHENTICATION_TOKEN",
+            "요청 목적에 맞지 않는 재인증 토큰입니다.",
+            401,
+        )
+    try:
+        return int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        raise _error(
+            "INVALID_REAUTHENTICATION_TOKEN",
+            "유효하지 않은 재인증 토큰입니다.",
+            401,
+        ) from None
+
+
 def logout(db: Session, user_id: int) -> None:
     """사용자의 모든 리프레시 토큰을 폐기한다."""
-    AuthRepository(db).revoke_all_refresh_tokens(
-        user_id, _now().replace(tzinfo=None)
-    )
+    AuthRepository(db).revoke_all_refresh_tokens(user_id, _now().replace(tzinfo=None))
     db.commit()
 
 
