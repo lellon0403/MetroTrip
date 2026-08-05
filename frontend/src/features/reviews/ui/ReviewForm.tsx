@@ -137,7 +137,11 @@ function InlineImageEditor({ value, images, thumbnailId, onChange, onThumbnailCh
 
   function addImages(files: FileList | null) {
     if (!editor || !files?.length) return;
+<<<<<<< HEAD
     Array.from(files).forEach((file) => {
+=======
+      Array.from(files).forEach((file) => {
+>>>>>>> 608c15b (feat: 후기 목록과 상세 화면 개선)
       if (!file.type.startsWith('image/')) return;
       const src = URL.createObjectURL(file);
       const asset = { id: `local-${crypto.randomUUID()}`, src, file };
