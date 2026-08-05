@@ -1,10 +1,9 @@
 # 백엔드 연동 인수인계 문서
 
-MVP는 백엔드 없이 프론트 단독으로 동작합니다.
-나중에 백엔드가 붙을 때 **프론트를 크게 뜯어고치지 않도록**, 지금부터 지켜야 할 경계를 정리합니다.
+초기 MVP의 지도 기능은 프론트 단독으로 동작하지만, 현재 회원가입·로그인·비밀번호 재설정은 백엔드와 연결되어 있습니다. 회원 조회·수정·탈퇴 백엔드도 구현되어 있어 이 문서를 기준으로 마이페이지 프론트 연동을 진행합니다.
 
 > 대상: 백엔드(윤홍규), DB(김유진), 프론트(우진, 황지성)
-> 상태: 현재 FastAPI Swagger 계약 기준 — 비즈니스 로직 구현 전
+> 상태: 2026-08-05 기준 — 인증과 회원 조회·수정·탈퇴 백엔드 구현 완료, 프론트 회원 관리 연동 필요
 
 ---
 
@@ -24,7 +23,7 @@ MVP는 백엔드 없이 프론트 단독으로 동작합니다.
 
 컴포넌트에서 `import stations from '../data/stations.json'` 처럼 **직접 import 하지 않습니다.**
 
-## 2. 지금 만들어 둘 인터페이스
+## 2. 유지할 데이터 접근 인터페이스
 
 ```ts
 // frontend/src/shared/types/station.ts
@@ -50,7 +49,9 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 |---|---|---|
 | `stations.json` 정적 로드 | `GET /api/v1/stations` | `frontend/src/shared/lib/stations.ts` |
 | 카카오 로컬 API 프론트 직접 호출 | 백엔드 프록시 경유 (키 은닉 + 캐싱) | `frontend/src/features/station-map/api/places.ts` |
-| 없음 | 인증 토큰 처리 | `frontend/src/shared/lib/apiClient.ts` (신규) |
+| 인증 API별 개별 `fetch` | Access Token 첨부·갱신·공통 오류 처리를 담당하는 API 클라이언트 | `frontend/src/shared/lib/apiClient.ts` (신규) |
+| 마이페이지 예시 정보 | `GET /api/v1/users/me` 응답 | `frontend/src/features/my-page/*` |
+| 계정 관리 프리뷰 | 목적별 재인증 후 프로필·비밀번호 수정·회원 탈퇴 API | `frontend/src/features/my-page/*` |
 
 ### 카카오 API를 백엔드로 옮겨야 하는 이유
 지금은 JavaScript 키가 브라우저에 노출됩니다. MVP에서는 **도메인 제한**으로 막지만,
@@ -68,6 +69,7 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 | GET | `/health` | 서버 상태 확인 |
 | POST | `/api/v1/auth/register` | 회원가입 |
 | POST | `/api/v1/auth/login` | 로그인 |
+| POST | `/api/v1/auth/reauthenticate` | 회원 정보 수정 전 현재 비밀번호 재인증 |
 | POST | `/api/v1/auth/refresh` | Access Token 갱신 |
 | POST | `/api/v1/auth/logout` | 로그아웃 |
 | POST | `/api/v1/auth/email-verifications` | 이메일 인증 코드 발송 |
@@ -76,6 +78,7 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 | POST | `/api/v1/auth/password-reset/confirm` | 비밀번호 변경 |
 | GET | `/api/v1/users/me` | 내 회원 정보 |
 | PATCH | `/api/v1/users/me` | 내 회원 정보 수정 |
+| PATCH | `/api/v1/users/me/password` | 내 비밀번호 변경 |
 | DELETE | `/api/v1/users/me` | 회원 탈퇴 |
 | GET | `/api/v1/users/me/favorites` | 역 즐겨찾기 목록 |
 | POST | `/api/v1/users/me/favorites/{station_id}` | 역 즐겨찾기 추가 |
@@ -119,9 +122,11 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 | PATCH | `/api/v1/admin/places/{place_id}` | 장소 수정 |
 | DELETE | `/api/v1/admin/places/{place_id}` | 장소 삭제 |
 
-현재 인증 API와 `/health`는 실제 구현되어 있습니다. 그 외 비즈니스 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
+현재 인증 API, 내 회원 정보 조회·수정·탈퇴 API와 `/health`는 실제 구현되어 있습니다. 그 외 비즈니스 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
 
-프론트 인증 연결은 `frontend/src/features/auth/api/auth.ts`에서 담당합니다. 개발 환경의 이메일 발송 모드가 `console`이면 인증 코드는 백엔드 실행 터미널에 표시됩니다.
+내 회원 정보 수정과 탈퇴는 Access Token과 `X-Reauthentication-Token` 헤더를 함께 요구합니다. 재인증 토큰은 `/api/v1/auth/reauthenticate`에서 현재 비밀번호와 목적(`PROFILE_UPDATE`, `PASSWORD_CHANGE`, `WITHDRAWAL`)을 확인한 후 발급되며, 별도 DB 저장 없이 5분 동안 유효합니다. 각 API는 자신의 목적과 일치하는 재인증 토큰만 허용합니다. 일반 회원 정보 수정은 이름과 닉네임만 허용하고, 비밀번호는 `/api/v1/users/me/password`에서 별도로 변경합니다. 회원 탈퇴 시 사용자 행과 DB에서 `ON DELETE CASCADE`로 연결된 회원 소유 데이터를 함께 하드 딜리트합니다.
+
+회원가입·로그인·비밀번호 재설정의 기존 프론트 연결은 `frontend/src/features/auth/api/auth.ts`에서 담당합니다. 회원 조회·수정·탈퇴 API는 백엔드만 구현되어 있으므로 아래 계약에 맞춰 프론트 연결이 필요합니다. 개발 환경의 이메일 발송 모드가 `console`이면 인증 코드는 백엔드 실행 터미널에 표시됩니다.
 
 LAN에서 프론트를 공유할 때는 `backend/.env`의 `METROTRIP_CORS_ORIGINS`에 프론트 접속 주소를 추가해야 합니다. 예를 들어 프론트가 `http://192.168.0.108:5173`에서 열리면 해당 주소를 CORS 목록에 포함합니다.
 
@@ -138,7 +143,156 @@ LAN에서 프론트를 공유할 때는 `backend/.env`의 `METROTRIP_CORS_ORIGIN
 }
 ```
 
-## 5. DB 담당에게 전달할 사항
+## 5. 프론트 회원 관리 연동 계약
+
+### 5-1. 공통 인증 헤더
+
+로그인 응답의 `accessToken`은 인증이 필요한 모든 요청에 Bearer 헤더로 전달합니다.
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+현재 프론트는 토큰을 다음 키로 저장합니다.
+
+```text
+metrotrip-access-token
+metrotrip-refresh-token
+```
+
+Access Token 만료 시간은 기본 30분, Refresh Token 만료 시간은 기본 14일입니다. 백엔드에는 `POST /api/v1/auth/refresh`가 구현되어 있지만 프론트의 자동 갱신과 401 재시도 로직은 아직 없습니다.
+
+현재 프론트 로그아웃은 로컬 토큰만 제거합니다. 서버의 활성 Refresh Token까지 폐기하려면 로컬 토큰 제거 전에 `POST /api/v1/auth/logout`을 Access Token과 함께 호출해야 합니다.
+
+### 5-2. 내 회원 정보 조회
+
+```http
+GET /api/v1/users/me
+Authorization: Bearer <accessToken>
+```
+
+성공 응답:
+
+```json
+{
+  "userId": 7,
+  "email": "user@example.com",
+  "name": "홍길동",
+  "nickname": "길동",
+  "role": "USER",
+  "createdAt": "2026-08-05T09:00:00",
+  "updatedAt": "2026-08-05T09:00:00"
+}
+```
+
+이메일은 로그인 식별자이므로 조회만 가능하고 수정할 수 없습니다. 전화번호는 현재 가입·조회·수정 범위에서 사용하지 않습니다.
+
+### 5-3. 목적별 비밀번호 재인증
+
+프로필 수정, 비밀번호 변경, 회원 탈퇴 전에는 현재 비밀번호를 다시 확인합니다.
+
+```http
+POST /api/v1/auth/reauthenticate
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "password": "CurrentPassword1!",
+  "purpose": "PROFILE_UPDATE"
+}
+```
+
+허용 목적과 사용 API:
+
+| `purpose` | 사용할 API |
+|---|---|
+| `PROFILE_UPDATE` | `PATCH /api/v1/users/me` |
+| `PASSWORD_CHANGE` | `PATCH /api/v1/users/me/password` |
+| `WITHDRAWAL` | `DELETE /api/v1/users/me` |
+
+성공 응답:
+
+```json
+{
+  "verificationToken": "...",
+  "expiresIn": 300,
+  "purpose": "PROFILE_UPDATE"
+}
+```
+
+재인증 토큰은 DB에 저장하지 않는 5분짜리 JWT입니다. 프론트에서는 `localStorage`에 저장하지 말고 계정 관리 화면의 메모리 상태에만 보관합니다. 수정 API에는 다음 헤더로 전달합니다.
+
+```http
+X-Reauthentication-Token: <verificationToken>
+```
+
+다른 목적의 재인증 토큰을 사용하면 HTTP `401`, Access Token과 재인증 토큰의 사용자가 다르면 HTTP `403`을 반환합니다.
+
+### 5-4. 이름·닉네임 수정
+
+```http
+PATCH /api/v1/users/me
+Authorization: Bearer <accessToken>
+X-Reauthentication-Token: <PROFILE_UPDATE verificationToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "변경할 이름",
+  "nickname": "변경할닉네임"
+}
+```
+
+이름과 닉네임 중 하나만 보내도 됩니다. 빈 요청, `null`, 이메일·전화번호·비밀번호 같은 허용되지 않은 필드는 HTTP `422`로 거절합니다. 중복 닉네임은 HTTP `409`와 `NICKNAME_ALREADY_EXISTS`를 반환합니다.
+
+### 5-5. 비밀번호 변경
+
+```http
+PATCH /api/v1/users/me/password
+Authorization: Bearer <accessToken>
+X-Reauthentication-Token: <PASSWORD_CHANGE verificationToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "newPassword": "ChangedPassword1!",
+  "newPasswordConfirm": "ChangedPassword1!"
+}
+```
+
+성공하면 기존 Refresh Token이 모두 폐기됩니다. 프론트는 성공 직후 두 로컬 토큰을 삭제하고 로그인 화면으로 이동해야 합니다.
+
+```ts
+localStorage.removeItem('metrotrip-access-token');
+localStorage.removeItem('metrotrip-refresh-token');
+navigate('/login');
+```
+
+### 5-6. 회원 탈퇴
+
+```http
+DELETE /api/v1/users/me
+Authorization: Bearer <accessToken>
+X-Reauthentication-Token: <WITHDRAWAL verificationToken>
+```
+
+Request Body는 없습니다. 성공 후 프론트는 로컬 토큰을 모두 삭제하고 로그인 또는 첫 화면으로 이동해야 합니다. 사용자와 DB에서 `ON DELETE CASCADE`로 연결된 회원 소유 데이터는 함께 하드 딜리트됩니다.
+
+### 5-7. 프론트 구현 권장 순서
+
+1. 인증 헤더와 공통 오류 처리를 담당하는 `apiClient.ts`를 추가합니다.
+2. `getMyProfile`, `reauthenticate`, `updateProfile`, `changePassword`, `withdraw` API 함수를 추가합니다.
+3. 마이페이지 진입 시 `GET /users/me`로 실제 회원 정보를 불러옵니다.
+4. 계정 관리 진입 전에 목적을 선택해 재인증합니다.
+5. 재인증 토큰은 화면 메모리에만 보관하고 만료 시 비밀번호 입력 단계로 되돌립니다.
+6. 비밀번호 변경·탈퇴 성공 시 로컬 토큰을 제거하고 로그인 화면으로 이동합니다.
+7. Access Token 만료에 대비해 Refresh Token 갱신과 요청 재시도를 공통 API 클라이언트에 연결합니다.
+
+## 6. DB 담당에게 전달할 사항
 
 역·노선 정보는 데이터베이스 명세서 V1.8 구조를 기준으로 합니다.
 
