@@ -2,9 +2,9 @@
 -- 지하철 노선 기반 관광 추천 서비스 (MetroTrip)
 -- 테이블 생성 스크립트
 --
--- 근거 문서 : 데이터베이스 명세서 V1.8
+-- 근거 문서 : 데이터베이스 명세서 V1.10
 -- 대상 DBMS : MySQL 8.0
--- 구성      : 22개 테이블 / PK 22 / UNIQUE 11 / FK 34 / CHECK 20
+-- 구성      : 22개 테이블 / PK 22 / UNIQUE 10 / FK 34 / CHECK 20
 --
 -- 비고 : 조회 성능용 인덱스(CREATE INDEX)는 포함하지 않는다.
 --        기능 개발 후 EXPLAIN 으로 확인하며 migrations/ 에 추가한다.
@@ -138,16 +138,18 @@ CREATE TABLE subway_lines (
 -- =====================================================================
 -- 7. stations : 지하철 역
 -- 근거 요구사항 : CM-004, CM-005, CM-006
+-- 외부 코드(station_code)는 V1.9 에서 삭제했다. 공공데이터 출처별로 체계가 달라
+-- (서울교통공사 외부코드 / 코레일 역코드) 단일 컬럼으로 조인 키를 만들 수 없다.
+-- 외부 API 조회는 호선·역명·방향 조합으로 처리하며, 시간표 연동이 필요해지면
+-- line_stations 에 노선-역 단위 코드를 추가한다.
 -- =====================================================================
 CREATE TABLE stations (
   station_id    BIGINT        NOT NULL AUTO_INCREMENT COMMENT '역 식별자',
-  station_name  VARCHAR(100)  NOT NULL                COMMENT '역 검색 대상',
-  station_code  VARCHAR(20)   NULL                    COMMENT '공공 API 연동용 외부 코드',
+  station_name  VARCHAR(100)  NOT NULL                COMMENT '역 검색 대상. 부역명(괄호) 제외한 정식 역명',
   latitude      DECIMAL(10,7) NOT NULL                COMMENT '지도 표시 및 반경 계산 기준',
   longitude     DECIMAL(10,7) NOT NULL                COMMENT '지도 표시 및 반경 계산 기준',
   address       VARCHAR(255)  NULL                    COMMENT '역 소재지 도로명 주소',
-  CONSTRAINT pk_stations      PRIMARY KEY (station_id),
-  CONSTRAINT uk_stations_code UNIQUE (station_code)
+  CONSTRAINT pk_stations PRIMARY KEY (station_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='지하철 역';
 
 
@@ -169,18 +171,29 @@ CREATE TABLE line_stations (
 -- =====================================================================
 -- 9. train_timetables : 열차 시간표
 -- 근거 요구사항 : CM-009
+--
+-- train_no  : 동일 열차의 역별 정차 시각을 묶는 키. 없으면 역 단위 배차표만
+--             조회할 수 있고 열차 여정 추적(A역 → B역 소요 시간)은 불가능하다.
+-- 시각 컬럼 : 시발역은 도착시각이, 종착역은 출발시각이 존재하지 않으므로
+--             두 컬럼 모두 NULL 을 허용한다. 최소 한쪽은 값이 있어야 한다.
+-- day_type  : 코레일 광역철도는 토·일 시간표가 동일하여 평일/주말 2종이다.
+-- 24시 이후 : 원본에 24:01:00 같은 값이 존재한다. MySQL TIME 이 수용하지만
+--             '현재 시각 이후 열차' 조회 시 자정 넘김 처리가 필요하다.
 -- =====================================================================
 CREATE TABLE train_timetables (
   timetable_id            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '식별자',
+  train_no                VARCHAR(20) NULL                    COMMENT '열차번호(예: K1904). 동일 열차의 역별 정차 시각을 묶는 키',
   line_id                 BIGINT      NOT NULL                COMMENT 'subway_lines.line_id',
   station_id              BIGINT      NOT NULL                COMMENT 'stations.station_id',
-  day_type                VARCHAR(10) NOT NULL                COMMENT 'WEEKDAY / SATURDAY / HOLIDAY',
+  day_type                VARCHAR(10) NOT NULL                COMMENT 'WEEKDAY(평일) / WEEKEND(주말)',
   direction               VARCHAR(10) NOT NULL                COMMENT 'UP(상행) / DOWN(하행)',
-  arrival_time            TIME        NOT NULL                COMMENT '해당 역 도착 예정 시각',
-  destination_station_id  BIGINT      NULL                    COMMENT 'stations.station_id',
+  arrival_time            TIME        NULL                    COMMENT '해당 역 도착 시각. 시발역은 NULL',
+  departure_time          TIME        NULL                    COMMENT '해당 역 출발 시각. 종착역은 NULL',
+  destination_station_id  BIGINT      NULL                    COMMENT 'stations.station_id. 차량기지 등 역이 아닌 값은 NULL',
   CONSTRAINT pk_train_timetables            PRIMARY KEY (timetable_id),
-  CONSTRAINT ck_train_timetables_day_type   CHECK (day_type  IN ('WEEKDAY', 'SATURDAY', 'HOLIDAY')),
-  CONSTRAINT ck_train_timetables_direction  CHECK (direction IN ('UP', 'DOWN'))
+  CONSTRAINT ck_train_timetables_day_type   CHECK (day_type  IN ('WEEKDAY', 'WEEKEND')),
+  CONSTRAINT ck_train_timetables_direction  CHECK (direction IN ('UP', 'DOWN')),
+  CONSTRAINT ck_train_timetables_time       CHECK (arrival_time IS NOT NULL OR departure_time IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='열차 시간표';
 
 
@@ -362,42 +375,50 @@ CREATE TABLE line_view_logs (
 
 
 -- =====================================================================
--- 21. board_posts : 게시판 게시글
+-- 21. board_posts : 인원 모집 게시글
 -- 근거 요구사항 : MB-신규 (요구사항 정의서 반영 대기)
--- 일반 글·인원 모집을 post_type 으로 구분하는 통합 게시판
--- recruit_* 및 meeting_date 는 RECRUIT 전용. 일반 글은 NULL
+--
+-- 일반 게시판 기능을 제외하고 인원 모집 전용으로 운영한다. 따라서
+-- 모집 정원·마감일·상태가 모두 필수이며 조건부 NULL 규칙이 존재하지 않는다.
+--
+-- recruit_status : 생성 시 DEFAULT 'RECRUITING'. 정원이 차면 수락 처리
+--                  트랜잭션 안에서 CLOSED 로 갱신한다.
+--                  현재 인원은 post_participants 의 ACCEPTED 건수로 산출하므로
+--                  동시 수락 시 정원 초과를 막으려면 게시글 행을 잠가야 한다.
+--                  (SELECT ... FOR UPDATE)
+-- recruit_deadline : 경과하면 recruit_status 가 RECRUITING 이어도 신청을 차단한다.
+--                  자동 마감 배치가 없으므로 목록 조회 필터에도 같은 조건이 필요하다.
 -- =====================================================================
 CREATE TABLE board_posts (
   post_id           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '게시글 식별자',
   user_id           BIGINT       NOT NULL                COMMENT 'users.user_id. 작성자 탈퇴 시 게시글도 함께 삭제',
-  post_type         VARCHAR(20)  NOT NULL                COMMENT 'GENERAL(일반) / RECRUIT(인원 모집)',
   title             VARCHAR(100) NOT NULL                COMMENT '글 제목',
   content           TEXT         NOT NULL                COMMENT '본문',
   view_count        INT          NOT NULL DEFAULT 0      COMMENT '상세 조회 시 증가',
-  recruit_capacity  INT          NULL                    COMMENT 'RECRUIT 전용. 모집 인원 수(일반 글은 NULL)',
-  recruit_deadline  DATE         NULL                    COMMENT 'RECRUIT 전용. 모집 마감 날짜(일반 글은 NULL)',
-  recruit_status    VARCHAR(20)  NULL                    COMMENT 'RECRUIT 전용. RECRUITING(모집중) / CLOSED(마감)',
-  meeting_date      DATE         NULL                    COMMENT 'RECRUIT 전용. 실제 모임 날짜(선택)',
-  plan_id           BIGINT       NULL                    COMMENT 'travel_plans.plan_id. 인원 모집 시 동선 연계(선택)',
+  recruit_capacity  INT          NOT NULL                COMMENT '모집 인원 수',
+  recruit_deadline  DATE         NOT NULL                COMMENT '모집 마감 날짜. 경과 시 신청 차단',
+  recruit_status    VARCHAR(20)  NOT NULL DEFAULT 'RECRUITING' COMMENT 'RECRUITING(모집중) / CLOSED(마감)',
+  meeting_date      DATE         NULL                    COMMENT '실제 모임 날짜(선택)',
+  plan_id           BIGINT       NULL                    COMMENT 'travel_plans.plan_id. 동선 연계(선택)',
   created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '작성 시각',
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '수정 시각 자동 갱신',
   CONSTRAINT pk_board_posts                   PRIMARY KEY (post_id),
-  CONSTRAINT ck_board_posts_post_type         CHECK (post_type IN ('GENERAL', 'RECRUIT')),
   CONSTRAINT ck_board_posts_view_count        CHECK (view_count >= 0),
   CONSTRAINT ck_board_posts_recruit_capacity  CHECK (recruit_capacity >= 1),
   CONSTRAINT ck_board_posts_recruit_status    CHECK (recruit_status IN ('RECRUITING', 'CLOSED'))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='게시판 게시글';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='인원 모집 게시글';
 
 
 -- =====================================================================
 -- 22. post_participants : 모집 참여자
 -- 근거 요구사항 : MB-신규 (요구사항 정의서 반영 대기)
--- 현재 모집 인원은 status = 'ACCEPTED' 건수로 산출
--- post_type = 'RECRUIT' 여부는 애플리케이션에서 검증
+-- 현재 모집 인원은 status = 'ACCEPTED' 건수로 산출한다.
+-- 취소·거절 후 재신청은 복합 UNIQUE 때문에 새 행을 넣을 수 없으므로
+-- 기존 행을 APPLIED 로 되돌리는 방식으로 처리한다.
 -- =====================================================================
 CREATE TABLE post_participants (
   participant_id  BIGINT      NOT NULL AUTO_INCREMENT COMMENT '참여 신청 식별자',
-  post_id         BIGINT      NOT NULL                COMMENT 'board_posts.post_id (post_type=RECRUIT)',
+  post_id         BIGINT      NOT NULL                COMMENT 'board_posts.post_id',
   user_id         BIGINT      NOT NULL                COMMENT 'users.user_id',
   status          VARCHAR(20) NOT NULL DEFAULT 'APPLIED' COMMENT 'APPLIED(신청) / ACCEPTED(수락) / REJECTED(거절) / CANCELED(취소)',
   applied_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '신청 시각',

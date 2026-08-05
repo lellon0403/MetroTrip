@@ -37,3 +37,4 @@ pnpm-debug.log*
 
 # 기타
 tmp
+.txt

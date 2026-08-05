@@ -2,10 +2,17 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
-from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, not_implemented
+from app.database import get_db
+from app.routers.contract import (
+    AUTH_REQUIRED,
+    ERROR_RESPONSES,
+    CurrentUserId,
+    not_implemented,
+)
 from app.schemas.reviews import (
     MediaUploadRequest,
     MediaUploadResponse,
@@ -14,6 +21,7 @@ from app.schemas.reviews import (
     ReviewResponse,
     ReviewUpdateRequest,
 )
+from app.services import reviews as review_service
 
 router = APIRouter(prefix="/reviews", tags=["여행 후기"])
 media_router = APIRouter(
@@ -21,6 +29,7 @@ media_router = APIRouter(
     tags=["여행 후기"],
     dependencies=AUTH_REQUIRED,
 )
+DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get(
@@ -30,13 +39,22 @@ media_router = APIRouter(
     responses=ERROR_RESPONSES,
 )
 def list_reviews(
+    db: DatabaseSession,
     keyword: Annotated[str | None, Query(max_length=100)] = None,
     station_id: Annotated[int | None, Query()] = None,
     tag: Annotated[str | None, Query(max_length=30)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> JSONResponse:
-    return not_implemented()
+) -> ReviewListResponse:
+    """후기 목록을 조회한다."""
+    return review_service.list_reviews(
+        db,
+        keyword=keyword,
+        station_id=station_id,
+        tag=tag,
+        page=page,
+        size=size,
+    )
 
 
 @router.post(
@@ -47,8 +65,13 @@ def list_reviews(
     dependencies=AUTH_REQUIRED,
     responses=ERROR_RESPONSES,
 )
-def create_review(_: ReviewCreateRequest) -> JSONResponse:
-    return not_implemented()
+def create_review(
+    request: ReviewCreateRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> ReviewResponse:
+    """새 후기를 작성한다."""
+    return review_service.create_review(db, user_id, request)
 
 
 @router.get(
@@ -57,8 +80,9 @@ def create_review(_: ReviewCreateRequest) -> JSONResponse:
     summary="후기 상세 조회",
     responses=ERROR_RESPONSES,
 )
-def get_review(review_id: int) -> JSONResponse:
-    return not_implemented()
+def get_review(review_id: int, db: DatabaseSession) -> ReviewResponse:
+    """후기 상세를 조회한다."""
+    return review_service.get_review(db, review_id)
 
 
 @router.patch(
@@ -68,8 +92,14 @@ def get_review(review_id: int) -> JSONResponse:
     dependencies=AUTH_REQUIRED,
     responses=ERROR_RESPONSES,
 )
-def update_review(review_id: int, _: ReviewUpdateRequest) -> JSONResponse:
-    return not_implemented()
+def update_review(
+    review_id: int,
+    request: ReviewUpdateRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> ReviewResponse:
+    """본인이 작성한 후기를 수정한다."""
+    return review_service.update_review(db, review_id, user_id, request)
 
 
 @router.delete(
@@ -79,8 +109,13 @@ def update_review(review_id: int, _: ReviewUpdateRequest) -> JSONResponse:
     dependencies=AUTH_REQUIRED,
     responses=ERROR_RESPONSES,
 )
-def delete_review(review_id: int) -> JSONResponse:
-    return not_implemented()
+def delete_review(
+    review_id: int,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> None:
+    """본인이 작성한 후기를 삭제한다."""
+    review_service.delete_review(db, review_id, user_id)
 
 
 @media_router.post(
@@ -92,4 +127,5 @@ def delete_review(review_id: int) -> JSONResponse:
     responses=ERROR_RESPONSES,
 )
 def create_media_upload(_: MediaUploadRequest) -> JSONResponse:
+    """오브젝트 스토리지 연동 전까지는 계약만 정의한다."""
     return not_implemented()

@@ -1,6 +1,6 @@
 %% 지하철 노선 기반 관광 추천 서비스 (MetroTrip) ERD
-%% 근거 문서 : 데이터베이스 명세서 V1.8
-%% 22개 테이블 / FK 34건
+%% 근거 문서 : 데이터베이스 명세서 V1.10
+%% 22개 테이블 / 140컬럼 / FK 34건 / UNIQUE 10 / CHECK 20
 %% 표기 : ||--o{ = 부모 필수(자식 FK NOT NULL) / |o--o{ = 부모 선택(자식 FK NULL 허용)
 
 erDiagram
@@ -93,7 +93,6 @@ erDiagram
     stations {
         BIGINT station_id PK
         VARCHAR_100 station_name
-        VARCHAR_20 station_code UK "nullable"
         DECIMAL latitude
         DECIMAL longitude
         VARCHAR_255 address "nullable"
@@ -106,11 +105,13 @@ erDiagram
     }
     train_timetables {
         BIGINT timetable_id PK
+        VARCHAR_20 train_no "nullable"
         BIGINT line_id FK
         BIGINT station_id FK
         VARCHAR_10 day_type
         VARCHAR_10 direction
-        TIME arrival_time
+        TIME arrival_time "nullable"
+        TIME departure_time "nullable"
         BIGINT destination_station_id FK "nullable"
     }
     places {
@@ -203,13 +204,12 @@ erDiagram
     board_posts {
         BIGINT post_id PK
         BIGINT user_id FK
-        VARCHAR_20 post_type
         VARCHAR_100 title
         TEXT content
         INT view_count
-        INT recruit_capacity "nullable"
-        DATE recruit_deadline "nullable"
-        VARCHAR_20 recruit_status "nullable"
+        INT recruit_capacity
+        DATE recruit_deadline
+        VARCHAR_20 recruit_status
         DATE meeting_date "nullable"
         BIGINT plan_id FK "nullable"
         DATETIME created_at

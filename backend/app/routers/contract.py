@@ -19,11 +19,18 @@ def get_current_user_id(
 ) -> int:
     return auth.authenticate_access(credentials.credentials, get_settings())
 
-
-CurrentUserId = Annotated[int, Depends(get_current_user_id)]
+""" 
+공통 인프라
+get_current_user_id 의존성 추가
+"""
+def get_current_user_id(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> int:
+    """Bearer 토큰을 검증하고 현재 로그인한 사용자의 ID를 반환한다."""
+    return auth.authenticate_access(credentials.credentials, get_settings())
 
 AUTH_REQUIRED = [Depends(get_current_user_id)]
-
+CurrentUserId = Annotated[int, Depends(get_current_user_id)]
 
 def _get_reauthenticated_user_id(
     current_user_id: CurrentUserId,
