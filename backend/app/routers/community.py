@@ -2,10 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
 
-from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, not_implemented
+from app.database import get_db
+from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, CurrentUserId
 from app.schemas.community import (
     ParticipantCancelRequest,
     ParticipantDecisionRequest,
@@ -15,29 +16,37 @@ from app.schemas.community import (
     PostCreateRequest,
     PostDetailResponse,
     PostListResponse,
-    PostType,
     PostUpdateRequest,
     RecruitStatus,
 )
+from app.services import community as community_service
 
 router = APIRouter(prefix="/posts", tags=["게시판"])
+DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get(
     "",
     response_model=PostListResponse,
     summary="게시글 목록 조회",
-    description="일반 글과 인원 모집 글을 조회합니다. 좋아요와 정렬 옵션은 제외합니다.",
+    description="인원 모집 글을 조회합니다. 좋아요와 정렬 옵션은 제외합니다.",
     responses=ERROR_RESPONSES,
 )
 def list_posts(
-    post_type: Annotated[PostType | None, Query()] = None,
+    db: DatabaseSession,
     keyword: Annotated[str | None, Query(max_length=100)] = None,
     recruit_status: Annotated[RecruitStatus | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> JSONResponse:
-    return not_implemented()
+) -> PostListResponse:
+    """게시글 목록을 조회한다."""
+    return community_service.list_posts(
+        db,
+        keyword=keyword,
+        recruit_status=recruit_status,
+        page=page,
+        size=size,
+    )
 
 
 @router.post(
@@ -48,8 +57,13 @@ def list_posts(
     dependencies=AUTH_REQUIRED,
     responses=ERROR_RESPONSES,
 )
-def create_post(_: PostCreateRequest) -> JSONResponse:
-    return not_implemented()
+def create_post(
+    request: PostCreateRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> PostDetailResponse:
+    """새 게시글을 작성한다."""
+    return community_service.create_post(db, user_id, request)
 
 
 @router.get(
@@ -58,8 +72,9 @@ def create_post(_: PostCreateRequest) -> JSONResponse:
     summary="게시글 상세 조회",
     responses=ERROR_RESPONSES,
 )
-def get_post(post_id: int) -> JSONResponse:
-    return not_implemented()
+def get_post(post_id: int, db: DatabaseSession) -> PostDetailResponse:
+    """게시글 상세를 조회한다."""
+    return community_service.get_post(db, post_id)
 
 
 @router.patch(
@@ -69,8 +84,14 @@ def get_post(post_id: int) -> JSONResponse:
     dependencies=AUTH_REQUIRED,
     responses=ERROR_RESPONSES,
 )
-def update_post(post_id: int, _: PostUpdateRequest) -> JSONResponse:
-    return not_implemented()
+def update_post(
+    post_id: int,
+    request: PostUpdateRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> PostDetailResponse:
+    """본인이 작성한 게시글을 수정한다."""
+    return community_service.update_post(db, post_id, user_id, request)
 
 
 @router.delete(
@@ -80,8 +101,13 @@ def update_post(post_id: int, _: PostUpdateRequest) -> JSONResponse:
     dependencies=AUTH_REQUIRED,
     responses=ERROR_RESPONSES,
 )
-def delete_post(post_id: int) -> JSONResponse:
-    return not_implemented()
+def delete_post(
+    post_id: int,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> None:
+    """본인이 작성한 게시글을 삭제한다."""
+    community_service.delete_post(db, post_id, user_id)
 
 
 @router.post(
@@ -92,8 +118,13 @@ def delete_post(post_id: int) -> JSONResponse:
     dependencies=AUTH_REQUIRED,
     responses=ERROR_RESPONSES,
 )
-def apply_to_post(post_id: int) -> JSONResponse:
-    return not_implemented()
+def apply_to_post(
+    post_id: int,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> ParticipantResponse:
+    """모집 글에 참여를 신청한다."""
+    return community_service.apply_to_post(db, post_id, user_id)
 
 
 @router.patch(
@@ -105,9 +136,12 @@ def apply_to_post(post_id: int) -> JSONResponse:
 )
 def cancel_my_application(
     post_id: int,
-    _: ParticipantCancelRequest,
-) -> JSONResponse:
-    return not_implemented()
+    request: ParticipantCancelRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> ParticipantResponse:
+    """본인의 참여 신청을 취소한다."""
+    return community_service.cancel_my_application(db, post_id, user_id, request)
 
 
 @router.get(
@@ -119,12 +153,15 @@ def cancel_my_application(
 )
 def list_participants(
     post_id: int,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
     participant_status: Annotated[
         ParticipantStatus | None,
         Query(alias="status"),
     ] = None,
-) -> JSONResponse:
-    return not_implemented()
+) -> ParticipantListResponse:
+    """게시글 작성자가 참여 신청 목록을 조회한다."""
+    return community_service.list_participants(db, post_id, user_id, participant_status)
 
 
 @router.patch(
@@ -137,6 +174,11 @@ def list_participants(
 def decide_participant(
     post_id: int,
     participant_id: int,
-    _: ParticipantDecisionRequest,
-) -> JSONResponse:
-    return not_implemented()
+    request: ParticipantDecisionRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> ParticipantResponse:
+    """게시글 작성자가 참여 신청을 수락하거나 거절한다."""
+    return community_service.decide_participant(
+        db, post_id, participant_id, user_id, request
+    )
