@@ -1,4 +1,5 @@
 """SQLAlchemy database models."""
+
 from app.models.auth import (
     AuthToken,
     EmailVerification,
