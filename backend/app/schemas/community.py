@@ -23,6 +23,11 @@ class ParticipantStatus(str, Enum):
     CANCELED = "CANCELED"
 
 
+class ParticipatingPostStatus(str, Enum):
+    APPLIED = "APPLIED"
+    ACCEPTED = "ACCEPTED"
+
+
 class AuthorResponse(ApiSchema):
     user_id: int | None
     nickname: str
@@ -72,6 +77,21 @@ class PostDetailResponse(PostSummaryResponse):
 
 class PostListResponse(Pagination):
     items: list[PostSummaryResponse]
+
+
+class MyParticipationResponse(ApiSchema):
+    participant_id: int
+    status: ParticipatingPostStatus
+    applied_at: datetime
+    responded_at: datetime | None
+
+
+class ParticipatingPostResponse(PostSummaryResponse):
+    participation: MyParticipationResponse
+
+
+class ParticipatingPostListResponse(Pagination):
+    items: list[ParticipatingPostResponse]
 
 
 class ParticipantResponse(ApiSchema):

@@ -53,6 +53,26 @@ class CommunityRepository:
         ).all()
         return list(items), total
 
+    def list_posts_by_author_id(
+        self,
+        *,
+        user_id: int,
+        page: int,
+        size: int,
+    ) -> tuple[list[BoardPost], int]:
+        """사용자가 작성한 모집 글을 최근 작성순으로 조회하고 전체 건수를 반환한다."""
+        statement = select(BoardPost).where(BoardPost.user_id == user_id)
+        total = (
+            self.session.scalar(select(func.count()).select_from(statement.subquery()))
+            or 0
+        )
+        items = self.session.scalars(
+            statement.order_by(BoardPost.created_at.desc(), BoardPost.post_id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        ).all()
+        return list(items), total
+
     def create_post(self, **fields: object) -> BoardPost:
         """새 게시글을 추가하고 식별자를 할당한다."""
         post = BoardPost(**fields)
@@ -106,6 +126,47 @@ class CommunityRepository:
                 statement.order_by(PostParticipant.applied_at.asc())
             ).all()
         )
+
+    def list_participating_posts(
+        self,
+        *,
+        user_id: int,
+        status: str,
+        page: int,
+        size: int,
+    ) -> tuple[list[tuple[BoardPost, PostParticipant]], int]:
+        """사용자의 모집 참여 글을 상태별 최근 활동순으로 조회한다."""
+        condition = (PostParticipant.user_id == user_id) & (
+            PostParticipant.status == status
+        )
+        total = (
+            self.session.scalar(
+                select(func.count()).select_from(PostParticipant).where(condition)
+            )
+            or 0
+        )
+        statement = (
+            select(BoardPost, PostParticipant)
+            .join(
+                PostParticipant,
+                PostParticipant.post_id == BoardPost.post_id,
+            )
+            .where(condition)
+        )
+        if status == "ACCEPTED":
+            statement = statement.order_by(
+                PostParticipant.responded_at.desc(),
+                PostParticipant.participant_id.desc(),
+            )
+        else:
+            statement = statement.order_by(
+                PostParticipant.applied_at.desc(),
+                PostParticipant.participant_id.desc(),
+            )
+        rows = self.session.execute(
+            statement.offset((page - 1) * size).limit(size)
+        ).all()
+        return [(row[0], row[1]) for row in rows], total
 
     def create_participant(self, post_id: int, user_id: int) -> PostParticipant:
         """새 참여 신청을 추가한다."""

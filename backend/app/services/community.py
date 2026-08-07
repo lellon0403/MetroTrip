@@ -15,11 +15,15 @@ from app.models.community import BoardPost, PostParticipant
 from app.repositories.community import CommunityRepository
 from app.schemas.community import (
     AuthorResponse,
+    MyParticipationResponse,
     ParticipantCancelRequest,
     ParticipantDecisionRequest,
     ParticipantListResponse,
     ParticipantResponse,
     ParticipantStatus,
+    ParticipatingPostListResponse,
+    ParticipatingPostResponse,
+    ParticipatingPostStatus,
     PostCreateRequest,
     PostDetailResponse,
     PostListResponse,
@@ -126,6 +130,27 @@ def _to_participant_response(
     )
 
 
+def _build_post_summaries(
+    repository: CommunityRepository,
+    posts: list[BoardPost],
+) -> list[PostSummaryResponse]:
+    """여러 모집 글을 작성자와 수락 인원을 포함한 요약 응답으로 조립한다."""
+    if not posts:
+        return []
+    nicknames = repository.get_user_nicknames({post.user_id for post in posts})
+    accepted_counts = repository.count_accepted_for_posts(
+        [post.post_id for post in posts]
+    )
+    return [
+        _to_summary(
+            post,
+            author_nickname=nicknames.get(post.user_id, ""),
+            accepted_count=accepted_counts.get(post.post_id, 0),
+        )
+        for post in posts
+    ]
+
+
 def list_posts(
     db: Session,
     *,
@@ -143,22 +168,69 @@ def list_posts(
         size=size,
     )
 
-    items: list[PostSummaryResponse] = []
-    if posts:
-        nicknames = repository.get_user_nicknames({post.user_id for post in posts})
-        accepted_counts = repository.count_accepted_for_posts(
-            [post.post_id for post in posts]
-        )
-        items = [
-            _to_summary(
-                post,
-                author_nickname=nicknames.get(post.user_id, ""),
-                accepted_count=accepted_counts.get(post.post_id, 0),
-            )
-            for post in posts
-        ]
-
     return PostListResponse(
+        items=_build_post_summaries(repository, posts),
+        page=page,
+        size=size,
+        total_elements=total,
+        total_pages=math.ceil(total / size) if total else 0,
+    )
+
+
+def list_my_posts(
+    db: Session,
+    user_id: int,
+    *,
+    page: int,
+    size: int,
+) -> PostListResponse:
+    """현재 사용자가 작성한 모집 글을 최근 작성순으로 페이지 조회한다."""
+    repository = CommunityRepository(db)
+    posts, total = repository.list_posts_by_author_id(
+        user_id=user_id,
+        page=page,
+        size=size,
+    )
+    return PostListResponse(
+        items=_build_post_summaries(repository, posts),
+        page=page,
+        size=size,
+        total_elements=total,
+        total_pages=math.ceil(total / size) if total else 0,
+    )
+
+
+def list_my_participating_posts(
+    db: Session,
+    user_id: int,
+    *,
+    status: ParticipatingPostStatus,
+    page: int,
+    size: int,
+) -> ParticipatingPostListResponse:
+    """현재 사용자의 신청 중 또는 수락된 모집 글을 상태별 활동순으로 조회한다."""
+    repository = CommunityRepository(db)
+    rows, total = repository.list_participating_posts(
+        user_id=user_id,
+        status=status.value,
+        page=page,
+        size=size,
+    )
+    posts = [post for post, _ in rows]
+    summaries = _build_post_summaries(repository, posts)
+    items = [
+        ParticipatingPostResponse(
+            **summary.model_dump(),
+            participation=MyParticipationResponse(
+                participant_id=participant.participant_id,
+                status=participant.status,
+                applied_at=participant.applied_at,
+                responded_at=participant.responded_at,
+            ),
+        )
+        for summary, (_, participant) in zip(summaries, rows, strict=True)
+    ]
+    return ParticipatingPostListResponse(
         items=items,
         page=page,
         size=size,
@@ -358,7 +430,9 @@ def list_participants(
     )
     return ParticipantListResponse(
         items=[
-            _to_participant_response(participant, nicknames.get(participant.user_id, ""))
+            _to_participant_response(
+                participant, nicknames.get(participant.user_id, "")
+            )
             for participant in participants
         ]
     )
