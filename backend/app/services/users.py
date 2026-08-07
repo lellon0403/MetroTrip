@@ -105,3 +105,66 @@ def withdraw(db: Session, user_id: int) -> None:
     user = _find_user(repository, user_id)
     repository.delete_user(user)
     db.commit()
+
+
+def list_favorites(db: Session, user_id: int) -> dict[str, object]:
+    """현재 사용자가 즐겨찾기한 역을 최근 추가순으로 반환한다."""
+    repository = UserRepository(db)
+    _find_user(repository, user_id)
+    favorites = repository.list_favorites(user_id)
+    return {
+        "items": [
+            {
+                "favorite_id": favorite.favorite_id,
+                "station_id": favorite.station_id,
+                "station_name": station_name,
+                "created_at": favorite.created_at,
+            }
+            for favorite, station_name in favorites
+        ]
+    }
+
+
+def add_favorite(
+    db: Session,
+    user_id: int,
+    station_id: int,
+) -> dict[str, object]:
+    """현재 사용자의 역 즐겨찾기를 중복 없이 생성한다."""
+    repository = UserRepository(db)
+    _find_user(repository, user_id)
+    station = repository.find_station_by_id(station_id)
+    if not station:
+        raise _error("STATION_NOT_FOUND", "역을 찾을 수 없습니다.", 404)
+    if repository.find_favorite(user_id, station_id):
+        raise _error(
+            "FAVORITE_ALREADY_EXISTS",
+            "이미 즐겨찾기한 역입니다.",
+            409,
+        )
+
+    try:
+        favorite = repository.create_favorite(user_id, station_id)
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise _error(
+            "FAVORITE_ALREADY_EXISTS",
+            "이미 즐겨찾기한 역입니다.",
+            409,
+        ) from error
+
+    return {
+        "favorite_id": favorite.favorite_id,
+        "station_id": favorite.station_id,
+        "station_name": station.station_name,
+        "created_at": favorite.created_at,
+    }
+
+
+def delete_favorite(db: Session, user_id: int, station_id: int) -> None:
+    """현재 사용자의 역 즐겨찾기를 멱등적으로 삭제한다."""
+    repository = UserRepository(db)
+    _find_user(repository, user_id)
+    repository.delete_favorite(user_id, station_id)
+    db.commit()
