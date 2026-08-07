@@ -3,7 +3,7 @@
 초기 MVP의 지도 기능은 프론트 단독으로 동작하지만, 현재 회원가입·로그인·비밀번호 재설정은 백엔드와 연결되어 있습니다. 회원 조회·수정·탈퇴 백엔드도 구현되어 있어 이 문서를 기준으로 마이페이지 프론트 연동을 진행합니다.
 
 > 대상: 백엔드(윤홍규), DB(김유진), 프론트(우진, 황지성)
-> 상태: 2026-08-05 기준 — 인증과 회원 조회·수정·탈퇴 백엔드 구현 완료, 프론트 회원 관리 연동 필요
+> 상태: 2026-08-07 기준 — 인증, 회원 조회·수정·탈퇴, 역 즐겨찾기와 마이페이지 목록 API 백엔드 구현 완료, 프론트 회원 관리 연동 필요
 
 ---
 
@@ -84,6 +84,8 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 | POST | `/api/v1/users/me/favorites/{station_id}` | 역 즐겨찾기 추가 |
 | DELETE | `/api/v1/users/me/favorites/{station_id}` | 역 즐겨찾기 삭제 |
 | GET | `/api/v1/users/me/reviews` | 내가 작성한 후기 목록 |
+| GET | `/api/v1/users/me/posts` | 내가 작성한 모집 글 목록 |
+| GET | `/api/v1/users/me/participating-posts` | 내가 참여한 모집 글 목록 |
 | GET | `/api/v1/lines` | 노선 목록 |
 | GET | `/api/v1/lines/suggestions` | 최근 조회 기록 기반 노선 추천 |
 | POST | `/api/v1/lines/{line_id}/views` | 노선 조회 기록 |
@@ -122,7 +124,7 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 | PATCH | `/api/v1/admin/places/{place_id}` | 장소 수정 |
 | DELETE | `/api/v1/admin/places/{place_id}` | 장소 삭제 |
 
-현재 인증 API, 내 회원 정보 조회·수정·탈퇴 API와 `/health`는 실제 구현되어 있습니다. 그 외 비즈니스 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
+현재 인증 API, 내 회원 정보 조회·수정·탈퇴, 역 즐겨찾기, 내가 작성한 후기·모집 글·참여 모집 글 목록 API와 `/health`는 실제 구현되어 있습니다. 그 외 비즈니스 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
 
 내 회원 정보 수정과 탈퇴는 Access Token과 `X-Reauthentication-Token` 헤더를 함께 요구합니다. 재인증 토큰은 `/api/v1/auth/reauthenticate`에서 현재 비밀번호와 목적(`PROFILE_UPDATE`, `PASSWORD_CHANGE`, `WITHDRAWAL`)을 확인한 후 발급되며, 별도 DB 저장 없이 5분 동안 유효합니다. 각 API는 자신의 목적과 일치하는 재인증 토큰만 허용합니다. 일반 회원 정보 수정은 이름과 닉네임만 허용하고, 비밀번호는 `/api/v1/users/me/password`에서 별도로 변경합니다. 회원 탈퇴 시 사용자 행과 DB에서 `ON DELETE CASCADE`로 연결된 회원 소유 데이터를 함께 하드 딜리트합니다.
 
@@ -291,6 +293,144 @@ Request Body는 없습니다. 성공 후 프론트는 로컬 토큰을 모두 �
 5. 재인증 토큰은 화면 메모리에만 보관하고 만료 시 비밀번호 입력 단계로 되돌립니다.
 6. 비밀번호 변경·탈퇴 성공 시 로컬 토큰을 제거하고 로그인 화면으로 이동합니다.
 7. Access Token 만료에 대비해 Refresh Token 갱신과 요청 재시도를 공통 API 클라이언트에 연결합니다.
+
+### 5-8. 역 즐겨찾기
+
+즐겨찾기 API는 모두 Access Token을 요구하며, 프론트가 `userId`를 보내지 않습니다.
+
+목록 조회:
+
+```http
+GET /api/v1/users/me/favorites
+Authorization: Bearer <accessToken>
+```
+
+```json
+{
+  "items": [
+    {
+      "favoriteId": 3,
+      "stationId": 11,
+      "stationName": "탕정역",
+      "createdAt": "2026-08-06T10:00:00"
+    }
+  ]
+}
+```
+
+목록은 최근 추가순이며 즐겨찾기가 없으면 `{"items": []}`를 반환합니다.
+
+추가:
+
+```http
+POST /api/v1/users/me/favorites/{stationId}
+Authorization: Bearer <accessToken>
+```
+
+정상 추가는 HTTP `201`과 추가된 즐겨찾기를 반환합니다. 존재하지 않는 역은 `404 STATION_NOT_FOUND`, 이미 추가된 역은 `409 FAVORITE_ALREADY_EXISTS`를 반환합니다. 프론트는 요청 중 버튼을 비활성화하되, 서버의 중복 응답도 처리해야 합니다.
+
+삭제:
+
+```http
+DELETE /api/v1/users/me/favorites/{stationId}
+Authorization: Bearer <accessToken>
+```
+
+삭제는 멱등적으로 동작합니다. 즐겨찾기가 존재하거나 이미 삭제된 상태 모두 HTTP `204`를 반환하며 응답 Body는 없습니다. 지도와 마이페이지처럼 서로 다른 화면에서도 동일한 즐겨찾기 API 함수를 공유하는 것을 권장합니다.
+
+### 5-9. 내가 작성한 후기 목록
+
+```http
+GET /api/v1/users/me/reviews?page=1&size=10
+Authorization: Bearer <accessToken>
+```
+
+Access Token에서 현재 사용자를 식별하므로 프론트는 `userId`를 보내지 않습니다. `page`는 1부터 시작하고 `size`는 1~100이며 기본값은 10입니다.
+
+응답은 전체 후기 목록과 동일한 `ReviewListResponse`를 사용합니다.
+
+```json
+{
+  "items": [
+    {
+      "reviewId": 15,
+      "userId": 3,
+      "authorNickname": "metro_user",
+      "title": "서울역 여행 후기",
+      "content": "후기 내용",
+      "startStationId": 1,
+      "startStationName": "서울역",
+      "endStationId": 2,
+      "endStationName": "부산역",
+      "rating": 9,
+      "travelCost": 50000,
+      "planId": null,
+      "viewCount": 12,
+      "tags": ["당일치기"],
+      "media": [],
+      "createdAt": "2026-08-06T15:30:00",
+      "updatedAt": "2026-08-06T15:30:00"
+    }
+  ],
+  "page": 1,
+  "size": 10,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+목록은 `createdAt DESC`, 값이 같으면 `reviewId DESC`인 최근 작성순입니다. 작성한 후기가 없으면 `items`는 빈 배열이고 `totalElements`와 `totalPages`는 0입니다. 마이페이지 목록 조회는 후기 상세 열람이 아니므로 `viewCount`를 증가시키지 않습니다.
+
+### 5-10. 내가 작성한 모집 글
+
+```http
+GET /api/v1/users/me/posts?page=1&size=10
+Authorization: Bearer <accessToken>
+```
+
+현재 사용자가 작성한 모집 글만 `createdAt DESC`, 값이 같으면 `postId DESC`인 최근 작성순으로 반환합니다. 기존 `PostListResponse`를 사용하며 목록 조회는 `viewCount`를 증가시키지 않습니다.
+
+### 5-11. 내가 참여한 모집 글
+
+```http
+GET /api/v1/users/me/participating-posts?status=APPLIED&page=1&size=10
+Authorization: Bearer <accessToken>
+```
+
+`status`는 필수이며 `APPLIED`와 `ACCEPTED`만 허용합니다. `REJECTED`, `CANCELED` 또는 누락된 상태는 요청 검증 단계에서 HTTP `422`를 반환합니다.
+
+- `APPLIED`: `appliedAt DESC`, 값이 같으면 `participantId DESC`인 최근 신청순
+- `ACCEPTED`: `respondedAt DESC`, 값이 같으면 `participantId DESC`인 최근 수락순
+
+각 게시글에는 전체 모집 상태와 별도로 현재 사용자의 참여 정보를 포함합니다.
+
+```json
+{
+  "postId": 20,
+  "title": "부산 당일치기 동행",
+  "author": {
+    "userId": 5,
+    "nickname": "travel_user"
+  },
+  "viewCount": 8,
+  "recruitment": {
+    "capacity": 3,
+    "acceptedCount": 2,
+    "deadline": "2026-08-15",
+    "status": "RECRUITING",
+    "meetingDate": "2026-08-17"
+  },
+  "createdAt": "2026-08-01T12:00:00",
+  "participation": {
+    "participantId": 31,
+    "status": "ACCEPTED",
+    "appliedAt": "2026-08-02T09:00:00",
+    "respondedAt": "2026-08-03T14:00:00"
+  }
+}
+```
+
+취소·거절 후 재신청하면 기존 참여 행의 `appliedAt`을 재신청 시각으로 갱신하고 `respondedAt`을 초기화하므로 `APPLIED` 목록의 최근 신청순에 정상 반영됩니다.
 
 ## 6. DB 담당에게 전달할 사항
 

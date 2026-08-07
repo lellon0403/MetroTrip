@@ -74,7 +74,7 @@ GET http://localhost:8000/docs
 - JSON 필드명: `camelCase`
 - 목록 조회: `page`, `size` 페이지네이션
 - 인증 필요 API: Swagger의 `Authorize`에 Bearer Access Token 입력
-- 현재 상태: 인증 API와 회원 조회·수정·탈퇴 API를 제외한 비즈니스 API는 계약만 정의되어 `501` 반환
+- 현재 상태: 인증 API, 회원 조회·수정·탈퇴, 역 즐겨찾기, 내가 작성한 후기·모집 글·참여 모집 글 목록 API를 제외한 비즈니스 API는 계약만 정의되어 `501` 반환
 - 실시간 지하철 위치와 길 안내: 백엔드 범위에서 제외
 - 현재 좌표 표시: 프론트엔드의 Geolocation API로 처리
 - 여행 계획 공유: 로그인 없는 읽기 전용 링크만 지원
@@ -94,6 +94,10 @@ GET    /api/v1/users/me
 PATCH  /api/v1/users/me
 PATCH  /api/v1/users/me/password
 DELETE /api/v1/users/me
+
+GET    /api/v1/users/me/favorites
+POST   /api/v1/users/me/favorites/{station_id}
+DELETE /api/v1/users/me/favorites/{station_id}
 ```
 
 재인증 토큰은 5분 동안 유효하며 수정·탈퇴 요청의 `X-Reauthentication-Token` 헤더로 전달합니다. 요청·응답 예시와 프론트 토큰 처리 규칙은 [백엔드 연동 인수인계 문서](../docs/BACKEND-HANDOFF.md#5-프론트-회원-관리-연동-계약)를 참고합니다.
