@@ -2,8 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -14,9 +13,13 @@ from app.routers.contract import (
     PasswordChangeUserId,
     ProfileUpdateUserId,
     WithdrawalUserId,
-    not_implemented,
 )
 from app.schemas.common import MessageResponse
+from app.schemas.community import (
+    ParticipatingPostListResponse,
+    ParticipatingPostStatus,
+    PostListResponse,
+)
 from app.schemas.reviews import ReviewListResponse
 from app.schemas.users import (
     FavoriteListResponse,
@@ -25,6 +28,8 @@ from app.schemas.users import (
     UserProfileResponse,
     UserProfileUpdateRequest,
 )
+from app.services import community as community_service
+from app.services import reviews as review_service
 from app.services import users
 
 router = APIRouter(
@@ -101,8 +106,12 @@ def withdraw(
     summary="즐겨찾기한 역 목록 조회",
     responses=ERROR_RESPONSES,
 )
-def list_favorites() -> JSONResponse:
-    return not_implemented()
+def list_favorites(
+    current_user_id: CurrentUserId,
+    db: DatabaseSession,
+) -> FavoriteListResponse:
+    """현재 사용자가 즐겨찾기한 역 목록을 반환한다."""
+    return users.list_favorites(db, current_user_id)
 
 
 @router.post(
@@ -112,8 +121,13 @@ def list_favorites() -> JSONResponse:
     summary="역 즐겨찾기 추가",
     responses=ERROR_RESPONSES,
 )
-def add_favorite(station_id: int) -> JSONResponse:
-    return not_implemented()
+def add_favorite(
+    station_id: int,
+    current_user_id: CurrentUserId,
+    db: DatabaseSession,
+) -> FavoriteResponse:
+    """현재 사용자의 즐겨찾기에 역을 추가한다."""
+    return users.add_favorite(db, current_user_id, station_id)
 
 
 @router.delete(
@@ -122,8 +136,14 @@ def add_favorite(station_id: int) -> JSONResponse:
     summary="역 즐겨찾기 삭제",
     responses=ERROR_RESPONSES,
 )
-def delete_favorite(station_id: int) -> JSONResponse:
-    return not_implemented()
+def delete_favorite(
+    station_id: int,
+    current_user_id: CurrentUserId,
+    db: DatabaseSession,
+) -> Response:
+    """현재 사용자의 즐겨찾기에서 역을 멱등적으로 삭제한다."""
+    users.delete_favorite(db, current_user_id, station_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -132,5 +152,63 @@ def delete_favorite(station_id: int) -> JSONResponse:
     summary="내가 작성한 후기 목록 조회",
     responses=ERROR_RESPONSES,
 )
-def list_my_reviews() -> JSONResponse:
-    return not_implemented()
+def list_my_reviews(
+    current_user_id: CurrentUserId,
+    db: DatabaseSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> ReviewListResponse:
+    """현재 사용자가 작성한 후기를 최근 작성순으로 조회한다."""
+    return review_service.list_my_reviews(
+        db,
+        current_user_id,
+        page=page,
+        size=size,
+    )
+
+
+@router.get(
+    "/posts",
+    response_model=PostListResponse,
+    summary="내가 작성한 모집 글 목록 조회",
+    responses=ERROR_RESPONSES,
+)
+def list_my_posts(
+    current_user_id: CurrentUserId,
+    db: DatabaseSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> PostListResponse:
+    """현재 사용자가 작성한 모집 글을 최근 작성순으로 조회한다."""
+    return community_service.list_my_posts(
+        db,
+        current_user_id,
+        page=page,
+        size=size,
+    )
+
+
+@router.get(
+    "/participating-posts",
+    response_model=ParticipatingPostListResponse,
+    summary="내가 참여한 모집 글 목록 조회",
+    responses=ERROR_RESPONSES,
+)
+def list_my_participating_posts(
+    current_user_id: CurrentUserId,
+    db: DatabaseSession,
+    participant_status: Annotated[
+        ParticipatingPostStatus,
+        Query(alias="status"),
+    ],
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> ParticipatingPostListResponse:
+    """현재 사용자의 신청 중 또는 수락된 모집 글을 상태별로 조회한다."""
+    return community_service.list_my_participating_posts(
+        db,
+        current_user_id,
+        status=participant_status,
+        page=page,
+        size=size,
+    )
