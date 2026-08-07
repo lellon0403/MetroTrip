@@ -93,6 +93,12 @@
   --timetable-panel-width: clamp(22rem, 22vw, 26rem);
   --timetable-panel-height: min(88dvh, 42rem);
   --line-map-height: clamp(18rem, 62dvh, 38.75rem);
+  /*
+   * 경로 화면의 역 선택 지도.
+   * 1호선은 남북으로 길어 투영하면 세로로 길쭉해진다.
+   * 낮게 잡으면 역이 세로로 몰려 누를 수 없으므로 넉넉히 준다.
+   */
+  --route-map-height: clamp(26rem, 78dvh, 48rem);
   --auth-width: clamp(20rem, 90vw, 28rem);
   --auth-dialog-width: clamp(20rem, 90vw, 26rem);
   --auth-gutter: clamp(1rem, 4vw, 2.5rem);

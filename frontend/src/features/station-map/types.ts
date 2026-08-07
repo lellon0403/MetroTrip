@@ -10,10 +10,13 @@ export type Place = {
   /** 장소명 (예: "서브웨이 탕정점") */
   name: string;
   /**
-   * 카카오 로컬 카테고리 코드 (docs/SPEC.md 5장)
-   * FD6 음식점 / CE7 카페 / AT4 관광명소 / SW8 지하철역
+   * 카카오 로컬 카테고리 코드(docs/SPEC.md 5장) + DB `places.category`(V1.10).
+   *
+   * FD6 음식점 / CE7 카페 / AT4 관광명소 / SW8 지하철역 은 카카오 로컬 검색 코드.
+   * SHOPPING / ETC 는 DB 시드(`db/seed/seed_05_places.sql`, TourAPI 원본)가 쓰는 값으로,
+   * 카카오 코드에 대응이 없어 그대로 둔다.
    */
-  category: 'FD6' | 'CE7' | 'AT4' | 'SW8';
+  category: 'FD6' | 'CE7' | 'AT4' | 'SW8' | 'SHOPPING' | 'ETC';
   /** 카테고리 한글 이름 — 인포윈도우에 그대로 보여준다 */
   categoryName: string;
   address: string;

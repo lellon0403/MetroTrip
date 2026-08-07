@@ -1,49 +1,315 @@
 {
-  "탕정역": [
+  "성환역": [
     {
-      "id": "tangjeong-subway",
-      "name": "써브웨이 아산탕정점",
+      "id": "db-1",
+      "name": "[백년가게]진주회관본관",
       "category": "FD6",
-      "categoryName": "음식점",
-      "address": "충남 아산시 탕정면 한들물빛도시로 88",
-      "lat": 36.78721697041934,
-      "lng": 127.08384579316329
+      "address": "충청남도 천안시 서북구 성환읍 성환11길 15",
+      "lat": 36.916971,
+      "lng": 127.129625,
+      "categoryName": "음식점"
     },
     {
-      "id": "tangjeong-maehwa-park",
-      "name": "매화공원",
-      "category": "AT4",
-      "categoryName": "관광명소",
-      "address": "충남 아산시 탕정면 매곡리 1001-23",
-      "lat": 36.7914457910363,
-      "lng": 127.085265460342
-    },
-    {
-      "id": "tangjeong-chakhansogalbisal",
-      "name": "착한소갈비살",
+      "id": "db-2",
+      "name": "동순원 성환본점",
       "category": "FD6",
-      "categoryName": "음식점",
-      "address": "충남 아산시 탕정면 한들물빛6로 14",
-      "lat": 36.7873047576888,
-      "lng": 127.084583069242
+      "address": "충청남도 천안시 서북구 성환중앙로 33 박치과의원",
+      "lat": 36.917079,
+      "lng": 127.129809,
+      "categoryName": "음식점"
     },
     {
-      "id": "tangjeong-starbucks",
-      "name": "스타벅스 아산탕정역점",
+      "id": "db-3",
+      "name": "성환이화시장 (1, 6일)",
+      "category": "SHOPPING",
+      "address": "충청남도 천안시 서북구 성환읍 성환시장길 12",
+      "lat": 36.918526,
+      "lng": 127.130009,
+      "categoryName": "쇼핑"
+    },
+    {
+      "id": "db-4",
+      "name": "천안가야밀면",
+      "category": "FD6",
+      "address": "충청남도 천안시 서북구 성환1로 151",
+      "lat": 36.908136,
+      "lng": 127.128276,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-5",
+      "name": "매주리커피",
       "category": "CE7",
-      "categoryName": "카페",
-      "address": "충남 아산시 탕정면 한들물빛도시로 88",
-      "lat": 36.78703589945,
-      "lng": 127.083770533699
+      "address": "충청남도 천안시 서북구 성환18길 24",
+      "lat": 36.923656,
+      "lng": 127.12965,
+      "categoryName": "카페"
+    }
+  ],
+  "두정역": [
+    {
+      "id": "db-6",
+      "name": "광명만두",
+      "category": "FD6",
+      "address": "충청남도 천안시 서북구 두정중4길 1 코리아숯불바베큐",
+      "lat": 36.834147,
+      "lng": 127.14231,
+      "categoryName": "음식점"
+    }
+  ],
+  "천안역": [
+    {
+      "id": "db-7",
+      "name": "천안역전시장",
+      "category": "SHOPPING",
+      "address": "충청남도 천안시 동남구 공설시장1길 9 (대흥동)",
+      "lat": 36.809956,
+      "lng": 127.148924,
+      "categoryName": "쇼핑"
     },
     {
-      "id": "tangjeong-station-line1",
-      "name": "탕정역 1호선",
-      "category": "SW8",
-      "categoryName": "지하철역",
-      "address": "충남 아산시 탕정면 한들물빛6로 11",
-      "lat": 36.7882087107804,
-      "lng": 127.08439248328
+      "id": "db-8",
+      "name": "달식당",
+      "category": "FD6",
+      "address": "충청남도 천안시 동남구 대흥로 215",
+      "lat": 36.807387,
+      "lng": 127.147174,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-9",
+      "name": "석산장",
+      "category": "FD6",
+      "address": "충청남도 천안시 동남구 문화로 30 (문화동)",
+      "lat": 36.810253,
+      "lng": 127.151751,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-10",
+      "name": "히흣 도예공방",
+      "category": "SHOPPING",
+      "address": "충청남도 천안시 동남구 대흥로 323 (성황동)",
+      "lat": 36.816741,
+      "lng": 127.15059,
+      "categoryName": "쇼핑"
+    },
+    {
+      "id": "db-11",
+      "name": "충청남도교육청학생교육문화원",
+      "category": "ETC",
+      "address": "충청남도 천안시 동남구 옛농고1길 41",
+      "lat": 36.809628,
+      "lng": 127.15692,
+      "categoryName": "기타"
+    },
+    {
+      "id": "db-12",
+      "name": "홍두깨칼국수",
+      "category": "FD6",
+      "address": "충청남도 천안시 동남구 사직로 22 (사직동)",
+      "lat": 36.802068,
+      "lng": 127.149463,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-13",
+      "name": "구암생갈비",
+      "category": "FD6",
+      "address": "충청남도 천안시 서북구 성정10길 24 동막골",
+      "lat": 36.814391,
+      "lng": 127.13705,
+      "categoryName": "음식점"
+    }
+  ],
+  "봉명역": [
+    {
+      "id": "db-14",
+      "name": "몽상가인",
+      "category": "FD6",
+      "address": "충청남도 천안시 서북구 쌍용대로 85 몽상가인",
+      "lat": 36.805176,
+      "lng": 127.132103,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-15",
+      "name": "숨 어반",
+      "category": "CE7",
+      "address": "충청남도 천안시 서북구 서부대로 446",
+      "lat": 36.806936,
+      "lng": 127.128617,
+      "categoryName": "카페"
+    }
+  ],
+  "쌍용역": [
+    {
+      "id": "db-16",
+      "name": "수원참갈비",
+      "category": "FD6",
+      "address": "충청남도 천안시 서북구 쌍용16길 60 (쌍용동)",
+      "lat": 36.797026,
+      "lng": 127.123735,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-17",
+      "name": "점핑고",
+      "category": "AT4",
+      "address": "충청남도 천안시 동남구 신촌로 24 (신방동)",
+      "lat": 36.787725,
+      "lng": 127.12148,
+      "categoryName": "관광명소"
+    },
+    {
+      "id": "db-18",
+      "name": "신방공원",
+      "category": "ETC",
+      "address": "충청남도 천안시 동남구 천안천변길 129-33 (신방동)",
+      "lat": 36.785272,
+      "lng": 127.120438,
+      "categoryName": "기타"
+    }
+  ],
+  "아산역": [
+    {
+      "id": "db-19",
+      "name": "밀이랑보리랑",
+      "category": "FD6",
+      "address": "충청남도 아산시 공원로16번길 16-4",
+      "lat": 36.785222,
+      "lng": 127.10109,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-20",
+      "name": "에코힐링 황톳길",
+      "category": "ETC",
+      "address": "충청남도 천안시 서북구 공원로 159 (불당동)",
+      "lat": 36.797834,
+      "lng": 127.097907,
+      "categoryName": "기타"
+    }
+  ],
+  "배방역": [
+    {
+      "id": "db-21",
+      "name": "이내카페",
+      "category": "CE7",
+      "address": "충청남도 아산시 배방읍 배방로13번길 19-6",
+      "lat": 36.776686,
+      "lng": 127.056619,
+      "categoryName": "카페"
+    },
+    {
+      "id": "db-22",
+      "name": "모산수제비",
+      "category": "FD6",
+      "address": "충청남도 아산시 모산로 148 한멋피아노학원",
+      "lat": 36.774942,
+      "lng": 127.059122,
+      "categoryName": "음식점"
+    }
+  ],
+  "온양온천역": [
+    {
+      "id": "db-23",
+      "name": "신천탕",
+      "category": "AT4",
+      "address": "충청남도 아산시 온천대로 1469 (온천동)",
+      "lat": 36.782323,
+      "lng": 127.001227,
+      "categoryName": "관광명소"
+    },
+    {
+      "id": "db-24",
+      "name": "재벌짬뽕",
+      "category": "FD6",
+      "address": "충청남도 아산시 온양역길 124",
+      "lat": 36.779551,
+      "lng": 127.007138,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-25",
+      "name": "온양온천시장",
+      "category": "SHOPPING",
+      "address": "충청남도 아산시 시장길 29 (온천동)",
+      "lat": 36.783348,
+      "lng": 127.004302,
+      "categoryName": "쇼핑"
+    },
+    {
+      "id": "db-26",
+      "name": "[백년가게]은정갈비",
+      "category": "FD6",
+      "address": "충청남도 아산시 온궁로 5 (온천동)",
+      "lat": 36.782754,
+      "lng": 127.001196,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-27",
+      "name": "현대갈비",
+      "category": "FD6",
+      "address": "충청남도 아산시 충무로20번길 19",
+      "lat": 36.782437,
+      "lng": 127.006682,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-28",
+      "name": "이충무공사적비",
+      "category": "AT4",
+      "address": "충청남도 아산시 온천대로 1496",
+      "lat": 36.783345,
+      "lng": 127.001352,
+      "categoryName": "관광명소"
+    },
+    {
+      "id": "db-29",
+      "name": "영괴대",
+      "category": "AT4",
+      "address": "충청남도 아산시 온천대로 1459",
+      "lat": 36.78304,
+      "lng": 126.999591,
+      "categoryName": "관광명소"
+    },
+    {
+      "id": "db-30",
+      "name": "온양 청국장집",
+      "category": "FD6",
+      "address": "충청남도 아산시 온천대로 1436-19 (온천동)",
+      "lat": 36.78219,
+      "lng": 126.998902,
+      "categoryName": "음식점"
+    },
+    {
+      "id": "db-31",
+      "name": "온양온천지구",
+      "category": "AT4",
+      "address": "충청남도 아산시 온천동",
+      "lat": 36.783326,
+      "lng": 126.999524,
+      "categoryName": "관광명소"
+    },
+    {
+      "id": "db-32",
+      "name": "온양관광호텔 온천탕",
+      "category": "AT4",
+      "address": "충청남도 아산시 온천대로 1459",
+      "lat": 36.783204,
+      "lng": 126.99898,
+      "categoryName": "관광명소"
+    },
+    {
+      "id": "db-33",
+      "name": "신정식당",
+      "category": "FD6",
+      "address": "충청남도 아산시 시민로409번길 18",
+      "lat": 36.785917,
+      "lng": 126.999963,
+      "categoryName": "음식점"
     }
   ]
 }

@@ -16,6 +16,8 @@ const CATEGORY_COLOR: Record<Place['category'], string> = {
   SW8: '#6b7280', // 지하철역 — 회색
   FD6: '#fb7185', // 음식점 — 분홍(고기 느낌)
   CE7: '#92400e', // 카페 — 커피색 (임의 지정)
+  SHOPPING: '#7c3aed', // 쇼핑 — 보라 (DB 시드, TourAPI 원본)
+  ETC: '#64748b', // 기타 — 회청색 (DB 시드, TourAPI 원본)
 };
 
 /** 카테고리 색상의 동글핀 모양 SVG를 만든다. 외부 이미지 파일 없이 인라인으로 처리한다. */

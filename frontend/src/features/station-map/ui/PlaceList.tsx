@@ -14,6 +14,8 @@ function getCategoryIcon(category: Place['category']) {
   if (category === 'CE7') return 'local_cafe';
   if (category === 'AT4') return 'park';
   if (category === 'SW8') return 'subway';
+  if (category === 'SHOPPING') return 'storefront';
+  if (category === 'ETC') return 'place';
   return 'restaurant';
 }
 

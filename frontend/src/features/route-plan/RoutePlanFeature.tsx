@@ -1,74 +1,139 @@
-import { Icon } from '../../shared/ui/Icon';
-import { PreviewFrame } from '../../shared/ui/PreviewFrame';
 import { Card } from '../../shared/ui/Card';
-import { Badge } from '../../shared/ui/Badge';
+import { Icon } from '../../shared/ui/Icon';
+import { useRoutePlan } from './hooks/useRoutePlan';
+import { RouteCoverHeader } from './ui/RouteCoverHeader';
+import { RouteDepartureTime } from './ui/RouteDepartureTime';
+import { RouteOptionCards } from './ui/RouteOptionCards';
+import { RouteStationMap } from './ui/RouteStationMap';
+import { RouteTimeline } from './ui/RouteTimeline';
 
-/** 화면 구성을 보여주기 위한 고정 예시. 실제 계산 결과가 아니다. */
-const EXAMPLE = {
-  from: '탕정역',
-  to: '온양온천역',
-  path: ['탕정', '배방', '온양온천'],
-};
-
-/** 경로 프리뷰 (docs/SPEC.md 2-1). 출발·도착역을 고르는 화면 구성만 보여준다. */
+/**
+ * 경로 화면 (docs/SPEC.md 2-2).
+ *
+ * 출발·도착역을 고르면 최소 시간·최소 환승 두 안을 계산해 비교하고,
+ * 확정한 경로의 경유역마다 들를 만한 장소를 보여준다.
+ *
+ * 경로 계산은 지금 프론트가 직접 하지만, 백엔드에 `GET /api/v1/routes` 가 생기면
+ * `api/routes.ts` 내부만 교체하면 된다 (docs/BACKEND-HANDOFF.md).
+ */
 export function RoutePlanFeature() {
+  const {
+    stations,
+    lineOrder,
+    fromName,
+    toName,
+    pickStation,
+    swap,
+    status,
+    result,
+    selectedKind,
+    setSelectedKind,
+    selectedOption,
+    routeStationNames,
+    departureAt,
+    setDepartureAt,
+    schedules,
+    selectedSchedule,
+    stats,
+  } = useRoutePlan();
+
+  const hasNoRoute = result !== null && result.options.length === 0;
+
   return (
-    <PreviewFrame
-      title="경로"
-      description="출발역과 도착역을 골라 지나는 역을 확인합니다."
-      notice="아래는 화면 구성을 보여주기 위한 예시입니다. 실제 경로 계산은 아직 동작하지 않습니다."
-    >
-      <Card className="flex flex-col gap-sm p-md">
-        <div className="flex items-center gap-sm rounded-xl bg-primary-container/30 px-md py-sm">
-          <Badge>출발</Badge>
-          <span className="text-body-lg text-on-surface">{EXAMPLE.from}</span>
-        </div>
+    <div className="h-full overflow-y-auto bg-background">
+      <div className="responsive-frame-content mx-auto flex max-w-4xl flex-col gap-[var(--layout-gap)] p-[var(--layout-gutter)]">
+        <RouteCoverHeader
+          fromName={fromName}
+          toName={toName}
+          option={selectedOption}
+          schedule={selectedSchedule}
+        />
 
-        <div className="flex justify-end pr-sm">
-          <span className="flex h-8 w-8 items-center justify-center text-on-surface-variant">
-            <Icon name="swap_vert" className="text-[20px]" />
-          </span>
-        </div>
+        <Card className="flex items-start gap-sm border-tertiary/25 bg-tertiary-container/10 p-md shadow-none">
+          <Icon
+            name="info"
+            className="mt-[2px] shrink-0 text-[19px] text-tertiary"
+          />
+          <p className="text-body-md text-on-surface-variant">
+            {selectedSchedule?.fromTimetable ? (
+              <>
+                도착 시각은{' '}
+                <strong className="text-on-surface">실제 열차 시간표</strong>를
+                따라 계산했습니다. 타는 열차가 각 역에 서는 시각 그대로입니다.
+              </>
+            ) : (
+              <>
+                이 구간은 시간표가 없어{' '}
+                <strong className="text-on-surface">
+                  역간 {stats.minutesPerHop}분 · 열차 대기 {stats.averageWait}분
+                </strong>
+                으로 추정한 값입니다.
+                {stats.fromTimetable
+                  ? ' 이 수치는 실제 시간표에서 뽑았습니다.'
+                  : ''}{' '}
+                시간표가 있는 구간은 실제 시각으로 표시됩니다.
+              </>
+            )}
+          </p>
+        </Card>
 
-        <div className="flex items-center gap-sm border-b border-outline-variant px-xs py-sm">
-          <Badge className="bg-secondary-container text-on-secondary-container">도착</Badge>
-          <span className="text-body-lg text-on-surface">{EXAMPLE.to}</span>
-        </div>
-      </Card>
+        <RouteStationMap
+          stations={stations}
+          lineOrder={lineOrder}
+          fromName={fromName}
+          toName={toName}
+          routeStationNames={routeStationNames}
+          onPick={pickStation}
+          onSwap={swap}
+        />
 
-      <Card className="p-md">
-        <h3 className="text-label-caps uppercase tracking-widest text-on-surface-variant">
-          예시 결과
-        </h3>
-        <p className="mt-xs text-body-lg font-bold text-on-surface">
-          온양온천 방향 · 2개 역 이동
-        </p>
+        <RouteDepartureTime
+          value={departureAt}
+          onChange={setDepartureAt}
+          schedule={selectedSchedule}
+        />
 
-        <div className="mt-sm flex flex-wrap items-center gap-xs">
-          {EXAMPLE.path.map((name, index) => {
-            const isEndpoint = index === 0 || index === EXAMPLE.path.length - 1;
-            return (
-              <span key={name} className="flex items-center gap-xs">
-                {index > 0 && (
-                  <Icon
-                    name="chevron_right"
-                    className="text-[18px] text-on-surface-variant"
-                  />
-                )}
-                <span
-                  className={
-                    isEndpoint
-                      ? 'rounded-full bg-primary-container px-sm py-xs text-body-md font-bold text-on-primary-container'
-                      : 'rounded-full bg-surface-container px-sm py-xs text-body-md text-on-surface-variant'
-                  }
-                >
-                  {name}
-                </span>
-              </span>
-            );
-          })}
-        </div>
-      </Card>
-    </PreviewFrame>
+        {status === 'error' ? (
+          <Card
+            className="flex items-start gap-sm bg-error-container/45 p-md"
+            role="alert"
+          >
+            <Icon name="error_outline" className="text-[20px] text-error" />
+            <p className="text-body-md text-error">
+              경로를 계산하지 못했습니다.
+            </p>
+          </Card>
+        ) : hasNoRoute ? (
+          <Card className="flex items-start gap-sm p-md">
+            <Icon
+              name="info"
+              className="mt-[2px] shrink-0 text-[19px] text-on-surface-variant"
+            />
+            <p className="text-body-md text-on-surface-variant">
+              {fromName === toName
+                ? '출발역과 도착역이 같습니다. 다른 역을 골라 주세요.'
+                : '두 역을 잇는 경로를 찾지 못했습니다.'}
+            </p>
+          </Card>
+        ) : (
+          result && (
+            <>
+              <RouteOptionCards
+                options={result.options}
+                selectedKind={selectedKind}
+                onSelect={setSelectedKind}
+                schedules={schedules}
+              />
+              {selectedOption && (
+                <RouteTimeline
+                  option={selectedOption}
+                  schedule={selectedSchedule}
+                />
+              )}
+            </>
+          )
+        )}
+      </div>
+    </div>
   );
 }

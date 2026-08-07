@@ -65,7 +65,6 @@ export function MetroMapPanel({ stations, selected, onSelect, viewport: viewport
     svgRef,
     viewport,
     dragging,
-    onWheel,
     onPointerDown,
     onPointerMove,
     onPointerUp,
@@ -128,7 +127,6 @@ export function MetroMapPanel({ stations, selected, onSelect, viewport: viewport
           role="group"
           aria-label="1호선 천안·아산 구간 약도"
           style={{ touchAction: 'none', cursor: dragging ? 'grabbing' : 'grab' }}
-          onWheel={onWheel}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
