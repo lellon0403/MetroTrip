@@ -23,7 +23,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base
 from app.models.auth import User
-from app.schemas.reviews import ReviewCreateRequest, ReviewUpdateRequest
+from app.schemas.reviews import (
+    ReviewCreateRequest,
+    ReviewSearchField,
+    ReviewUpdateRequest,
+)
 from app.services import reviews as review_service
 
 _support_metadata = MetaData()
@@ -248,6 +252,75 @@ def test_update_review_replaces_tags(db: Session) -> None:
 
     assert updated.tags == ["연인"]
     assert updated.title == created.title
+
+
+def test_list_reviews_title_search_excludes_content_only_matches(
+    db: Session,
+) -> None:
+    review_service.create_review(
+        db, 1, _create_request(title="벚꽃놀이 후기", content="평범한 내용입니다.")
+    )
+    review_service.create_review(
+        db, 1, _create_request(title="평범한 제목", content="벚꽃놀이 다녀왔어요.")
+    )
+
+    result = review_service.list_reviews(
+        db,
+        keyword="벚꽃놀이",
+        search_field=ReviewSearchField.TITLE,
+        station_id=None,
+        tag=None,
+        page=1,
+        size=20,
+    )
+
+    assert result.total_elements == 1
+    assert result.items[0].title == "벚꽃놀이 후기"
+
+
+def test_list_reviews_content_search_excludes_title_only_matches(
+    db: Session,
+) -> None:
+    review_service.create_review(
+        db, 1, _create_request(title="벚꽃놀이 후기", content="평범한 내용입니다.")
+    )
+    review_service.create_review(
+        db, 1, _create_request(title="평범한 제목", content="벚꽃놀이 다녀왔어요.")
+    )
+
+    result = review_service.list_reviews(
+        db,
+        keyword="벚꽃놀이",
+        search_field=ReviewSearchField.CONTENT,
+        station_id=None,
+        tag=None,
+        page=1,
+        size=20,
+    )
+
+    assert result.total_elements == 1
+    assert result.items[0].content == "벚꽃놀이 다녀왔어요."
+
+
+def test_list_reviews_title_content_search_matches_either(db: Session) -> None:
+    review_service.create_review(
+        db, 1, _create_request(title="벚꽃놀이 후기", content="평범한 내용입니다.")
+    )
+    review_service.create_review(
+        db, 1, _create_request(title="평범한 제목", content="벚꽃놀이 다녀왔어요.")
+    )
+
+    result = review_service.list_reviews(
+        db,
+        keyword="벚꽃놀이",
+        search_field=ReviewSearchField.TITLE_CONTENT,
+        station_id=None,
+        tag=None,
+        page=1,
+        size=20,
+    )
+
+    assert result.total_elements == 2
 
 
 def test_delete_review_removes_it(db: Session) -> None:
