@@ -31,6 +31,8 @@ type RouteStationMapProps = {
   toName: string;
   /** 확정된 경로의 역 이름(순서대로). 지도에 굵게 강조한다. */
   routeStationNames: string[];
+  /** 시간표가 있어 정확한 시각을 줄 수 있는 역 */
+  timetableStations: Set<string>;
   onPick: (stationName: string, kind: PickKind) => void;
   onSwap: () => void;
 };
@@ -53,6 +55,7 @@ export function RouteStationMap({
   fromName,
   toName,
   routeStationNames,
+  timetableStations,
   onPick,
   onSwap,
 }: RouteStationMapProps) {
@@ -96,14 +99,33 @@ export function RouteStationMap({
    * 일반역과 구분해야 "여기서 노선이 바뀐다"는 걸 한눈에 알 수 있다.
    */
   const interchanges = useMemo(() => {
-    const counts = new Map<string, number>();
+    /*
+     * "두 노선에 속한 역"으로 세면 안 된다. 1호선은 인천행·신창행이
+     * 연천~구로 45개 역을 공통으로 갖기 때문에, 그 구간 전체가
+     * 환승역으로 잡혀 버린다. 실제로 갈아타는 곳은 구로역 하나다.
+     *
+     * 그래서 **이웃 역이 셋 이상인 곳**을 환승역으로 본다.
+     * 구로역은 신도림·구일·가산디지털단지 셋과 맞닿아 있어 걸리고,
+     * 노선이 교차하는 진짜 환승역도 같은 기준으로 걸린다.
+     */
+    const neighbours = new Map<string, Set<string>>();
+    const link = (a: string, b: string) => {
+      const set = neighbours.get(a) ?? new Set<string>();
+      set.add(b);
+      neighbours.set(a, set);
+    };
+
     for (const names of Object.values(lineOrder)) {
-      for (const name of new Set(names)) {
-        counts.set(name, (counts.get(name) ?? 0) + 1);
-      }
+      names.forEach((name, index) => {
+        if (index > 0) link(name, names[index - 1]);
+        if (index < names.length - 1) link(name, names[index + 1]);
+      });
     }
+
     return new Set(
-      [...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name),
+      [...neighbours.entries()]
+        .filter(([, set]) => set.size > 2)
+        .map(([name]) => name),
     );
   }, [lineOrder]);
 
@@ -368,15 +390,30 @@ export function RouteStationMap({
                 const isTo = station.name === toName;
                 const isOnRoute = onRoute.has(station.name);
                 const isInterchange = interchanges.has(station.name);
+                const hasTimetable = timetableStations.has(station.name);
                 const lineColor = getLineColor(station.line);
 
                 /*
-                 * 카카오·네이버처럼 일반역은 흰 속에 노선색 테두리인 작은 원,
-                 * 환승역은 더 크게 그려 "여기서 갈아탄다"가 눈에 띄게 한다.
-                 * 출발·도착은 원 안을 채워서 다른 역과 확실히 구분한다.
+                 * 카카오·네이버처럼 흰 속에 노선색 테두리인 원으로 그린다.
+                 * 실제 노선도가 주요역을 크게, 그 외를 작게 그리는 방식을 빌려
+                 * **시간표가 있는 역**(정확한 시각을 줄 수 있는 역)을 또렷한 흰 원으로,
+                 * 없는 역은 작고 흐린 점으로 그린다.
+                 * 출발·도착은 원 안을 채워서 확실히 구분한다.
                  */
-                const radius = isFrom || isTo ? 11 : isInterchange ? 9 : 6;
-                const strokeWidth = isFrom || isTo ? 3 : isInterchange ? 3.5 : 2.5;
+                const radius = isFrom || isTo
+                  ? 11
+                  : isInterchange
+                    ? 9
+                    : hasTimetable
+                      ? 6.5
+                      : 4;
+                const strokeWidth = isFrom || isTo
+                  ? 3
+                  : isInterchange
+                    ? 3.5
+                    : hasTimetable
+                      ? 2.5
+                      : 2;
 
                 const fill = isFrom
                   ? 'var(--color-primary)'
@@ -420,6 +457,8 @@ export function RouteStationMap({
                         fill,
                         stroke,
                         strokeWidth,
+                        // 시간표가 없는 역은 흐리게 — 시각이 추정값이라는 신호
+                        opacity: isFrom || isTo || isInterchange || hasTimetable ? 1 : 0.45,
                         pointerEvents: 'none',
                       }}
                     />
@@ -543,6 +582,30 @@ export function RouteStationMap({
           </g>
         </svg>
       </Card>
+
+      {/*
+        점 모양이 무엇을 뜻하는지 알려주지 않으면 구분이 의미가 없다.
+        시간표가 채워질수록 흐린 점이 줄어든다.
+      */}
+      <div className="flex flex-wrap items-center gap-md text-body-md text-on-surface-variant">
+        <span className="flex items-center gap-xs">
+          <svg width="16" height="16" aria-hidden="true">
+            <circle cx="8" cy="8" r="5.5" fill="var(--color-surface-bright)"
+              stroke="var(--color-primary)" strokeWidth="2.5" />
+          </svg>
+          시간표 있음 — 실제 시각
+        </span>
+        <span className="flex items-center gap-xs">
+          <svg width="16" height="16" aria-hidden="true">
+            <circle cx="8" cy="8" r="3.5" fill="var(--color-surface-bright)"
+              stroke="var(--color-primary)" strokeWidth="2" opacity="0.45" />
+          </svg>
+          시간표 없음 — 추정 시각
+        </span>
+        <span>
+          {timetableStations.size} / {layout.stations.length} 역
+        </span>
+      </div>
     </div>
   );
 }

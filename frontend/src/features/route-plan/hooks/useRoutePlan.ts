@@ -118,6 +118,17 @@ export function useRoutePlan() {
   );
 
   /**
+   * 시간표가 있는 역.
+   *
+   * 이 역들만 실제 열차를 따라간 정확한 시각을 줄 수 있다.
+   * 지도에서 눈에 띄게 그려 어디가 정확한지 알 수 있게 한다.
+   */
+  const timetableStations = useMemo(
+    () => new Set(timetables.map((row) => row.stationName)),
+    [timetables],
+  );
+
+  /**
    * 역간 소요·배차 간격을 실제 시간표에서 뽑아 둔다.
    * 시간표가 없는 구간의 시각을 추정하는 데 쓴다.
    */
@@ -175,5 +186,6 @@ export function useRoutePlan() {
     schedules,
     selectedSchedule,
     stats,
+    timetableStations,
   };
 }
