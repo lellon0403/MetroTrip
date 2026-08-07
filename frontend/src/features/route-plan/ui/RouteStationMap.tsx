@@ -66,7 +66,7 @@ export function RouteStationMap({
     onPointerUp,
     zoomAt,
     centerOn,
-    resetViewport,
+    fitTo,
   } = useLineMapViewport();
 
   const [openStation, setOpenStation] = useState<string | null>(null);
@@ -285,8 +285,16 @@ export function RouteStationMap({
             type="button"
             variant="outline"
             size="sm"
+            onClick={() => fitTo(layout.size)}
+          >
+            <Icon name="fit_screen" className="text-[18px]" />
+            전체 보기
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => {
-              resetViewport();
               const station = positionByName.get(fromName);
               if (station) centerOn(station);
             }}
