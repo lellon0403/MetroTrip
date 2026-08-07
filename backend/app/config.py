@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from: str | None = None
     smtp_use_tls: bool = True
+    media_root_dir: str = "media"
+    media_upload_expire_minutes: int = 15
 
 
 @lru_cache

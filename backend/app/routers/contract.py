@@ -13,7 +13,10 @@ from app.services import auth
 
 bearer_scheme = HTTPBearer(description="로그인 시 발급된 Access Token")
 
-
+""" 
+공통 인프라
+get_current_user_id 의존성 추가
+"""
 def get_current_user_id(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> int:
@@ -22,7 +25,6 @@ def get_current_user_id(
 
 AUTH_REQUIRED = [Depends(get_current_user_id)]
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
-
 
 def _get_reauthenticated_user_id(
     current_user_id: CurrentUserId,
@@ -99,7 +101,6 @@ ERROR_RESPONSES = {
     422: {"model": ErrorResponse, "description": "입력값 검증 실패"},
     501: {"model": ErrorResponse, "description": "계약만 정의된 미구현 API"},
 }
-
 
 def not_implemented() -> JSONResponse:
     return JSONResponse(

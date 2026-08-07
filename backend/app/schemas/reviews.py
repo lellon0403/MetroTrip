@@ -13,6 +13,12 @@ class MediaType(str, Enum):
     VIDEO = "VIDEO"
 
 
+class ReviewSearchField(str, Enum):
+    TITLE = "TITLE"
+    CONTENT = "CONTENT"
+    TITLE_CONTENT = "TITLE_CONTENT"
+
+
 class ReviewMediaInput(ApiSchema):
     media_url: str = Field(max_length=500)
     media_type: MediaType

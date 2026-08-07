@@ -2,23 +2,18 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.routers.contract import (
-    AUTH_REQUIRED,
-    ERROR_RESPONSES,
-    CurrentUserId,
-    not_implemented,
-)
+from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, CurrentUserId
 from app.schemas.reviews import (
     MediaUploadRequest,
     MediaUploadResponse,
     ReviewCreateRequest,
     ReviewListResponse,
     ReviewResponse,
+    ReviewSearchField,
     ReviewUpdateRequest,
 )
 from app.services import reviews as review_service
@@ -41,6 +36,9 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
 def list_reviews(
     db: DatabaseSession,
     keyword: Annotated[str | None, Query(max_length=100)] = None,
+    search_field: Annotated[
+        ReviewSearchField, Query(alias="searchField")
+    ] = ReviewSearchField.TITLE_CONTENT,
     station_id: Annotated[int | None, Query()] = None,
     tag: Annotated[str | None, Query(max_length=30)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -50,6 +48,7 @@ def list_reviews(
     return review_service.list_reviews(
         db,
         keyword=keyword,
+        search_field=search_field,
         station_id=station_id,
         tag=tag,
         page=page,
@@ -126,6 +125,23 @@ def delete_review(
     description="파일 URI를 경로 변수로 받지 않고 업로드용 URL을 발급합니다.",
     responses=ERROR_RESPONSES,
 )
-def create_media_upload(_: MediaUploadRequest) -> JSONResponse:
-    """오브젝트 스토리지 연동 전까지는 계약만 정의한다."""
-    return not_implemented()
+def create_media_upload(
+    request: MediaUploadRequest,
+    http_request: Request,
+) -> MediaUploadResponse:
+    """로컬 저장소에 저장할 미디어의 업로드 URL을 발급한다."""
+    return review_service.create_media_upload(http_request, request)
+
+
+@media_router.put(
+    "/{file_name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="발급받은 URL로 미디어 파일 업로드",
+    description="발급받은 upload_url에 파일 바이트를 그대로 PUT으로 전송합니다.",
+    name="upload_review_media",
+    responses=ERROR_RESPONSES,
+)
+async def upload_review_media(file_name: str, http_request: Request) -> None:
+    """업로드된 미디어 바이트를 로컬 저장소에 기록한다."""
+    content = await http_request.body()
+    review_service.save_uploaded_media(file_name, content)

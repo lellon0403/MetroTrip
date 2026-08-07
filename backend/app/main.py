@@ -2,8 +2,10 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.integrations.local_storage import media_root
 from app.routers import api_router
 from app.routers.health import router as health_router
 
@@ -86,6 +88,11 @@ def create_app() -> FastAPI:
 
     application.include_router(health_router)
     application.include_router(api_router, prefix=settings.api_v1_prefix)
+    application.mount(
+        f"{settings.api_v1_prefix}/media",
+        StaticFiles(directory=media_root(settings)),
+        name="media",
+    )
     return application
 
 

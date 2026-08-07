@@ -1,18 +1,34 @@
 """여행 후기 비즈니스 로직."""
 
 import math
+import re
+import secrets
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
+from app.integrations.local_storage import (
+    MediaTooLargeError,
+    UnsupportedMediaTypeError,
+    resolve_extension,
+    save_file,
+)
 from app.models.reviews import Review, ReviewMedia
 from app.repositories.reviews import ReviewRepository
 from app.schemas.reviews import (
+    MediaUploadRequest,
+    MediaUploadResponse,
     ReviewCreateRequest,
     ReviewListResponse,
     ReviewMediaResponse,
     ReviewResponse,
+    ReviewSearchField,
     ReviewUpdateRequest,
+)
+
+_FILE_NAME_PATTERN = re.compile(
+    r"^[0-9a-f]{32}\.(jpg|png|gif|webp|mp4|mov|webm)$"
 )
 
 
@@ -129,6 +145,7 @@ def list_reviews(
     db: Session,
     *,
     keyword: str | None,
+    search_field: ReviewSearchField,
     station_id: int | None,
     tag: str | None,
     page: int,
@@ -138,6 +155,7 @@ def list_reviews(
     repository = ReviewRepository(db)
     reviews, total = repository.list_reviews(
         keyword=keyword,
+        search_field=search_field.value,
         station_id=station_id,
         tag=tag,
         page=page,
@@ -262,3 +280,46 @@ def delete_review(db: Session, review_id: int, user_id: int) -> None:
     review = _find_owned_review(repository, review_id, user_id)
     repository.delete_review(review)
     db.commit()
+
+
+def create_media_upload(
+    http_request: Request,
+    request: MediaUploadRequest,
+) -> MediaUploadResponse:
+    """로컬 저장소에 저장할 미디어의 업로드 URL과 최종 접근 URL을 발급한다."""
+    try:
+        extension = resolve_extension(request.content_type)
+    except UnsupportedMediaTypeError as error:
+        raise _error(
+            "UNSUPPORTED_MEDIA_TYPE",
+            "지원하지 않는 파일 형식입니다.",
+            400,
+        ) from error
+
+    file_name = f"{secrets.token_hex(16)}{extension}"
+    settings = get_settings()
+    return MediaUploadResponse(
+        upload_url=str(
+            http_request.url_for("upload_review_media", file_name=file_name)
+        ),
+        media_url=str(
+            http_request.url_for("media", path=f"reviews/{file_name}")
+        ),
+        expires_in=settings.media_upload_expire_minutes * 60,
+    )
+
+
+def save_uploaded_media(file_name: str, content: bytes) -> None:
+    """발급받은 파일명으로 업로드된 미디어 바이트를 로컬 저장소에 기록한다."""
+    if not _FILE_NAME_PATTERN.fullmatch(file_name):
+        raise _error("INVALID_FILE_NAME", "유효하지 않은 파일명입니다.", 400)
+
+    settings = get_settings()
+    try:
+        save_file(settings, f"reviews/{file_name}", content)
+    except MediaTooLargeError as error:
+        raise _error(
+            "MEDIA_TOO_LARGE",
+            "파일 용량이 너무 큽니다.",
+            413,
+        ) from error

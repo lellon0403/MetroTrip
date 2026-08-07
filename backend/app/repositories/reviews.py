@@ -27,6 +27,7 @@ class ReviewRepository:
         self,
         *,
         keyword: str | None,
+        search_field: str,
         station_id: int | None,
         tag: str | None,
         page: int,
@@ -36,9 +37,14 @@ class ReviewRepository:
         statement = select(Review)
         if keyword:
             pattern = f"%{keyword}%"
-            statement = statement.where(
-                Review.title.ilike(pattern) | Review.content.ilike(pattern)
-            )
+            if search_field == "TITLE":
+                statement = statement.where(Review.title.ilike(pattern))
+            elif search_field == "CONTENT":
+                statement = statement.where(Review.content.ilike(pattern))
+            else:
+                statement = statement.where(
+                    Review.title.ilike(pattern) | Review.content.ilike(pattern)
+                )
         if station_id is not None:
             statement = statement.where(
                 (Review.start_station_id == station_id)
