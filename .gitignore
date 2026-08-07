@@ -21,6 +21,9 @@ __pycache__/
 !.env.example
 certs/
 
+# 로컬에 저장되는 업로드 미디어 (오브젝트 스토리지 미연동 상태)
+backend/media/
+
 # 에디터 / 툴
 .claude/
 .vscode/*
