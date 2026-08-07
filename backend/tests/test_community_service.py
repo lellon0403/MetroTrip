@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base
 from app.models.auth import User
+from app.models.community import PostParticipant
 from app.schemas.community import (
     ParticipantCancelRequest,
     ParticipantDecisionRequest,
     ParticipantStatus,
+    ParticipatingPostStatus,
     PostCreateRequest,
     PostUpdateRequest,
 )
@@ -41,9 +43,7 @@ def db() -> Iterator[Session]:
     Base.metadata.create_all(engine)
     _support_metadata.create_all(engine)
 
-    session_factory = sessionmaker(
-        bind=engine, autoflush=False, expire_on_commit=False
-    )
+    session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = session_factory()
     try:
         session.add_all(
@@ -124,6 +124,164 @@ def test_list_posts_filters_by_keyword(db: Session) -> None:
     assert result.items[0].title == "탕정역 모임"
 
 
+def test_list_my_posts_returns_only_authors_posts_in_recent_order(
+    db: Session,
+) -> None:
+    """내 작성 글은 다른 사용자의 글을 제외하고 최근 작성순으로 반환한다."""
+    first = community_service.create_post(
+        db,
+        1,
+        _create_request(title="첫 번째 작성 글"),
+    )
+    community_service.create_post(
+        db,
+        2,
+        _create_request(title="다른 사용자의 글"),
+    )
+    second = community_service.create_post(
+        db,
+        1,
+        _create_request(title="두 번째 작성 글"),
+    )
+
+    result = community_service.list_my_posts(db, 1, page=1, size=10)
+
+    assert [item.post_id for item in result.items] == [
+        second.post_id,
+        first.post_id,
+    ]
+    assert result.total_elements == 2
+    assert result.total_pages == 1
+    assert all(item.author.user_id == 1 for item in result.items)
+    assert all(item.view_count == 0 for item in result.items)
+
+
+def test_list_my_posts_paginates_and_returns_empty_page(db: Session) -> None:
+    """내 작성 글은 페이지 단위로 조회하고 결과가 없으면 빈 페이지를 반환한다."""
+    community_service.create_post(db, 1, _create_request(title="첫 번째 작성 글"))
+    community_service.create_post(db, 1, _create_request(title="두 번째 작성 글"))
+
+    second_page = community_service.list_my_posts(db, 1, page=2, size=1)
+    empty = community_service.list_my_posts(db, 3, page=1, size=10)
+
+    assert len(second_page.items) == 1
+    assert second_page.total_elements == 2
+    assert second_page.total_pages == 2
+    assert empty.items == []
+    assert empty.total_elements == 0
+    assert empty.total_pages == 0
+
+
+def test_list_my_applied_posts_uses_recent_application_order(db: Session) -> None:
+    """신청 중인 모집 글은 최근 신청순이며 다른 상태는 제외한다."""
+    first_post = community_service.create_post(
+        db,
+        1,
+        _create_request(title="먼저 신청한 글"),
+    )
+    second_post = community_service.create_post(
+        db,
+        1,
+        _create_request(title="나중에 신청한 글"),
+    )
+    accepted_post = community_service.create_post(
+        db,
+        1,
+        _create_request(title="수락된 글"),
+    )
+    first = community_service.apply_to_post(db, first_post.post_id, 2)
+    second = community_service.apply_to_post(db, second_post.post_id, 2)
+    accepted = community_service.apply_to_post(db, accepted_post.post_id, 2)
+    community_service.decide_participant(
+        db,
+        accepted_post.post_id,
+        accepted.participant_id,
+        1,
+        ParticipantDecisionRequest(status=ParticipantStatus.ACCEPTED),
+    )
+
+    first_row = db.get(PostParticipant, first.participant_id)
+    second_row = db.get(PostParticipant, second.participant_id)
+    assert first_row is not None
+    assert second_row is not None
+    first_row.applied_at = dt.datetime(2026, 8, 1, 10, 0)
+    second_row.applied_at = dt.datetime(2026, 8, 2, 10, 0)
+    db.commit()
+
+    result = community_service.list_my_participating_posts(
+        db,
+        2,
+        status=ParticipatingPostStatus.APPLIED,
+        page=1,
+        size=10,
+    )
+
+    assert [item.post_id for item in result.items] == [
+        second_post.post_id,
+        first_post.post_id,
+    ]
+    assert all(item.participation.status.value == "APPLIED" for item in result.items)
+    assert result.total_elements == 2
+
+
+def test_list_my_accepted_posts_uses_recent_acceptance_order(db: Session) -> None:
+    """수락된 모집 글은 최근 수락순으로 참여 정보를 포함해 반환한다."""
+    first_post = community_service.create_post(
+        db,
+        1,
+        _create_request(title="먼저 수락된 글"),
+    )
+    second_post = community_service.create_post(
+        db,
+        1,
+        _create_request(title="나중에 수락된 글"),
+    )
+    first = community_service.apply_to_post(db, first_post.post_id, 2)
+    second = community_service.apply_to_post(db, second_post.post_id, 2)
+    community_service.decide_participant(
+        db,
+        first_post.post_id,
+        first.participant_id,
+        1,
+        ParticipantDecisionRequest(status=ParticipantStatus.ACCEPTED),
+    )
+    community_service.decide_participant(
+        db,
+        second_post.post_id,
+        second.participant_id,
+        1,
+        ParticipantDecisionRequest(status=ParticipantStatus.ACCEPTED),
+    )
+
+    first_row = db.get(PostParticipant, first.participant_id)
+    second_row = db.get(PostParticipant, second.participant_id)
+    assert first_row is not None
+    assert second_row is not None
+    first_row.responded_at = dt.datetime(2026, 8, 1, 10, 0)
+    second_row.responded_at = dt.datetime(2026, 8, 2, 10, 0)
+    db.commit()
+
+    result = community_service.list_my_participating_posts(
+        db,
+        2,
+        status=ParticipatingPostStatus.ACCEPTED,
+        page=1,
+        size=1,
+    )
+
+    assert [item.post_id for item in result.items] == [second_post.post_id]
+    assert result.items[0].participation.participant_id == second.participant_id
+    assert result.items[0].participation.responded_at == dt.datetime(
+        2026,
+        8,
+        2,
+        10,
+        0,
+    )
+    assert result.total_elements == 2
+    assert result.total_pages == 2
+
+
 def test_update_post_rejects_other_user(db: Session) -> None:
     created = community_service.create_post(db, 1, _create_request())
 
@@ -135,9 +293,7 @@ def test_update_post_rejects_other_user(db: Session) -> None:
 
 
 def test_update_post_rejects_capacity_below_accepted(db: Session) -> None:
-    created = community_service.create_post(
-        db, 1, _create_request(recruit_capacity=2)
-    )
+    created = community_service.create_post(db, 1, _create_request(recruit_capacity=2))
     first = community_service.apply_to_post(db, created.post_id, 2)
     second = community_service.apply_to_post(db, created.post_id, 3)
     community_service.decide_participant(
@@ -173,9 +329,7 @@ def test_apply_to_own_post_is_rejected(db: Session) -> None:
 
 
 def test_apply_accept_fills_capacity_and_closes_recruit(db: Session) -> None:
-    created = community_service.create_post(
-        db, 1, _create_request(recruit_capacity=1)
-    )
+    created = community_service.create_post(db, 1, _create_request(recruit_capacity=1))
 
     participant = community_service.apply_to_post(db, created.post_id, 2)
     assert participant.status.value == "APPLIED"
@@ -195,9 +349,7 @@ def test_apply_accept_fills_capacity_and_closes_recruit(db: Session) -> None:
 
 
 def test_apply_after_closed_is_rejected(db: Session) -> None:
-    created = community_service.create_post(
-        db, 1, _create_request(recruit_capacity=1)
-    )
+    created = community_service.create_post(db, 1, _create_request(recruit_capacity=1))
     participant = community_service.apply_to_post(db, created.post_id, 2)
     community_service.decide_participant(
         db,
