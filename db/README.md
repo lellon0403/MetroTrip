@@ -11,7 +11,8 @@ MetroTrip 서비스의 데이터베이스 스키마와 관련 산출물입니다
 
 | 경로 | 내용 |
 | --- | --- |
-| `schema/` | 현재 시점의 전체 테이블 구조 (baseline) |
+| `schema/mysql/` | 현재 시점의 MySQL 테이블 구조 (baseline, 서비스 주 DB) |
+| `schema/oracle/` | Oracle 백업 DB 테이블 구조 (MySQL 장애 시 읽기 전용 대체 조회용) |
 | `migrations/` | 스키마 변경 이력. 번호 순서대로 실행 |
 | `seed/` | 초기 데이터 |
 | `erd/` | ERD 파일 |
@@ -35,8 +36,10 @@ CREATE DATABASE IF NOT EXISTS metrotrip
 
 **새로 만드는 경우**
 
-1. `schema/schema_V1.10.sql`
+1. `schema/mysql/schema_mysql_V1.10.sql`
 2. `seed/` 하위 파일을 **번호 순서대로**. 파일명 앞 번호가 FK 의존 순서입니다.
+
+Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V1.10.sql`을 사용합니다 (Oracle Database 19c 기준, MySQL 장애 시 읽기 전용 대체 조회 용도).
 
 | 파일 | 테이블 | 건수 | 선행 |
 | --- | --- | --- | --- |
