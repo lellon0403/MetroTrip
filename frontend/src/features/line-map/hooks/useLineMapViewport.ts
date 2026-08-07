@@ -3,7 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Point, Viewport } from '../types';
 
 const INITIAL_VIEWPORT: Viewport = { x: 0, y: 0, scale: 0.88 };
-const MIN_SCALE = 0.7;
+/**
+ * 최소 배율.
+ *
+ * 경로 화면의 노선도는 카드보다 훨씬 크다(1호선 전 구간 기준 2500x2900px).
+ * 전체 모양을 한눈에 보려면 0.2 근처까지 줄일 수 있어야 한다.
+ */
+const MIN_SCALE = 0.15;
 const MAX_SCALE = 2.8;
 
 function clamp(value: number, min: number, max: number) {
@@ -173,6 +179,24 @@ export function useLineMapViewport() {
     }));
   }, []);
 
+  /** 지정한 크기가 화면에 다 들어오도록 배율과 위치를 맞춘다. */
+  const fitTo = useCallback((size: { width: number; height: number }) => {
+    const svg = svgNodeRef.current;
+    if (!svg || size.width <= 0 || size.height <= 0) return;
+    const rect = svg.getBoundingClientRect();
+
+    const scale = clamp(
+      Math.min(rect.width / size.width, rect.height / size.height),
+      MIN_SCALE,
+      MAX_SCALE,
+    );
+    setViewport({
+      scale,
+      x: (rect.width - size.width * scale) / 2,
+      y: (rect.height - size.height * scale) / 2,
+    });
+  }, []);
+
   return {
     svgRef,
     svgNode,
@@ -183,6 +207,7 @@ export function useLineMapViewport() {
     onPointerUp,
     zoomAt,
     centerOn,
+    fitTo,
     resetViewport: () => setViewport(INITIAL_VIEWPORT),
   };
 }

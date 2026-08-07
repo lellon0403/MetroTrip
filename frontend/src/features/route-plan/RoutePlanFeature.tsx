@@ -35,6 +35,7 @@ export function RoutePlanFeature() {
     schedules,
     selectedSchedule,
     stats,
+    timetableStations,
   } = useRoutePlan();
 
   const hasNoRoute = result !== null && result.options.length === 0;
@@ -83,6 +84,7 @@ export function RoutePlanFeature() {
           fromName={fromName}
           toName={toName}
           routeStationNames={routeStationNames}
+          timetableStations={timetableStations}
           onPick={pickStation}
           onSwap={swap}
         />
