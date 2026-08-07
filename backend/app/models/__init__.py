@@ -9,6 +9,8 @@ from app.models.auth import (
 )
 from app.models.community import BoardPost, PostParticipant
 from app.models.reviews import Review, ReviewMedia, ReviewTag
+from app.models.transit import Station
+from app.models.users import StationFavorite
 
 __all__ = [
     "AuthToken",
@@ -19,6 +21,8 @@ __all__ = [
     "ReviewMedia",
     "ReviewTag",
     "SocialAccount",
+    "Station",
+    "StationFavorite",
     "User",
     "UserAgreement",
 ]
