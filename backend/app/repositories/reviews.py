@@ -11,6 +11,7 @@ from app.models.reviews import Review, ReviewMedia, ReviewTag
 _stations = table("stations", column("station_id"), column("station_name"))
 _travel_plans = table("travel_plans", column("plan_id"))
 
+
 class ReviewRepository:
     """여행 후기 관련 SQLAlchemy 작업을 담당한다."""
 
@@ -50,6 +51,26 @@ class ReviewRepository:
                 )
             )
 
+        total = (
+            self.session.scalar(select(func.count()).select_from(statement.subquery()))
+            or 0
+        )
+        items = self.session.scalars(
+            statement.order_by(Review.created_at.desc(), Review.review_id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        ).all()
+        return list(items), total
+
+    def list_reviews_by_user_id(
+        self,
+        *,
+        user_id: int,
+        page: int,
+        size: int,
+    ) -> tuple[list[Review], int]:
+        """사용자가 작성한 후기를 최근 작성순으로 조회하고 전체 건수를 반환한다."""
+        statement = select(Review).where(Review.user_id == user_id)
         total = (
             self.session.scalar(select(func.count()).select_from(statement.subquery()))
             or 0
@@ -172,9 +193,7 @@ class ReviewRepository:
 
     def replace_tags(self, review_id: int, tags: list[str]) -> None:
         """후기의 태그를 새 목록으로 교체한다."""
-        self.session.execute(
-            delete(ReviewTag).where(ReviewTag.review_id == review_id)
-        )
+        self.session.execute(delete(ReviewTag).where(ReviewTag.review_id == review_id))
         self.add_tags(review_id, tags)
 
     def replace_media(self, review_id: int, media: list[tuple[str, str]]) -> None:

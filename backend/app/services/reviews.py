@@ -152,6 +152,29 @@ def list_reviews(
     )
 
 
+def list_my_reviews(
+    db: Session,
+    user_id: int,
+    *,
+    page: int,
+    size: int,
+) -> ReviewListResponse:
+    """현재 사용자가 작성한 후기를 최근 작성순으로 페이지 조회한다."""
+    repository = ReviewRepository(db)
+    reviews, total = repository.list_reviews_by_user_id(
+        user_id=user_id,
+        page=page,
+        size=size,
+    )
+    return ReviewListResponse(
+        items=_build_responses(repository, reviews),
+        page=page,
+        size=size,
+        total_elements=total,
+        total_pages=math.ceil(total / size) if total else 0,
+    )
+
+
 def create_review(
     db: Session,
     user_id: int,
@@ -159,9 +182,7 @@ def create_review(
 ) -> ReviewResponse:
     """새 여행 후기를 작성한다."""
     repository = ReviewRepository(db)
-    _require_stations(
-        repository, {request.start_station_id, request.end_station_id}
-    )
+    _require_stations(repository, {request.start_station_id, request.end_station_id})
     _require_plan(repository, request.plan_id)
 
     review = repository.create_review(
