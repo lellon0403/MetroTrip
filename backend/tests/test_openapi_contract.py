@@ -7,6 +7,15 @@ import httpx
 from app.main import app
 
 
+def test_openapi_description_matches_current_implementation() -> None:
+    """Swagger 설명이 DB V1.10과 현재 구현 범위를 안내하는지 확인한다."""
+    description = app.openapi()["info"]["description"]
+
+    assert "V1.10" in description
+    assert "V1.8" not in description
+    assert "공개 노선 및 역 조회 API는 구현" in description
+
+
 def test_openapi_contains_agreed_api_contract() -> None:
     schema = app.openapi()
     paths = schema["paths"]
@@ -22,6 +31,8 @@ def test_openapi_contains_agreed_api_contract() -> None:
         "/api/v1/users/me/posts",
         "/api/v1/users/me/reviews",
         "/api/v1/stations",
+        "/api/v1/stations/{station_id}",
+        "/api/v1/stations/{station_id}/timetables",
         "/api/v1/stations/{station_id}/places",
         "/api/v1/plans/{plan_id}/share-links",
         "/api/v1/shared-plans/{share_token}",
@@ -90,16 +101,41 @@ def test_protected_and_shared_plan_security_contract() -> None:
     )
 
 
+def test_line_view_optional_security_contract() -> None:
+    """노선 조회 기록 API가 회원과 비회원 요청을 모두 문서화하는지 확인한다."""
+    schema = app.openapi()
+    operation = schema["paths"]["/api/v1/lines/{line_id}/views"]["post"]
+
+    assert operation["security"] == [{"HTTPBearer": []}, {}]
+    assert all(
+        parameter["name"] != "authorization"
+        for parameter in operation["parameters"]
+    )
+
+
+def test_timetable_contract_matches_database_v1_10() -> None:
+    """시간표 응답이 열차번호와 문자열 시각을 노출하는지 확인한다."""
+    timetable = app.openapi()["components"]["schemas"]["TimetableResponse"]
+    properties = timetable["properties"]
+
+    assert "trainNo" in properties
+    for field in ("arrivalTime", "departureTime"):
+        assert any(
+            branch.get("type") == "string"
+            for branch in properties[field]["anyOf"]
+        )
+
+
 def test_contract_endpoint_returns_standard_not_implemented_error() -> None:
-    async def request_lines() -> httpx.Response:
+    async def request_notices() -> httpx.Response:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://testserver",
         ) as client:
-            return await client.get("/api/v1/lines")
+            return await client.get("/api/v1/notices")
 
-    response = asyncio.run(request_lines())
+    response = asyncio.run(request_notices())
 
     assert response.status_code == 501
     assert response.json()["code"] == "NOT_IMPLEMENTED"
