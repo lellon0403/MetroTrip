@@ -102,6 +102,25 @@ def get_current_admin_id(
 
 ADMIN_REQUIRED = [Depends(get_current_admin_id)]
 CurrentAdminId = Annotated[int, Depends(get_current_admin_id)]
+def get_optional_current_user_id(
+    request: Request,
+) -> int | None:
+    """토큰이 있으면 사용자를 인증하고 없으면 비회원으로 처리한다."""
+    authorization = request.headers.get("Authorization")
+    if authorization is None:
+        return None
+    scheme, separator, token = authorization.partition(" ")
+    if not separator or scheme.lower() != "bearer" or not token:
+        raise HTTPException(
+            401,
+            detail="유효하지 않은 액세스 토큰입니다.",
+            headers={"X-Error-Code": "INVALID_TOKEN"},
+        )
+    return auth.authenticate_access(token, get_settings())
+
+
+OptionalCurrentUserId = Annotated[int | None, Depends(get_optional_current_user_id)]
+
 
 def _get_reauthenticated_user_id(
     current_user_id: CurrentUserId,
