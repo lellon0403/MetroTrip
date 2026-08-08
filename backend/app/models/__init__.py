@@ -37,7 +37,6 @@ __all__ = [
     "Place",
     "PlaceImage",
     "PlaceStation",
-    "Notice",
     "PostParticipant",
     "Review",
     "ReviewMedia",
