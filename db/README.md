@@ -2,8 +2,8 @@
 
 MetroTrip 서비스의 데이터베이스 스키마와 관련 산출물입니다.
 
-> **MVP 단계에서는 사용하지 않습니다.** 현재 발표용 MVP는 프론트엔드 단독으로 동작하며 백엔드가 없습니다.
-> 이 폴더는 백엔드 연동(P1) 대비 산출물이며, [요구사항 정의서 V1.3](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) 기준으로 작성했습니다.
+> 현재 백엔드의 SQLAlchemy 모델과 조회 로직은 DB V1.10을 기준으로 합니다.
+> 프론트의 일부 transit 화면은 정적 데이터를 유지하고 있으며, 공개 노선·역·시간표·주변 장소 API로 전환할 수 있습니다.
 
 ---
 

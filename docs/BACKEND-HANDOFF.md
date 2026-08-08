@@ -1,9 +1,9 @@
 # 백엔드 연동 인수인계 문서
 
-초기 MVP의 지도 기능은 프론트 단독으로 동작하지만, 현재 회원가입·로그인·비밀번호 재설정은 백엔드와 연결되어 있습니다. 회원 조회·수정·탈퇴 백엔드도 구현되어 있어 이 문서를 기준으로 마이페이지 프론트 연동을 진행합니다.
+초기 MVP의 지도 기능은 아직 프론트 정적 데이터를 사용하지만, 인증·회원·후기·모집 게시판은 백엔드와 연결되어 있습니다. 공개 노선·역·시간표·주변 장소 조회 백엔드도 구현되어 있어 이 문서를 기준으로 transit 프론트 연동을 진행합니다.
 
 > 대상: 백엔드(윤홍규), DB(김유진), 프론트(우진, 황지성)
-> 상태: 2026-08-07 기준 — 인증, 회원 조회·수정·탈퇴, 역 즐겨찾기와 마이페이지 목록 API 백엔드 구현 완료, 프론트 회원 관리 연동 필요
+> 상태: 2026-08-09 기준 — 공개 transit API 구현 및 Swagger 검증 완료, 프론트 transit 연동 필요
 
 ---
 
@@ -15,10 +15,10 @@
 그래서 데이터 접근은 반드시 **각 Feature의 `api/` 또는 shared 데이터 접근 함수 한 겹을 거쳐서** 합니다.
 
 ```
-역 Feature  →  frontend/src/shared/lib/stations.ts  →  (지금) shared/data/stations.json
-                                                     →  (나중) GET /api/v1/stations
-장소 Feature → frontend/src/features/station-map/api/places.ts → (지금) places.json
-                                                                → (나중) 백엔드 API
+역 Feature  →  frontend/src/shared/lib/stations.ts  →  (현재 FE) shared/data/stations.json
+                                                     →  (연동 대상) GET /api/v1/stations (백엔드 준비됨)
+장소 Feature → frontend/src/features/station-map/api/places.ts → (현재 FE) places.json/카카오 API
+                                                                → (연동 대상) GET /api/v1/stations/{id}/places (백엔드 준비됨)
 ```
 
 컴포넌트에서 `import stations from '../data/stations.json'` 처럼 **직접 import 하지 않습니다.**
@@ -48,7 +48,7 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 | 현재 (MVP) | 교체 후 (P1) | 영향 파일 |
 |---|---|---|
 | `stations.json` 정적 로드 | `GET /api/v1/stations` | `frontend/src/shared/lib/stations.ts` |
-| 카카오 로컬 API 프론트 직접 호출 | 백엔드 프록시 경유 (키 은닉 + 캐싱) | `frontend/src/features/station-map/api/places.ts` |
+| 정적 장소/카카오 로컬 API 직접 호출 | `GET /api/v1/stations/{id}/places` | `frontend/src/features/station-map/api/places.ts` |
 | 인증 API별 개별 `fetch` | Access Token 첨부·갱신·공통 오류 처리를 담당하는 API 클라이언트 | `frontend/src/shared/lib/apiClient.ts` (신규) |
 | 프론트에서 그래프 탐색으로 경로 계산 | `GET /api/v1/routes` (**계약에 없음 — 신설 필요**) | `frontend/src/features/route-plan/api/routes.ts` |
 | DB 시드를 변환한 정적 시간표 | `GET /api/v1/stations/{id}/timetables` | `frontend/src/features/route-plan/api/timetables.ts` |
@@ -200,7 +200,19 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | PATCH | `/api/v1/admin/places/{place_id}` | 장소 수정 |
 | DELETE | `/api/v1/admin/places/{place_id}` | 장소 삭제 |
 
-현재 인증 API, 내 회원 정보 조회·수정·탈퇴, 역 즐겨찾기, 내가 작성한 후기·모집 글·참여 모집 글 목록 API와 `/health`는 실제 구현되어 있습니다. 그 외 비즈니스 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
+현재 인증·회원·즐겨찾기·후기·모집 게시판과 공개 노선·역·시간표·주변 장소 API 및 `/health`가 실제 구현되어 있습니다. 여행 계획, 공지사항, 관리자 장소 등록·수정·삭제 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
+
+### 4-1. 공개 transit API 연동 계약
+
+- `GET /lines`: DB V1.10의 노선을 표시 순서대로 반환합니다.
+- `GET /lines/suggestions`: 최근 1시간의 `line_view_logs`를 집계해 상위 3개 노선을 반환합니다.
+- `POST /lines/{line_id}/views`: 인증 선택 API입니다. 인증 헤더가 없으면 익명 기록을, 유효한 Bearer Access Token이 있으면 회원 기록을 저장합니다. 잘못되거나 만료된 토큰은 `401`입니다.
+- `GET /stations`: `keyword`, `line_id`, `page`, `size`를 지원하고 좌표와 소속 노선을 함께 반환합니다. 전체 역을 프론트에서 보관하려면 현재 데이터 범위에서 `size=100`으로 한 번 조회할 수 있습니다.
+- `GET /stations/{station_id}`: 역 좌표, 주소, 소속 노선을 반환합니다.
+- `GET /stations/{station_id}/timetables`: `line_id`, `day_type`, `direction`이 필수입니다. `day_type`은 `WEEKDAY|WEEKEND`, `direction`은 `UP|DOWN`입니다. V1.10의 `train_no`는 `trainNo`로 반환하며, `24:00:00` 이후 시각을 보존하기 위해 도착·출발 시각은 문자열입니다.
+- `GET /stations/{station_id}/places`: 선택한 역과 V1.10의 `place_stations`로 연결된 반경 1km 이내 장소를 반환하며 `category`, `page`, `size`를 지원합니다.
+
+역 목록을 프론트에 캐시해 이름 검색과 지도 선택을 처리할 수 있습니다. DB의 역 정보가 바뀌면 다시 조회해야 하므로 정적 파일로 영구 복제하기보다는 애플리케이션 시작 시 한 번 조회하는 방식을 권장합니다.
 
 내 회원 정보 수정과 탈퇴는 Access Token과 `X-Reauthentication-Token` 헤더를 함께 요구합니다. 재인증 토큰은 `/api/v1/auth/reauthenticate`에서 현재 비밀번호와 목적(`PROFILE_UPDATE`, `PASSWORD_CHANGE`, `WITHDRAWAL`)을 확인한 후 발급되며, 별도 DB 저장 없이 5분 동안 유효합니다. 각 API는 자신의 목적과 일치하는 재인증 토큰만 허용합니다. 일반 회원 정보 수정은 이름과 닉네임만 허용하고, 비밀번호는 `/api/v1/users/me/password`에서 별도로 변경합니다. 회원 탈퇴 시 사용자 행과 DB에서 `ON DELETE CASCADE`로 연결된 회원 소유 데이터를 함께 하드 딜리트합니다.
 
