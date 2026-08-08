@@ -9,13 +9,27 @@ from app.models.auth import (
 )
 from app.models.community import BoardPost, PostParticipant
 from app.models.reviews import Review, ReviewMedia, ReviewTag
-from app.models.transit import Station
+from app.models.transit import (
+    LineStation,
+    LineViewLog,
+    Place,
+    PlaceImage,
+    PlaceStation,
+    Station,
+    SubwayLine,
+    TrainTimetable,
+)
 from app.models.users import StationFavorite
 
 __all__ = [
     "AuthToken",
     "BoardPost",
     "EmailVerification",
+    "LineViewLog",
+    "LineStation",
+    "Place",
+    "PlaceImage",
+    "PlaceStation",
     "PostParticipant",
     "Review",
     "ReviewMedia",
@@ -23,6 +37,8 @@ __all__ = [
     "SocialAccount",
     "Station",
     "StationFavorite",
+    "SubwayLine",
+    "TrainTimetable",
     "User",
     "UserAgreement",
 ]
