@@ -4,12 +4,12 @@
 --
 -- 근거 문서 : 데이터베이스 명세서 V1.10
 -- 대상 DBMS : MySQL 8.0
--- 구성      : 22개 테이블 / PK 22 / UNIQUE 10 / FK 34 / CHECK 20
+-- 구성      : 22개 테이블 / PK 22 / UNIQUE 10 / FK 34 / CHECK 20 / 인덱스 3
 --
--- 비고 : 조회 성능용 인덱스(CREATE INDEX)는 포함하지 않는다.
---        기능 개발 후 EXPLAIN 으로 확인하며 migrations/ 에 추가한다.
---        테이블은 FK 의존 순서대로 정렬되어 있으므로 위에서부터
+-- 비고 : 테이블은 FK 의존 순서대로 정렬되어 있으므로 위에서부터
 --        그대로 실행하면 참조 오류가 발생하지 않는다.
+--        조회 성능용 인덱스는 파일 마지막에 있다. 추가·변경은 이 파일이 아니라
+--        migrations/ 에 번호 파일로 남긴 뒤 이곳에 병합한다.
 -- =====================================================================
 
 -- 데이터베이스 생성. MySQL 8.0 의 기본 콜레이션을 사용한다.
@@ -537,3 +537,45 @@ ALTER TABLE post_participants ADD CONSTRAINT fk_post_participants_post_id
 -- 34
 ALTER TABLE post_participants ADD CONSTRAINT fk_post_participants_user_id
   FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE;              -- 신청자 탈퇴 시 신청 내역 삭제(개인 데이터)
+
+
+-- =====================================================================
+-- 조회 성능용 인덱스 (3건)
+--
+-- PK / UNIQUE / FK 인덱스는 위에서 이미 만들어진다.
+-- InnoDB 는 FK 를 만들 때 자식 컬럼에 인덱스를 자동 생성하므로,
+-- FK 컬럼을 선두로 하는 인덱스는 뒤쪽 정렬 컬럼만 새로 얻는다.
+-- 수백 행 규모의 테이블은 풀 스캔이 더 빠르므로 대상에서 제외했다.
+--
+-- 이력 : migrations/001__add_indexes.sql
+-- =====================================================================
+
+-- 역별 배차표 조회. train_timetables 는 가장 큰 테이블이며 인덱스가 없으면
+-- 매 조회마다 전체를 훑는다. 등호 조건 3개 뒤에 정렬 컬럼을 배치했으며
+-- 순서를 바꾸면 인덱스를 타지 않는다.
+CREATE INDEX idx_timetables_lookup
+  ON train_timetables (station_id, day_type, direction, arrival_time);
+
+-- 역명 검색. 서비스의 첫 진입 경로이고 노선 추가에 따라 계속 늘어난다.
+-- 앞 일치 검색 전제이며, 중간 일치가 필요해지면 FULLTEXT 로 전환한다.
+CREATE INDEX idx_stations_name ON stations (station_name);
+
+-- 인기 노선 집계(CM-003). 조회 1회당 1행씩 쌓여 가장 빨리 커지는 테이블이다.
+-- 기간 조건이 선두여야 하며, 순서를 바꾸면 걸리지 않는다.
+CREATE INDEX idx_line_view_logs_time ON line_view_logs (viewed_at, line_id);
+
+
+-- ---------------------------------------------------------------------
+-- 보류 항목 — 조건이 맞으면 migrations/ 에 추가한 뒤 이곳에 병합한다
+-- ---------------------------------------------------------------------
+-- 열차 여정 추적(WHERE train_no = ?)을 실제로 사용할 때
+-- CREATE INDEX idx_timetables_train ON train_timetables (train_no, day_type, direction);
+--
+-- 노선도 화면을 자주 그린다면. uk_line_stations 가 line_id 필터까지는 이미 커버
+-- CREATE INDEX idx_line_stations_order ON line_stations (line_id, station_order);
+--
+-- 목록 조회용. 대상 테이블이 비어 있고 백엔드 쿼리 모양이 미확정
+-- CREATE INDEX idx_board_posts_created ON board_posts (created_at DESC);
+-- CREATE INDEX idx_reviews_created     ON reviews (created_at DESC);
+-- CREATE INDEX idx_review_tags_name    ON review_tags (tag_name, review_id);
+-- CREATE INDEX idx_board_posts_recruit ON board_posts (recruit_status, recruit_deadline);
