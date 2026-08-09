@@ -2,10 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
 
-from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, not_implemented
+from app.database import get_db
+from app.routers.contract import ADMIN_REQUIRED, ERROR_RESPONSES, CurrentAdminId
 from app.schemas.notices import (
     NoticeListResponse,
     NoticeResponse,
@@ -13,13 +14,15 @@ from app.schemas.notices import (
     NoticeUpdateRequest,
     NoticeUpsertRequest,
 )
+from app.services import notices as notice_service
 
 router = APIRouter(prefix="/notices", tags=["공지사항"])
 admin_router = APIRouter(
     prefix="/admin/notices",
     tags=["관리자"],
-    dependencies=AUTH_REQUIRED,
+    dependencies=ADMIN_REQUIRED,
 )
+DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get(
@@ -29,11 +32,15 @@ admin_router = APIRouter(
     responses=ERROR_RESPONSES,
 )
 def list_notices(
+    db: DatabaseSession,
     notice_type: Annotated[NoticeType | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> JSONResponse:
-    return not_implemented()
+) -> NoticeListResponse:
+    """공지사항 목록을 조회한다."""
+    return notice_service.list_notices(
+        db, notice_type=notice_type, page=page, size=size
+    )
 
 
 @router.get(
@@ -42,8 +49,9 @@ def list_notices(
     summary="공지사항 상세 조회",
     responses=ERROR_RESPONSES,
 )
-def get_notice(notice_id: int) -> JSONResponse:
-    return not_implemented()
+def get_notice(notice_id: int, db: DatabaseSession) -> NoticeResponse:
+    """공지사항 상세를 조회한다."""
+    return notice_service.get_notice(db, notice_id)
 
 
 @admin_router.post(
@@ -53,8 +61,13 @@ def get_notice(notice_id: int) -> JSONResponse:
     summary="공지사항 작성",
     responses=ERROR_RESPONSES,
 )
-def create_notice(_: NoticeUpsertRequest) -> JSONResponse:
-    return not_implemented()
+def create_notice(
+    request: NoticeUpsertRequest,
+    db: DatabaseSession,
+    admin_id: CurrentAdminId,
+) -> NoticeResponse:
+    """관리자가 새 공지사항을 작성한다."""
+    return notice_service.create_notice(db, admin_id, request)
 
 
 @admin_router.patch(
@@ -63,8 +76,14 @@ def create_notice(_: NoticeUpsertRequest) -> JSONResponse:
     summary="공지사항 수정",
     responses=ERROR_RESPONSES,
 )
-def update_notice(notice_id: int, _: NoticeUpdateRequest) -> JSONResponse:
-    return not_implemented()
+def update_notice(
+    notice_id: int,
+    request: NoticeUpdateRequest,
+    db: DatabaseSession,
+    admin_id: CurrentAdminId,
+) -> NoticeResponse:
+    """관리자가 공지사항을 수정한다."""
+    return notice_service.update_notice(db, notice_id, request)
 
 
 @admin_router.delete(
@@ -73,5 +92,10 @@ def update_notice(notice_id: int, _: NoticeUpdateRequest) -> JSONResponse:
     summary="공지사항 삭제",
     responses=ERROR_RESPONSES,
 )
-def delete_notice(notice_id: int) -> JSONResponse:
-    return not_implemented()
+def delete_notice(
+    notice_id: int,
+    db: DatabaseSession,
+    admin_id: CurrentAdminId,
+) -> None:
+    """관리자가 공지사항을 삭제한다."""
+    notice_service.delete_notice(db, notice_id)

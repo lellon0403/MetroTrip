@@ -8,6 +8,7 @@ from app.models.auth import (
     UserAgreement,
 )
 from app.models.community import BoardPost, PostParticipant
+from app.models.notices import Notice
 from app.models.reviews import Review, ReviewMedia, ReviewTag
 from app.models.transit import (
     LineStation,
@@ -30,6 +31,7 @@ __all__ = [
     "Place",
     "PlaceImage",
     "PlaceStation",
+    "Notice",
     "PostParticipant",
     "Review",
     "ReviewMedia",
