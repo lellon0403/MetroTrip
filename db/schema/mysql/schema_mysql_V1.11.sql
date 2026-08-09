@@ -2,9 +2,9 @@
 -- 지하철 노선 기반 관광 추천 서비스 (MetroTrip)
 -- 테이블 생성 스크립트
 --
--- 근거 문서 : 데이터베이스 명세서 V1.10
+-- 근거 문서 : 데이터베이스 명세서 V1.11
 -- 대상 DBMS : MySQL 8.0
--- 구성      : 22개 테이블 / PK 22 / UNIQUE 10 / FK 34 / CHECK 20 / 인덱스 3
+-- 구성      : 23개 테이블 / PK 23 / UNIQUE 11 / FK 35 / CHECK 22 / 인덱스 3
 --
 -- 비고 : 테이블은 FK 의존 순서대로 정렬되어 있으므로 위에서부터
 --        그대로 실행하면 참조 오류가 발생하지 않는다.
@@ -25,7 +25,8 @@ USE metrotrip;
 -- SET FOREIGN_KEY_CHECKS = 0;
 -- DROP TABLE IF EXISTS post_participants, board_posts, line_view_logs,
 --   notices, review_tags, review_media, reviews, travel_plan_items,
---   travel_plans, station_favorites, place_images, place_stations,
+--   travel_plan_share_links, travel_plans, station_favorites,
+--   place_images, place_stations,
 --   places, train_timetables, line_stations, stations, subway_lines,
 --   email_verifications, auth_tokens, social_accounts, user_agreements,
 --   users;
@@ -430,8 +431,37 @@ CREATE TABLE post_participants (
 
 
 -- =====================================================================
--- 외래키 제약 (34건)
--- CASCADE 15 / RESTRICT 12 / SET NULL 7
+-- 23. travel_plan_share_links : 여행 계획 공유 링크
+-- 근거 요구사항 : MB-018
+--
+-- 여행 계획을 읽기 전용으로 공유하기 위한 링크. 토큰 원문은 저장하지 않고
+-- SHA-256 해시(hex 64자)만 보관하므로, DB 가 유출되어도 링크를 복원할 수 없다.
+-- 계획 1건에 여러 링크를 발급할 수 있으며 만료(expires_at)와
+-- 폐기(revoked_at)를 분리해 관리한다.
+--
+-- 주의 : created_at 이 DEFAULT CURRENT_TIMESTAMP 이므로 CHECK 평가 시점에
+--        기본값이 적용되지 않을 수 있다. INSERT 시 created_at 을 명시할 것.
+--          INSERT INTO travel_plan_share_links
+--            (plan_id, token_hash, created_at, expires_at)
+--          VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 7 DAY));
+-- =====================================================================
+CREATE TABLE travel_plan_share_links (
+  share_link_id  BIGINT      NOT NULL AUTO_INCREMENT COMMENT '공유 링크 식별자',
+  plan_id        BIGINT      NOT NULL                COMMENT 'travel_plans.plan_id',
+  token_hash     VARCHAR(64) NOT NULL                COMMENT '공유 토큰 SHA-256 해시(hex). 원문은 저장하지 않음',
+  created_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '발급 시각',
+  expires_at     DATETIME    NOT NULL                COMMENT '만료 시각',
+  revoked_at     DATETIME    NULL                    COMMENT '폐기 시각. NULL이면 미폐기',
+  CONSTRAINT pk_travel_plan_share_links            PRIMARY KEY (share_link_id),
+  CONSTRAINT uk_travel_plan_share_links_token_hash UNIQUE (token_hash),
+  CONSTRAINT ck_travel_plan_share_links_expires_at CHECK (expires_at > created_at),
+  CONSTRAINT ck_travel_plan_share_links_revoked_at CHECK (revoked_at IS NULL OR revoked_at >= created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='여행 계획 공유 링크';
+
+
+-- =====================================================================
+-- 외래키 제약 (35건)
+-- CASCADE 16 / RESTRICT 12 / SET NULL 7
 -- 번호는 데이터베이스 명세서 '관계 정의(FK)' 시트와 일치한다.
 -- =====================================================================
 
@@ -537,6 +567,9 @@ ALTER TABLE post_participants ADD CONSTRAINT fk_post_participants_post_id
 -- 34
 ALTER TABLE post_participants ADD CONSTRAINT fk_post_participants_user_id
   FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE;              -- 신청자 탈퇴 시 신청 내역 삭제(개인 데이터)
+-- 35
+ALTER TABLE travel_plan_share_links ADD CONSTRAINT fk_travel_plan_share_links_plan_id
+  FOREIGN KEY (plan_id) REFERENCES travel_plans (plan_id) ON DELETE CASCADE;       -- 계획 삭제 시 공유 링크도 함께 삭제
 
 
 -- =====================================================================
