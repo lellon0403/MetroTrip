@@ -2,6 +2,7 @@
 
 import math
 from datetime import datetime, time, timedelta, timezone
+from enum import Enum
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -13,10 +14,13 @@ from app.schemas.transit import (
     Direction,
     LineListResponse,
     LineSuggestionResponse,
+    PlaceAdminResponse,
     PlaceCategory,
     PlaceImageResponse,
     PlaceListResponse,
     PlaceResponse,
+    PlaceUpdateRequest,
+    PlaceUpsertRequest,
     StationDetailResponse,
     StationListResponse,
     StationSummary,
@@ -46,6 +50,39 @@ def _find_station(
     if not station:
         raise _error("STATION_NOT_FOUND", "역을 찾을 수 없습니다.", 404)
     return station
+
+
+def _find_place(
+    repository: TransitRepository,
+    place_id: int,
+    *,
+    for_update: bool = False,
+) -> Place:
+    """장소를 조회하고 존재하지 않으면 404 오류를 발생시킨다."""
+    place = repository.find_place_by_id(place_id, for_update=for_update)
+    if not place:
+        raise _error("PLACE_NOT_FOUND", "장소를 찾을 수 없습니다.", 404)
+    return place
+
+
+def _normalize_station_ids(station_ids: list[int]) -> list[int]:
+    """역 ID의 최초 요청 순서를 유지하면서 중복을 제거한다."""
+    return list(dict.fromkeys(station_ids))
+
+
+def _require_stations(
+    repository: TransitRepository,
+    station_ids: list[int],
+) -> None:
+    """요청한 모든 역이 존재하는지 확인하고 누락된 역을 오류로 반환한다."""
+    requested_ids = set(station_ids)
+    missing_ids = requested_ids - repository.existing_station_ids(requested_ids)
+    if missing_ids:
+        raise _error(
+            "STATION_NOT_FOUND",
+            f"존재하지 않는 역입니다: {sorted(missing_ids)}",
+            400,
+        )
 
 
 def _format_timetable_time(value: time | timedelta | None) -> str | None:
@@ -84,6 +121,22 @@ def _build_place_response(
             )
             for image in images
         ],
+    )
+
+
+def _build_place_admin_response(
+    repository: TransitRepository,
+    place: Place,
+) -> PlaceAdminResponse:
+    """장소와 이미지·접근역·등록 정보를 관리자 응답으로 조립한다."""
+    images = repository.list_place_images([place.place_id])
+    public_response = _build_place_response(place, images)
+    return PlaceAdminResponse(
+        **public_response.model_dump(),
+        station_ids=repository.list_place_station_ids(place.place_id),
+        created_by=place.created_by,
+        created_at=place.created_at,
+        updated_at=place.updated_at,
     )
 
 
@@ -258,3 +311,68 @@ def list_station_places(
         total_elements=total,
         total_pages=math.ceil(total / size) if total else 0,
     )
+
+
+def create_place(
+    db: Session,
+    admin_id: int,
+    request: PlaceUpsertRequest,
+) -> PlaceAdminResponse:
+    """관리자가 장소와 접근역·이미지를 하나의 트랜잭션으로 등록한다."""
+    repository = TransitRepository(db)
+    station_ids = _normalize_station_ids(request.station_ids)
+    _require_stations(repository, station_ids)
+
+    place = repository.create_place(
+        place_name=request.place_name,
+        category=request.category.value,
+        description=request.description,
+        address=request.address,
+        latitude=request.latitude,
+        longitude=request.longitude,
+        phone=request.phone,
+        created_by=admin_id,
+    )
+    repository.replace_place_stations(place.place_id, station_ids)
+    repository.replace_place_images(place.place_id, request.image_urls)
+    db.commit()
+    db.refresh(place)
+    return _build_place_admin_response(repository, place)
+
+
+def update_place(
+    db: Session,
+    place_id: int,
+    request: PlaceUpdateRequest,
+) -> PlaceAdminResponse:
+    """관리자가 전달한 장소 필드와 접근역·이미지 목록을 부분 수정한다."""
+    repository = TransitRepository(db)
+    place = _find_place(repository, place_id)
+    fields = request.model_dump(
+        exclude_unset=True,
+        exclude={"station_ids", "image_urls"},
+    )
+    for name, value in fields.items():
+        setattr(place, name, value.value if isinstance(value, Enum) else value)
+
+    if "station_ids" in request.model_fields_set:
+        station_ids = _normalize_station_ids(request.station_ids or [])
+        _require_stations(repository, station_ids)
+        repository.replace_place_stations(place_id, station_ids)
+    if "image_urls" in request.model_fields_set:
+        repository.replace_place_images(place_id, request.image_urls or [])
+
+    place.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
+    db.refresh(place)
+    return _build_place_admin_response(repository, place)
+
+
+def delete_place(db: Session, place_id: int) -> None:
+    """계획에서 장소 항목을 제거한 뒤 장소와 종속 데이터를 삭제한다."""
+    repository = TransitRepository(db)
+    place = _find_place(repository, place_id, for_update=True)
+    affected_plan_ids = repository.delete_plan_items_by_place_id(place_id)
+    repository.touch_travel_plans(affected_plan_ids)
+    repository.delete_place(place)
+    db.commit()

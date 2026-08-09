@@ -2,9 +2,10 @@
 
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session, aliased
 
+from app.models.plans import TravelPlan, TravelPlanItem
 from app.models.transit import (
     LineStation,
     LineViewLog,
@@ -39,6 +40,128 @@ class TransitRepository:
     def find_station_by_id(self, station_id: int) -> Station | None:
         """식별자에 해당하는 역을 조회한다."""
         return self.session.get(Station, station_id)
+
+    def existing_station_ids(self, station_ids: set[int]) -> set[int]:
+        """전달한 역 ID 중 실제로 존재하는 ID를 반환한다."""
+        if not station_ids:
+            return set()
+        rows = self.session.scalars(
+            select(Station.station_id).where(Station.station_id.in_(station_ids))
+        )
+        return set(rows)
+
+    def find_place_by_id(
+        self,
+        place_id: int,
+        *,
+        for_update: bool = False,
+    ) -> Place | None:
+        """장소를 조회하고 필요하면 삭제 트랜잭션을 위해 행을 잠근다."""
+        if not for_update:
+            return self.session.get(Place, place_id)
+        return self.session.scalar(
+            select(Place).where(Place.place_id == place_id).with_for_update()
+        )
+
+    def create_place(
+        self,
+        *,
+        place_name: str,
+        category: str,
+        description: str | None,
+        address: str,
+        latitude: float,
+        longitude: float,
+        phone: str | None,
+        created_by: int,
+    ) -> Place:
+        """추천 장소를 생성하고 자식 행 생성에 사용할 식별자를 할당한다."""
+        place = Place(
+            place_name=place_name,
+            category=category,
+            description=description,
+            address=address,
+            latitude=latitude,
+            longitude=longitude,
+            phone=phone,
+            created_by=created_by,
+        )
+        self.session.add(place)
+        self.session.flush()
+        return place
+
+    def list_place_station_ids(self, place_id: int) -> list[int]:
+        """장소에 연결된 역 ID를 중복 없이 오름차순으로 조회한다."""
+        rows = self.session.scalars(
+            select(PlaceStation.station_id)
+            .where(PlaceStation.place_id == place_id)
+            .distinct()
+            .order_by(PlaceStation.station_id)
+        )
+        return list(rows)
+
+    def replace_place_stations(
+        self,
+        place_id: int,
+        station_ids: list[int],
+    ) -> None:
+        """장소의 기존 접근역 매핑을 전달받은 역 목록으로 교체한다."""
+        self.session.execute(
+            delete(PlaceStation).where(PlaceStation.place_id == place_id)
+        )
+        self.session.add_all(
+            [
+                PlaceStation(place_id=place_id, station_id=station_id)
+                for station_id in station_ids
+            ]
+        )
+
+    def replace_place_images(
+        self,
+        place_id: int,
+        image_urls: list[str],
+    ) -> None:
+        """장소 이미지를 요청 순서에 따라 1부터 정렬 번호를 부여해 교체한다."""
+        self.session.execute(
+            delete(PlaceImage).where(PlaceImage.place_id == place_id)
+        )
+        self.session.add_all(
+            [
+                PlaceImage(
+                    place_id=place_id,
+                    image_url=image_url,
+                    sort_order=sort_order,
+                )
+                for sort_order, image_url in enumerate(image_urls, start=1)
+            ]
+        )
+
+    def delete_plan_items_by_place_id(self, place_id: int) -> set[int]:
+        """장소를 참조하는 계획 항목을 삭제하고 영향받은 계획 ID를 반환한다."""
+        plan_ids = set(
+            self.session.scalars(
+                select(TravelPlanItem.plan_id)
+                .where(TravelPlanItem.place_id == place_id)
+                .distinct()
+            )
+        )
+        self.session.execute(
+            delete(TravelPlanItem).where(TravelPlanItem.place_id == place_id)
+        )
+        return plan_ids
+
+    def touch_travel_plans(self, plan_ids: set[int]) -> None:
+        """장소 항목이 제거된 여행 계획의 수정 시각을 현재 시각으로 갱신한다."""
+        if plan_ids:
+            self.session.execute(
+                update(TravelPlan)
+                .where(TravelPlan.plan_id.in_(plan_ids))
+                .values(updated_at=func.current_timestamp())
+            )
+
+    def delete_place(self, place: Place) -> None:
+        """추천 장소를 삭제 대상으로 등록한다."""
+        self.session.delete(place)
 
     def list_stations(
         self,

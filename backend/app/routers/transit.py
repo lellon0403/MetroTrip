@@ -3,15 +3,14 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.routers.contract import (
-    AUTH_REQUIRED,
+    ADMIN_REQUIRED,
     ERROR_RESPONSES,
+    CurrentAdminId,
     OptionalCurrentUserId,
-    not_implemented,
 )
 from app.schemas.common import MessageResponse
 from app.schemas.transit import (
@@ -34,7 +33,7 @@ router = APIRouter(tags=["노선·역·장소"])
 admin_router = APIRouter(
     prefix="/admin/places",
     tags=["관리자"],
-    dependencies=AUTH_REQUIRED,
+    dependencies=ADMIN_REQUIRED,
 )
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
@@ -171,9 +170,13 @@ def list_station_places(
     summary="장소 추가",
     responses=ERROR_RESPONSES,
 )
-def create_place(_: PlaceUpsertRequest) -> JSONResponse:
+def create_place(
+    request: PlaceUpsertRequest,
+    db: DatabaseSession,
+    admin_id: CurrentAdminId,
+) -> PlaceAdminResponse:
     """관리자가 새 추천 장소를 등록한다."""
-    return not_implemented()
+    return transit_service.create_place(db, admin_id, request)
 
 
 @admin_router.patch(
@@ -182,9 +185,13 @@ def create_place(_: PlaceUpsertRequest) -> JSONResponse:
     summary="장소 수정",
     responses=ERROR_RESPONSES,
 )
-def update_place(place_id: int, _: PlaceUpdateRequest) -> JSONResponse:
+def update_place(
+    place_id: int,
+    request: PlaceUpdateRequest,
+    db: DatabaseSession,
+) -> PlaceAdminResponse:
     """관리자가 추천 장소의 일부 정보를 수정한다."""
-    return not_implemented()
+    return transit_service.update_place(db, place_id, request)
 
 
 @admin_router.delete(
@@ -193,6 +200,6 @@ def update_place(place_id: int, _: PlaceUpdateRequest) -> JSONResponse:
     summary="장소 삭제",
     responses=ERROR_RESPONSES,
 )
-def delete_place(place_id: int) -> JSONResponse:
+def delete_place(place_id: int, db: DatabaseSession) -> None:
     """관리자가 추천 장소를 삭제한다."""
-    return not_implemented()
+    transit_service.delete_place(db, place_id)
