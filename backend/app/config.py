@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "local-only-change-this-secret"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 14
+    public_frontend_url: str = "http://localhost:5173"
+    share_link_expire_days: int = Field(default=7, ge=1)
     verification_code_expire_minutes: int = 5
     verification_max_attempts: int = 5
     email_mode: str = "console"
