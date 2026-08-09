@@ -3,11 +3,13 @@
 from fastapi import APIRouter
 
 from app.routers.auth import router as auth_router
+from app.routers.community import admin_router as admin_post_router
 from app.routers.community import router as community_router
 from app.routers.notices import admin_router as admin_notice_router
 from app.routers.notices import router as notice_router
 from app.routers.plans import router as plan_router
 from app.routers.plans import shared_router as shared_plan_router
+from app.routers.reviews import admin_router as admin_review_router
 from app.routers.reviews import media_router as review_media_router
 from app.routers.reviews import router as review_router
 from app.routers.transit import admin_router as admin_place_router
@@ -26,3 +28,5 @@ api_router.include_router(notice_router)
 api_router.include_router(community_router)
 api_router.include_router(admin_notice_router)
 api_router.include_router(admin_place_router)
+api_router.include_router(admin_review_router)
+api_router.include_router(admin_post_router)
