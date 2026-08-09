@@ -1,9 +1,5 @@
 """OpenAPI contract regression tests."""
 
-import asyncio
-
-import httpx
-
 from app.main import app
 
 
@@ -37,6 +33,8 @@ def test_openapi_contains_agreed_api_contract() -> None:
         "/api/v1/plans/{plan_id}/share-links",
         "/api/v1/shared-plans/{share_token}",
         "/api/v1/reviews",
+        "/api/v1/admin/reviews/{review_id}",
+        "/api/v1/admin/posts/{post_id}",
         "/api/v1/notices",
         "/api/v1/posts",
         "/api/v1/posts/{post_id}/participants/{participant_id}",
@@ -134,16 +132,26 @@ def test_timetable_contract_matches_database_v1_10() -> None:
         )
 
 
-def test_contract_endpoint_returns_standard_not_implemented_error() -> None:
-    async def request_notices() -> httpx.Response:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            return await client.get("/api/v1/notices")
+def test_admin_place_contract_requires_auth_and_exposes_station_ids() -> None:
+    """관리자 장소 CUD가 인증과 접근역 응답 계약을 공개하는지 확인한다."""
+    schema = app.openapi()
+    paths = schema["paths"]
+    create_operation = paths["/api/v1/admin/places"]["post"]
+    update_operation = paths["/api/v1/admin/places/{place_id}"]["patch"]
+    delete_operation = paths["/api/v1/admin/places/{place_id}"]["delete"]
+    response_properties = schema["components"]["schemas"][
+        "PlaceAdminResponse"
+    ]["properties"]
 
-    response = asyncio.run(request_notices())
+    assert create_operation["security"]
+    assert update_operation["security"]
+    assert delete_operation["security"]
+    assert "stationIds" in response_properties
 
-    assert response.status_code == 501
-    assert response.json()["code"] == "NOT_IMPLEMENTED"
+
+def test_admin_content_delete_contract_requires_authentication() -> None:
+    """관리자 후기·모집 게시글 삭제가 인증 계약을 공개하는지 확인한다."""
+    paths = app.openapi()["paths"]
+
+    assert paths["/api/v1/admin/reviews/{review_id}"]["delete"]["security"]
+    assert paths["/api/v1/admin/posts/{post_id}"]["delete"]["security"]
