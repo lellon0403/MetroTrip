@@ -93,9 +93,17 @@ def test_posts_contract_excludes_sort_and_uses_camel_case_body() -> None:
 
 
 def test_protected_and_shared_plan_security_contract() -> None:
+    """계획 CRUD는 인증이 필요하고 공유 조회는 비회원 접근을 유지하는지 확인한다."""
     schema = app.openapi()
 
     assert schema["paths"]["/api/v1/plans"]["get"]["security"]
+    assert schema["paths"]["/api/v1/plans/{plan_id}/share-links"]["post"][
+        "security"
+    ]
+    update_item = schema["components"]["schemas"]["PlanItemUpdateInput"]
+    assert "planItemId" in update_item["properties"]
+    share_response = schema["components"]["schemas"]["ShareLinkResponse"]
+    assert "expiresAt" in share_response["properties"]
     assert (
         "security" not in schema["paths"]["/api/v1/shared-plans/{share_token}"]["get"]
     )
