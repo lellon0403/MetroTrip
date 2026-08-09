@@ -4,7 +4,7 @@
 
 ## 완료된 연동
 
-- 인증 세션: 401 응답 시 Refresh Token으로 한 번만 갱신하고 원래 요청을 재시도한다. 로그아웃은 `POST /api/v1/auth/logout` 호출 뒤 로컬 Access/Refresh Token을 모두 정리한다.
+- 인증 세션: 401 응답 시 Refresh Token으로 한 번만 갱신하고 원래 요청을 재시도한다. 로그아웃은 `POST /api/v1/auth/logout` 호출 뒤 로컬 Access/Refresh Token을 모두 정리한다. 서버가 이미 발급된 Access Token을 즉시 폐기하지 않으므로 로컬 토큰 정리는 반드시 수행한다.
 - 회원 관리: 마이페이지에서 `GET/PATCH /api/v1/users/me`, 목적별 재인증, `PATCH /users/me/password`, `DELETE /users/me`를 사용한다. 재인증 토큰은 화면 메모리에만 두고 `X-Reauthentication-Token` 헤더로 전송한다.
 - 즐겨찾기 역: `GET/POST/DELETE /api/v1/users/me/favorites`를 사용한다. 정적 역 데이터에는 DB `station_id`를 포함해 추가 요청에 사용한다.
 - 후기: 목록·상세·작성·수정·삭제·미디어 업로드와 내가 작성한 후기 조회가 연동되어 있다. 후기 목록은 `tag` 쿼리로 태그 필터를 지원한다.
@@ -29,14 +29,25 @@
 - 공유 계획 화면은 토큰 입력창을 두지 않고 `/shared-plans/{shareToken}` 라우트에서 경로 토큰을 읽어 `GET /api/v1/shared-plans/{share_token}`을 호출한다. 이 조회에는 인증 헤더를 붙이지 않는다.
 - 공유 링크는 기본 7일 동안 유효하며 읽기 전용이다. 변조·만료·폐기된 토큰은 모두 `404 SHARED_PLAN_NOT_FOUND`로 처리한다.
 
-## 아직 미구현된 API
+## 관리자 API
 
-공지사항과 관리자 장소 등록·수정·삭제 API는 백엔드가 `501 Not Implemented`를 반환한다. 공개 역 주변 장소 조회와 관리자 장소 변경 API를 혼동하지 않는다.
+관리자 장소 등록·수정·삭제 API는 Bearer Access Token과 `ADMIN` 권한이 필요하다. 생성·수정 응답에는 전체 장소 정보와 `stationIds`가 포함된다. 수정 요청에서 `stationIds`와 `imageUrls`를 생략하면 기존 값을 유지하고, 전달하면 전체 목록을 교체한다. 장소 삭제 시 해당 장소를 참조하던 여행 계획 항목도 함께 삭제된다.
+
+관리자는 `DELETE /api/v1/admin/reviews/{review_id}`와 `DELETE /api/v1/admin/posts/{post_id}`로 작성자와 관계없이 후기와 모집 게시글을 삭제할 수 있다. 일반 회원 토큰은 `403 ADMIN_ONLY`로 거부된다.
+
+관리자 전용 장소 목록·상세 조회 API는 아직 없다. 공개 장소 조회는 역 기준이고 전체
+`stationIds`를 제공하지 않으므로, 전체 장소 목록에서 수정 화면으로 진입하는 관리자 UI를
+완성하려면 `GET /api/v1/admin/places`와 `GET /api/v1/admin/places/{place_id}`가 먼저
+필요하다. 후기 삭제 후에는 목록에서 항목을 제거하되, 물리 미디어 파일 정리는 백엔드 후속
+과제로 남아 있다.
 
 ## 검증 기록
 
 - 프론트: `npm.cmd run lint`, `npm.cmd run build` 통과
-- 백엔드: `backend/.venv/Scripts/python.exe -m pytest` — 87개 통과
+- 백엔드: `backend/.venv/Scripts/python.exe -m pytest` — 105개 통과
+- 관리자 API: 권한 거부, 장소 등록·부분 수정·삭제, 최소 한 역 검증, `stationIds` 응답,
+  계획 항목 선삭제, 후기·모집 게시글 CASCADE 삭제를 자동화 테스트로 확인했다. 실제 MySQL
+  서버의 통합 검증은 배포 전에 별도로 수행해야 한다.
 - 여행 계획·공유: HTTP CRUD 전 과정과 공유 링크 발급·비회원 조회·변조 토큰 차단을 자동화 테스트로 확인했다. 실제 운영 MySQL의 공유 링크 테이블 존재 여부는 배포 전에 별도로 확인해야 한다.
 - transit: 노선 목록·상위 3개 추천·회원/비회원 조회 기록, 역 목록·이름/노선 검색·상세·시간표·주변 장소를 Swagger에서 확인했다.
 - 브라우저: 로컬 계정으로 프로필 수정, 즐겨찾기 추가/삭제, 모집글 CRUD, 참여 신청/취소, 작성자 승인, 마이페이지 목록, 비밀번호 변경 후 재로그인, 회원 탈퇴를 확인했다. 검증용 게시글과 계정은 모두 삭제했다.

@@ -70,10 +70,6 @@ GET http://localhost:8000/docs
 - 여행 계획 공유: 로그인 없는 읽기 전용 링크 지원
 - 게시판: 좋아요와 정렬 옵션 제외
 
-인증·회원·즐겨찾기·후기·모집 게시판과 공개 노선·역 조회 API는 구현되어 있습니다.
-여행 계획 CRUD와 읽기 전용 공유 링크는 구현되어 있습니다. 공지사항과 관리자 장소
-등록·수정·삭제 API는 계약만 정의되어 `501 Not Implemented`를 반환합니다.
-
 스키마나 엔드포인트를 변경하면 코드와 OpenAPI 검증 테스트를 함께 수정합니다.
 
 ### 구현된 노선·역 조회 API
@@ -97,6 +93,30 @@ GET  /api/v1/stations/{station_id}/places
 - 시간표는 V1.10의 `train_no`를 `trainNo`로 반환합니다. `arrivalTime`과
   `departureTime`은 `24:00:00` 이후 값도 보존하기 위해 `HH:MM:SS` 문자열입니다.
 - 주변 장소는 V1.10의 `place_stations`에 연결된 반경 1km 이내 장소를 조회합니다.
+
+### 구현된 관리자 API
+
+```text
+POST   /api/v1/admin/places
+PATCH  /api/v1/admin/places/{place_id}
+DELETE /api/v1/admin/places/{place_id}
+
+DELETE /api/v1/admin/reviews/{review_id}
+DELETE /api/v1/admin/posts/{post_id}
+```
+
+- 모든 관리자 API는 Bearer Access Token과 `ADMIN` 권한이 필요합니다. 일반 회원은
+  `403 ADMIN_ONLY`로 거부됩니다.
+- 장소는 한 개 이상의 역과 연결해야 하며 생성·수정 응답에는 `stationIds`가 포함됩니다.
+  PATCH에서 `stationIds`나 `imageUrls`를 전달하면 해당 목록 전체를 교체하고 생략하면
+  기존 값을 유지합니다.
+- 장소를 삭제하면 해당 장소를 참조하는 여행 계획 항목을 같은 트랜잭션에서 먼저
+  제거합니다. 여행 계획 자체는 유지됩니다.
+- 관리자 후기·모집 게시글 삭제는 작성자와 관계없이 수행하며 연결된 DB 행은 FK CASCADE로
+  삭제됩니다. 후기 미디어의 물리 파일 삭제는 아직 구현되지 않았습니다.
+- 관리자 전용 장소 목록·상세 조회는 아직 없습니다. 전체 장소와 역 연결을 관리하는 화면을
+  구현하기 전에 `GET /api/v1/admin/places`와 `GET /api/v1/admin/places/{place_id}` 추가를
+  권장합니다.
 
 ### 구현된 여행 계획·공유 API
 
@@ -150,7 +170,7 @@ pytest
 ruff check .
 ```
 
-현재 전체 자동화 테스트 기준은 87개입니다.
+현재 전체 자동화 테스트 기준은 105개입니다.
 
 ## 데이터베이스
 

@@ -199,8 +199,10 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | POST | `/api/v1/admin/places` | 장소 추가 |
 | PATCH | `/api/v1/admin/places/{place_id}` | 장소 수정 |
 | DELETE | `/api/v1/admin/places/{place_id}` | 장소 삭제 |
+| DELETE | `/api/v1/admin/reviews/{review_id}` | 관리자 후기 삭제 |
+| DELETE | `/api/v1/admin/posts/{post_id}` | 관리자 모집 게시글 삭제 |
 
-현재 인증·회원·즐겨찾기·여행 계획 CRUD·읽기 전용 공유·후기·모집 게시판과 공개 노선·역·시간표·주변 장소 API 및 `/health`가 실제 구현되어 있습니다. 공지사항과 관리자 장소 등록·수정·삭제 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
+현재 인증·회원·즐겨찾기·여행 계획 CRUD·읽기 전용 공유·후기·모집 게시판, 공지사항, 공개 노선·역·시간표·주변 장소와 관리자 장소 변경·콘텐츠 삭제 API 및 `/health`가 실제 구현되어 있습니다.
 
 ### 4-1. 공개 transit API 연동 계약
 
@@ -211,10 +213,27 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 - `GET /stations/{station_id}`: 역 좌표, 주소, 소속 노선을 반환합니다.
 - `GET /stations/{station_id}/timetables`: `line_id`, `day_type`, `direction`이 필수입니다. `day_type`은 `WEEKDAY|WEEKEND`, `direction`은 `UP|DOWN`입니다. V1.10의 `train_no`는 `trainNo`로 반환하며, `24:00:00` 이후 시각을 보존하기 위해 도착·출발 시각은 문자열입니다.
 - `GET /stations/{station_id}/places`: 선택한 역과 V1.10의 `place_stations`로 연결된 반경 1km 이내 장소를 반환하며 `category`, `page`, `size`를 지원합니다.
+- `POST/PATCH/DELETE /admin/places`: `ADMIN` 권한이 필요합니다. 장소는 한 개 이상의 역과 연결되어야 하며 생성·수정 응답에는 `stationIds`가 포함됩니다. PATCH에서 역·이미지 목록을 전달하면 전체 교체하고 생략하면 유지합니다. 장소 삭제 시 참조 중인 여행 계획 항목을 먼저 삭제하고 계획 자체는 유지합니다.
+- `DELETE /admin/reviews/{review_id}`, `DELETE /admin/posts/{post_id}`: `ADMIN` 권한으로 작성자와 관계없이 후기와 모집 게시글을 삭제합니다. 후기 태그·미디어 DB 행과 모집 참여 신청은 DB CASCADE로 함께 삭제됩니다.
 
 역 목록을 프론트에 캐시해 이름 검색과 지도 선택을 처리할 수 있습니다. DB의 역 정보가 바뀌면 다시 조회해야 하므로 정적 파일로 영구 복제하기보다는 애플리케이션 시작 시 한 번 조회하는 방식을 권장합니다.
 
-### 4-2. 여행 계획·읽기 전용 공유 연동 계약
+### 4-2. 관리자 API 운영 및 후속 검토
+
+- 관리자 전용 장소 목록·상세 조회 API는 아직 없습니다. 공개 주변 장소 조회는 역과 반경을
+  기준으로 하고 전체 `stationIds`를 반환하지 않으므로, 관리자 화면의 전체 목록·수정 진입을
+  위해 `GET /api/v1/admin/places`와 `GET /api/v1/admin/places/{place_id}`를 우선 추가하는
+  것이 좋습니다.
+- 후기 삭제 시 `review_media` DB 행은 삭제되지만 로컬 저장소의 물리 파일은 삭제되지
+  않습니다. 기존 파일 URL 접근을 차단해야 한다면 저장소 삭제 인터페이스와 실패 처리 정책을
+  먼저 정해야 합니다.
+- 관리자 삭제 이력·삭제 사유를 저장하는 감사 로그는 현재 DB V1.10에 없습니다. 운영 감사가
+  필요하면 스키마와 보존 기간을 먼저 합의해야 합니다.
+- 현재 장소 이름·주소·이미지 URL의 길이는 검증하지만 공백만 입력된 문자열은 별도로
+  거부하지 않습니다. 관리자 UI에서 공백 입력을 막고, 백엔드 정규화 정책은 후속으로
+  확정해야 합니다.
+
+### 4-3. 여행 계획·읽기 전용 공유 연동 계약
 
 - `GET /plans`: 현재 사용자의 계획을 `createdAt`, `planId` 내림차순으로 페이지 조회합니다. 각 항목에는 전체 일정과 역·장소 이름이 포함됩니다.
 - `POST /plans`: `planTitle`, `startStationId`, `endStationId`, `items`로 계획을 작성합니다. 출발·도착역과 각 장소가 실제로 존재해야 하며, `stationId`가 있는 일정은 DB V1.10의 `place_stations`에 해당 장소·역 조합이 있어야 합니다.
@@ -271,7 +290,11 @@ metrotrip-refresh-token
 
 Access Token 만료 시간은 기본 30분, Refresh Token 만료 시간은 기본 14일입니다. 프론트는 `frontend/src/shared/lib/apiClient.ts`에서 인증 요청의 401 응답을 한 번만 Refresh Token으로 갱신하고 원래 요청을 재시도합니다. 여러 요청이 동시에 만료되어도 갱신 요청은 하나만 실행하며, Refresh Token까지 만료되거나 거부된 경우에만 로컬 세션을 정리합니다.
 
-현재 프론트 로그아웃은 로컬 토큰만 제거합니다. 서버의 활성 Refresh Token까지 폐기하려면 로컬 토큰 제거 전에 `POST /api/v1/auth/logout`을 Access Token과 함께 호출해야 합니다.
+현재 프론트 로그아웃은 로컬 토큰을 제거하기 전에 `POST /api/v1/auth/logout`을 호출하며,
+서버는 해당 사용자의 활성 Refresh Token을 모두 폐기합니다. 이미 발급된 Access Token은
+별도로 폐기되지 않아 기본 30분 만료 시점까지 유효하므로, 프론트는 로그아웃 즉시 로컬
+Access Token을 제거해야 합니다. 관리자 계정의 즉시 세션 무효화가 필요하면 Access Token
+차단 목록이나 토큰 버전 정책을 별도로 설계해야 합니다.
 
 ### 5-2. 내 회원 정보 조회
 

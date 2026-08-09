@@ -114,11 +114,18 @@ WHERE constraint_schema = 'metrotrip';
 `post_participants` 는 `board_posts` 에 CASCADE 로 묶여 있어, 작성자가 탈퇴하면 참여 신청 내역이
 DB 레벨에서 조용히 삭제됩니다. FK CASCADE 는 애플리케이션을 거치지 않으므로,
 **탈퇴 처리 직전에 참여자 목록을 읽어 취소 알림을 보내야** 합니다. 삭제 후에는 조회할 방법이 없습니다.
+관리자 모집 글 삭제 API도 같은 CASCADE를 사용하며, 현재 백엔드에는 참여자 알림과 관리자
+삭제 감사 로그가 구현되어 있지 않습니다.
 
 **마스터 테이블 FK 정책**
 `subway_lines` `stations` `places` 를 참조하는 FK 는 `ON DELETE RESTRICT` 로 통일했습니다.
 예외로 `train_timetables.destination_station_id`(종착역)와 `travel_plan_items.station_id`(경유역)는
 부가 정보이므로 `SET NULL` 입니다.
+
+`travel_plan_items.place_id`의 RESTRICT 정책은 유지합니다. 관리자 장소 삭제 API는 같은
+트랜잭션에서 해당 장소를 참조하는 계획 항목을 명시적으로 먼저 삭제하고, 영향받은 계획의
+`updated_at`을 갱신한 다음 장소를 삭제합니다. 계획 자체는 유지됩니다. 애플리케이션을 거치지
+않고 장소를 직접 삭제하면 DB가 계속 거부합니다.
 
 **역 코드를 보유하지 않습니다**
 `stations` 에 외부 코드 컬럼이 없습니다. 공공데이터 출처마다 체계가 달라

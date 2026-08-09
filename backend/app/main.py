@@ -66,7 +66,8 @@ def create_app() -> FastAPI:
         summary="MetroTrip 프론트엔드 협업용 REST API 계약",
         description=(
             "API 계약과 데이터베이스 명세서 V1.10을 기준으로 작성했습니다. "
-            "미구현된 API는 501을 반환합니다."
+            "공개 노선 및 역 조회 API는 구현되어 있으며 관리자 장소 변경과 "
+            "콘텐츠 삭제 API도 제공합니다."
         ),
         debug=settings.debug,
         version="0.1.0",
