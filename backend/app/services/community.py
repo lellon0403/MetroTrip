@@ -49,15 +49,24 @@ def _today() -> date:
     return _now().date()
 
 
+def _find_post(
+    repository: CommunityRepository,
+    post_id: int,
+) -> BoardPost:
+    """모집 게시글을 조회하고 존재하지 않으면 404 오류를 발생시킨다."""
+    post = repository.find_post_by_id(post_id)
+    if not post:
+        raise _error("POST_NOT_FOUND", "게시글을 찾을 수 없습니다.", 404)
+    return post
+
+
 def _find_owned_post(
     repository: CommunityRepository,
     post_id: int,
     user_id: int,
 ) -> BoardPost:
     """게시글을 조회하고 요청자가 작성자인지 확인한다."""
-    post = repository.find_post_by_id(post_id)
-    if not post:
-        raise _error("POST_NOT_FOUND", "게시글을 찾을 수 없습니다.", 404)
+    post = _find_post(repository, post_id)
     if post.user_id != user_id:
         raise _error(
             "POST_FORBIDDEN",
@@ -321,6 +330,14 @@ def delete_post(db: Session, post_id: int, user_id: int) -> None:
     """본인이 작성한 게시글을 삭제한다."""
     repository = CommunityRepository(db)
     post = _find_owned_post(repository, post_id, user_id)
+    repository.delete_post(post)
+    db.commit()
+
+
+def delete_post_as_admin(db: Session, post_id: int) -> None:
+    """관리자가 작성자와 관계없이 모집 게시글을 삭제한다."""
+    repository = CommunityRepository(db)
+    post = _find_post(repository, post_id)
     repository.delete_post(post)
     db.commit()
 

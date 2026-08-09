@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, CurrentUserId
+from app.routers.contract import (
+    ADMIN_REQUIRED,
+    AUTH_REQUIRED,
+    ERROR_RESPONSES,
+    CurrentUserId,
+)
 from app.schemas.community import (
     ParticipantCancelRequest,
     ParticipantDecisionRequest,
@@ -22,6 +27,11 @@ from app.schemas.community import (
 from app.services import community as community_service
 
 router = APIRouter(prefix="/posts", tags=["게시판"])
+admin_router = APIRouter(
+    prefix="/admin/posts",
+    tags=["관리자"],
+    dependencies=ADMIN_REQUIRED,
+)
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
@@ -108,6 +118,17 @@ def delete_post(
 ) -> None:
     """본인이 작성한 게시글을 삭제한다."""
     community_service.delete_post(db, post_id, user_id)
+
+
+@admin_router.delete(
+    "/{post_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="관리자 모집 게시글 삭제",
+    responses=ERROR_RESPONSES,
+)
+def delete_post_as_admin(post_id: int, db: DatabaseSession) -> None:
+    """관리자가 작성자와 관계없이 모집 게시글을 삭제한다."""
+    community_service.delete_post_as_admin(db, post_id)
 
 
 @router.post(
