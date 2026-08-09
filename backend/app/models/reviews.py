@@ -1,4 +1,4 @@
-"""DB 명세서 V1.8 기반 여행 후기 모델."""
+"""DB 명세서 V1.10 기반 여행 후기 모델."""
 
 from datetime import datetime
 
@@ -25,9 +25,8 @@ _PrimaryKeyId = BigInteger().with_variant(Integer, "sqlite")
 class Review(Base):
     """여행 후기를 reviews 테이블에 매핑한다.
 
-    start_station_id/end_station_id/plan_id는 각각 stations, travel_plans를
-    참조하지만 해당 도메인의 모델이 아직 없으므로 ORM 레벨 FK는 선언하지 않는다.
-    실제 참조 무결성은 DB 스키마(schema_V1.8.sql)의 FK 제약이 담당한다.
+    start_station_id/end_station_id/plan_id는 DB V1.10의 삭제 정책까지 포함해
+    stations와 travel_plans를 참조한다.
     """
 
     __tablename__ = "reviews"
@@ -45,11 +44,22 @@ class Review(Base):
     )
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    start_station_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    end_station_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    start_station_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("stations.station_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    end_station_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("stations.station_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     travel_cost: Mapped[int | None] = mapped_column(Integer)
-    plan_id: Mapped[int | None] = mapped_column(BigInteger)
+    plan_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("travel_plans.plan_id", ondelete="SET NULL"),
+    )
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

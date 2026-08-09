@@ -31,8 +31,7 @@ _PrimaryKeyId = BigInteger().with_variant(Integer, "sqlite")
 class BoardPost(Base):
     """인원 모집 게시글을 board_posts 테이블에 매핑한다.
 
-    plan_id는 travel_plans를 참조하지만 해당 도메인의 모델이 아직 없으므로
-    ORM 레벨 FK는 선언하지 않는다. 실제 참조 무결성은 DB 스키마가 담당한다.
+    plan_id는 DB V1.10의 삭제 정책에 따라 travel_plans를 선택적으로 참조한다.
     """
 
     __tablename__ = "board_posts"
@@ -64,7 +63,10 @@ class BoardPost(Base):
         server_default="RECRUITING",
     )
     meeting_date: Mapped[date | None] = mapped_column(Date)
-    plan_id: Mapped[int | None] = mapped_column(BigInteger)
+    plan_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("travel_plans.plan_id", ondelete="SET NULL"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.current_timestamp(),
