@@ -200,7 +200,7 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | PATCH | `/api/v1/admin/places/{place_id}` | 장소 수정 |
 | DELETE | `/api/v1/admin/places/{place_id}` | 장소 삭제 |
 
-현재 인증·회원·즐겨찾기·후기·모집 게시판과 공개 노선·역·시간표·주변 장소 API 및 `/health`가 실제 구현되어 있습니다. 여행 계획, 공지사항, 관리자 장소 등록·수정·삭제 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
+현재 인증·회원·즐겨찾기·여행 계획 CRUD·읽기 전용 공유·후기·모집 게시판과 공개 노선·역·시간표·주변 장소 API 및 `/health`가 실제 구현되어 있습니다. 공지사항과 관리자 장소 등록·수정·삭제 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
 
 ### 4-1. 공개 transit API 연동 계약
 
@@ -213,6 +213,25 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 - `GET /stations/{station_id}/places`: 선택한 역과 V1.10의 `place_stations`로 연결된 반경 1km 이내 장소를 반환하며 `category`, `page`, `size`를 지원합니다.
 
 역 목록을 프론트에 캐시해 이름 검색과 지도 선택을 처리할 수 있습니다. DB의 역 정보가 바뀌면 다시 조회해야 하므로 정적 파일로 영구 복제하기보다는 애플리케이션 시작 시 한 번 조회하는 방식을 권장합니다.
+
+### 4-2. 여행 계획·읽기 전용 공유 연동 계약
+
+- `GET /plans`: 현재 사용자의 계획을 `createdAt`, `planId` 내림차순으로 페이지 조회합니다. 각 항목에는 전체 일정과 역·장소 이름이 포함됩니다.
+- `POST /plans`: `planTitle`, `startStationId`, `endStationId`, `items`로 계획을 작성합니다. 출발·도착역과 각 장소가 실제로 존재해야 하며, `stationId`가 있는 일정은 DB V1.10의 `place_stations`에 해당 장소·역 조합이 있어야 합니다.
+- `GET /plans/{plan_id}`: 본인 계획만 상세 조회합니다. 없는 계획은 `404 PLAN_NOT_FOUND`, 다른 사용자의 계획은 `403 PLAN_FORBIDDEN`입니다.
+- `PATCH /plans/{plan_id}`: 전달한 기본 필드만 변경하지만, `items`는 전체 스냅샷으로 처리합니다. 기존 항목은 `planItemId`를 포함하고 새 항목은 이를 생략합니다. 요청 배열에서 누락된 기존 항목은 삭제되며 `items: []`는 전체 일정 삭제, `items` 생략은 일정 유지입니다. 수정 필드의 명시적 `null`은 허용하지 않습니다.
+- `DELETE /plans/{plan_id}`: 본인 계획을 삭제하고 `travel_plan_items`와 공유 링크는 CASCADE 삭제합니다. 연결된 후기와 모집 게시글의 `plan_id`는 DB V1.10에 따라 `NULL`이 됩니다.
+- `POST /plans/{plan_id}/share-links`: 본인 계획에 대해 기본 7일짜리 읽기 전용 링크를 발급합니다. 응답의 `shareToken`은 URL-safe 22자 원문이고 `shareUrl`은 프론트 공개 경로입니다. DB에는 원문 대신 SHA-256 64자 해시만 저장합니다.
+- `GET /shared-plans/{share_token}`: 인증 없이 현재 계획 내용을 읽습니다. 소유자와 작성·수정 시각은 공개하지 않으며, 변조·만료·폐기·삭제된 링크는 모두 `404 SHARED_PLAN_NOT_FOUND`로 응답합니다.
+
+프론트는 토큰 입력창 대신 `shareUrl`의 `/shared-plans/{shareToken}` 경로를 공개 페이지로 등록하고, 경로 파라미터를 공개 조회 API에 전달합니다. 공유 링크가 올바른 프론트 주소를 가리키도록 배포 환경에서 다음 값을 설정해야 합니다.
+
+```env
+METROTRIP_PUBLIC_FRONTEND_URL=https://프론트엔드-도메인
+METROTRIP_SHARE_LINK_EXPIRE_DAYS=7
+```
+
+`travel_plan_share_links`는 DB V1.10 원본에 없는 공유 기능 확장 테이블입니다. 공유 API 배포 전에 운영 MySQL에 해당 테이블과 `travel_plans(plan_id) ON DELETE CASCADE` FK, `token_hash CHAR(64) UNIQUE`, 만료·폐기 시각 컬럼이 실제로 적용됐는지 확인해야 합니다. 테이블이 없으면 두 공유 API는 정상 동작할 수 없습니다.
 
 내 회원 정보 수정과 탈퇴는 Access Token과 `X-Reauthentication-Token` 헤더를 함께 요구합니다. 재인증 토큰은 `/api/v1/auth/reauthenticate`에서 현재 비밀번호와 목적(`PROFILE_UPDATE`, `PASSWORD_CHANGE`, `WITHDRAWAL`)을 확인한 후 발급되며, 별도 DB 저장 없이 5분 동안 유효합니다. 각 API는 자신의 목적과 일치하는 재인증 토큰만 허용합니다. 일반 회원 정보 수정은 이름과 닉네임만 허용하고, 비밀번호는 `/api/v1/users/me/password`에서 별도로 변경합니다. 회원 탈퇴 시 사용자 행과 DB에서 `ON DELETE CASCADE`로 연결된 회원 소유 데이터를 함께 하드 딜리트합니다.
 

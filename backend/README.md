@@ -67,12 +67,12 @@ GET http://localhost:8000/docs
 - 인증 필요 API: Swagger의 `Authorize`에 Bearer Access Token 입력
 - 실시간 지하철 위치와 길 안내: 백엔드 범위에서 제외
 - 현재 좌표 표시: 프론트엔드의 Geolocation API로 처리
-- 여행 계획 공유: 로그인 없는 읽기 전용 링크만 지원 예정
+- 여행 계획 공유: 로그인 없는 읽기 전용 링크 지원
 - 게시판: 좋아요와 정렬 옵션 제외
 
 인증·회원·즐겨찾기·후기·모집 게시판과 공개 노선·역 조회 API는 구현되어 있습니다.
-여행 계획, 공지사항, 관리자 장소 등록·수정·삭제 API는 계약만 정의되어 `501 Not
-Implemented`를 반환합니다.
+여행 계획 CRUD와 읽기 전용 공유 링크는 구현되어 있습니다. 공지사항과 관리자 장소
+등록·수정·삭제 API는 계약만 정의되어 `501 Not Implemented`를 반환합니다.
 
 스키마나 엔드포인트를 변경하면 코드와 OpenAPI 검증 테스트를 함께 수정합니다.
 
@@ -97,6 +97,28 @@ GET  /api/v1/stations/{station_id}/places
 - 시간표는 V1.10의 `train_no`를 `trainNo`로 반환합니다. `arrivalTime`과
   `departureTime`은 `24:00:00` 이후 값도 보존하기 위해 `HH:MM:SS` 문자열입니다.
 - 주변 장소는 V1.10의 `place_stations`에 연결된 반경 1km 이내 장소를 조회합니다.
+
+### 구현된 여행 계획·공유 API
+
+```text
+GET    /api/v1/plans
+POST   /api/v1/plans
+GET    /api/v1/plans/{plan_id}
+PATCH  /api/v1/plans/{plan_id}
+DELETE /api/v1/plans/{plan_id}
+POST   /api/v1/plans/{plan_id}/share-links
+GET    /api/v1/shared-plans/{share_token}
+```
+
+- 계획 관리와 공유 링크 발급은 Bearer 인증이 필요하며 본인 계획만 처리합니다.
+- 수정 요청의 `items`는 전체 스냅샷입니다. 기존 항목은 `planItemId`를 포함하고 새 항목은
+  생략합니다. 누락된 기존 항목은 삭제되며 빈 배열은 일정 전체 삭제를 뜻합니다.
+- 공유 조회는 인증 없이 읽기만 가능합니다. 발급 응답에는 URL-safe 22자 원문 토큰을
+  반환하고 DB에는 SHA-256 64자 해시만 저장합니다.
+- 공유 URL의 기본 프론트 주소는 `http://localhost:5173`, 기본 만료 기간은 7일입니다.
+  배포 시 `METROTRIP_PUBLIC_FRONTEND_URL`과 `METROTRIP_SHARE_LINK_EXPIRE_DAYS`를 설정합니다.
+- 공유 기능은 DB V1.10 원본에 없는 `travel_plan_share_links` 확장 테이블이 필요합니다.
+  운영 배포 전에 해당 테이블이 실제 DB에 적용됐는지 확인합니다.
 
 ### 구현된 회원 관리 흐름
 
@@ -128,7 +150,7 @@ pytest
 ruff check .
 ```
 
-현재 전체 자동화 테스트 기준은 70개입니다.
+현재 전체 자동화 테스트 기준은 87개입니다.
 
 ## 데이터베이스
 
