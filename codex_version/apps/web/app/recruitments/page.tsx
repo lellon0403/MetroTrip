@@ -143,7 +143,7 @@ export default function RecruitmentsPage() {
         {items.map((item) => (
           <article key={item.id} className="recruitmentPost">
             <span className="feedAvatar" aria-hidden>{item.ownerName.slice(0, 1)}</span>
-            <article>
+            <div className="recruitmentPostBody">
               <header>
                 <strong>r/{item.ownerName}</strong><span className="routeSlash">/</span><b>{item.routeLabel}</b><span>·</span>
                 <time>{timeLabel(item.createdAt)}</time>
@@ -153,7 +153,7 @@ export default function RecruitmentsPage() {
               <p>{item.body}</p>
               <div className="postSchedule"><span><CalendarDays size={14} aria-hidden /> {timeLabel(item.meetingAt)}</span><span>신청 마감 {timeLabel(item.deadline)}</span></div>
               <footer><span><Eye size={13} aria-hidden /> 조회 {item.viewCount}</span><span><MessageCircle size={13} aria-hidden /> 질문</span><span><Users size={13} aria-hidden /> {item.acceptedCount}/{item.capacity}명</span><Link href={`/discover?recruitmentPlan=${item.id}`}><CalendarDays size={13} aria-hidden /> 일정</Link><Link className="recruitmentApplyLink" href={`/recruitments/${item.id}?mode=apply`}><UserPlus size={14} aria-hidden /> 신청하기 <ChevronRight size={13} aria-hidden /></Link></footer>
-            </article>
+            </div>
           </article>
         ))}
       </section>
