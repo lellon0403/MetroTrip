@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { ThumbsUp } from "lucide-react";
 
 export function ReviewLike({ reviewId, initialLiked, initialCount }: { reviewId: string; initialLiked: boolean; initialCount: number }) {
   const { status } = useSession();
@@ -17,5 +18,5 @@ export function ReviewLike({ reviewId, initialLiked, initialCount }: { reviewId:
     if (data) { setLiked(data.liked); setCount(data.likeCount); setMessage(null); }
   }
 
-  return <div className="reviewLike"><button type="button" aria-pressed={liked} onClick={() => void toggle()}>{liked ? "♥" : "♡"} 도움돼요 {count}</button>{message ? <p>{message}</p> : null}</div>;
+  return <div className="reviewLike"><button type="button" aria-pressed={liked} onClick={() => void toggle()}><ThumbsUp size={15} fill={liked ? "currentColor" : "none"} aria-hidden /> 도움돼요 {count}</button>{message ? <p>{message}</p> : null}</div>;
 }

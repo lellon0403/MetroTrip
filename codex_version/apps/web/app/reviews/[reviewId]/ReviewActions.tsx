@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Eye, Flag, Share2, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
-export function ReviewActions({ reviewId, authorId, title }: { reviewId: string; authorId: string; title: string }) {
+export function ReviewActions({ reviewId, authorId, title, viewCount }: { reviewId: string; authorId: string; title: string; viewCount: number }) {
   const router = useRouter();
   const { status, user } = useSession();
   const [message, setMessage] = useState<string | null>(null);
@@ -32,5 +33,5 @@ export function ReviewActions({ reviewId, authorId, title }: { reviewId: string;
     if (response.ok) router.push("/reviews"); else setMessage("후기를 삭제하지 못했습니다.");
   }
 
-  return <div className="reviewActions"><button type="button" onClick={() => void share()}>공유</button>{!owner && <button type="button" onClick={() => void report()}>신고</button>}{owner && <><Link href={`/reviews/${reviewId}/edit`}>수정</Link><button className="dangerText" type="button" onClick={() => void remove()}>삭제</button></>}{message && <span role="status">{message}</span>}</div>;
+  return <div className="reviewActions"><span><Eye size={14} aria-hidden /> 조회 {viewCount}</span><button type="button" onClick={() => void share()}><Share2 size={14} aria-hidden /> 공유</button>{!owner && <button type="button" onClick={() => void report()}><Flag size={14} aria-hidden /> 신고</button>}{owner && <><Link href={`/reviews/${reviewId}/edit`}>수정</Link><button className="dangerText" type="button" onClick={() => void remove()}><Trash2 size={14} aria-hidden /> 삭제</button></>}{message && <span role="status">{message}</span>}</div>;
 }

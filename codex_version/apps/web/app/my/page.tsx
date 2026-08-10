@@ -1,6 +1,7 @@
 "use client";
 
 import type { components } from "@metrotrip/contracts";
+import { Star, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
@@ -87,7 +88,7 @@ export default function MyPage() {
       <section className="myStats"><article><strong>{data.plans.length}</strong><span>일정</span></article><article><strong>{data.reviews.length}</strong><span>후기</span></article><article><strong>{data.recruitments.length}</strong><span>내 모집</span></article><article><strong>{data.applications.length}</strong><span>참여 신청</span></article></section>
       <div className="myColumns">
         <section><div className="mySectionTitle"><h2>최근 일정</h2><Link href="/plans">전체 보기</Link></div>{data.plans.slice(0, 4).map((plan) => <Link className="myRow" key={plan.id} href="/plans"><strong>{plan.title}</strong><span>{plan.startDate} · {plan.status}</span></Link>)}</section>
-        <section><div className="mySectionTitle"><h2>내 후기</h2><Link href="/reviews/new">작성</Link></div>{data.reviews.slice(0, 4).map((review) => <Link className="myRow" key={review.id} href={`/reviews/${review.id}`} prefetch={false}><strong>{review.title}</strong><span>★ {review.rating} · ♥ {review.likeCount}</span></Link>)}</section>
+        <section><div className="mySectionTitle"><h2>내 후기</h2><Link href="/reviews/new">작성</Link></div>{data.reviews.slice(0, 4).map((review) => <Link className="myRow" key={review.id} href={`/reviews/${review.id}`} prefetch={false}><strong>{review.title}</strong><span><Star size={13} fill="currentColor" aria-hidden /> {review.rating} · <ThumbsUp size={12} aria-hidden /> {review.likeCount}</span></Link>)}</section>
         <section><div className="mySectionTitle"><h2>저장한 곳</h2><Link href="/discover">탐색</Link></div>{data.favorites?.stations.slice(0, 3).map((station) => <div className="myRow" key={station.id}><strong>{station.name}역</strong><span>즐겨찾는 역</span></div>)}{data.favorites?.places.slice(0, 3).map((place) => <div className="myRow" key={place.id}><strong>{place.name}</strong><span>{place.category}</span></div>)}</section>
         <section><div className="mySectionTitle"><h2>모집 활동</h2><Link href="/recruitments">전체 보기</Link></div>{data.recruitments.slice(0, 2).map((item) => <Link className="myRow" href={`/recruitments/${item.id}`} key={item.id} prefetch={false}><strong>{item.title}</strong><span>{item.acceptedCount}/{item.capacity}명</span></Link>)}{data.applications.slice(0, 2).map((item) => <Link className="myRow" href={`/recruitments/${item.recruitmentId}`} key={item.id} prefetch={false}><strong>참여 신청</strong><span>{item.status}</span></Link>)}</section>
         <section id="account" className="accountSettings">

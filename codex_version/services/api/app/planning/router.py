@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -9,6 +10,8 @@ from app.identity.dependencies import CurrentUser
 from app.infrastructure.database import get_db
 from app.planning.repository import decode_plan_cursor, encode_plan_cursor
 from app.planning.schemas import (
+    DeletedPlanPage,
+    DeletedPlanSummary,
     PlanPage,
     PlanSummary,
     PlanView,
@@ -60,6 +63,25 @@ def list_my_plans(
     )
 
 
+@router.get("/plans/deleted", operation_id="listDeletedPlans", response_model=DeletedPlanPage)
+def list_deleted_plans(
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> DeletedPlanPage:
+    plans = PlanningService(db).list_deleted(user.id)
+    return DeletedPlanPage(
+        items=[
+            DeletedPlanSummary(
+                **PlanSummary.model_validate(plan).model_dump(),
+                deleted_at=plan.deleted_at,
+                expires_at=plan.deleted_at + timedelta(days=3),
+            )
+            for plan in plans
+            if plan.deleted_at is not None
+        ]
+    )
+
+
 @router.post("/plans", operation_id="createPlan", response_model=PlanView, status_code=201)
 def create_plan(
     body: PlanWriteRequest,
@@ -104,6 +126,18 @@ def delete_plan(
 ) -> Response:
     PlanningService(db).delete(plan_id, user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/plans/{plan_id}/restore", operation_id="restoreDeletedPlan", response_model=PlanView)
+def restore_deleted_plan(
+    plan_id: UUID,
+    response: Response,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> PlanView:
+    plan = PlanningService(db).restore(plan_id, user.id)
+    response.headers["ETag"] = _etag(plan.version)
+    return PlanView.model_validate(plan)
 
 
 @router.post(

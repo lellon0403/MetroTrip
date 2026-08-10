@@ -332,6 +332,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans/deleted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Deleted Plans */
+        get: operations["listDeletedPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans/{plan_id}": {
         parameters: {
             query?: never;
@@ -346,6 +363,23 @@ export interface paths {
         post?: never;
         /** Delete Plan */
         delete: operations["deletePlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans/{plan_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Deleted Plan */
+        post: operations["restoreDeletedPlan"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -574,6 +608,41 @@ export interface paths {
         post?: never;
         /** Delete Recruitment */
         delete: operations["deleteRecruitment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruitments/{recruitment_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Recruitment Plan */
+        get: operations["getRecruitmentPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recruitments/{recruitment_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Comments */
+        get: operations["listRecruitmentComments"];
+        put?: never;
+        /** Create Comment */
+        post: operations["createRecruitmentComment"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1098,6 +1167,49 @@ export interface components {
             status: string;
             /** Message */
             message: string;
+        };
+        /** DeletedPlanPage */
+        DeletedPlanPage: {
+            /** Items */
+            items: components["schemas"]["DeletedPlanSummary"][];
+        };
+        /** DeletedPlanSummary */
+        DeletedPlanSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Startdate
+             * Format: date
+             */
+            startDate: string;
+            /**
+             * Enddate
+             * Format: date
+             */
+            endDate: string;
+            status: components["schemas"]["PlanStatus"];
+            /** Version */
+            version: number;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /**
+             * Deletedat
+             * Format: date-time
+             */
+            deletedAt: string;
+            /**
+             * Expiresat
+             * Format: date-time
+             */
+            expiresAt: string;
         };
         /** Departure */
         Departure: {
@@ -1712,6 +1824,51 @@ export interface components {
             /** Dependencies */
             dependencies: components["schemas"]["DependencyHealth"][];
         };
+        /** RecruitmentCommentCreateRequest */
+        RecruitmentCommentCreateRequest: {
+            /** @default QUESTION */
+            kind: components["schemas"]["RecruitmentCommentKind"];
+            /** Body */
+            body: string;
+        };
+        /**
+         * RecruitmentCommentKind
+         * @enum {string}
+         */
+        RecruitmentCommentKind: "QUESTION" | "APPLICATION";
+        /** RecruitmentCommentPage */
+        RecruitmentCommentPage: {
+            /** Items */
+            items: components["schemas"]["RecruitmentCommentView"][];
+        };
+        /** RecruitmentCommentView */
+        RecruitmentCommentView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Recruitmentid
+             * Format: uuid
+             */
+            recruitmentId: string;
+            /**
+             * Authorid
+             * Format: uuid
+             */
+            authorId: string;
+            /** Authorname */
+            authorName: string;
+            kind: components["schemas"]["RecruitmentCommentKind"];
+            /** Body */
+            body: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+        };
         /** RecruitmentDetail */
         RecruitmentDetail: {
             /**
@@ -1728,6 +1885,8 @@ export interface components {
             ownerName: string;
             /** Planid */
             planId: string | null;
+            /** Routelabel */
+            routeLabel: string;
             /** Title */
             title: string;
             /** Body */
@@ -1757,6 +1916,8 @@ export interface components {
             /** Viewcount */
             viewCount: number;
             myApplicationStatus?: components["schemas"]["ApplicationStatus"] | null;
+            /** Comments */
+            comments?: components["schemas"]["RecruitmentCommentView"][];
         };
         /** RecruitmentPage */
         RecruitmentPage: {
@@ -1786,6 +1947,8 @@ export interface components {
             ownerName: string;
             /** Planid */
             planId: string | null;
+            /** Routelabel */
+            routeLabel: string;
             /** Title */
             title: string;
             /** Body */
@@ -2008,6 +2171,8 @@ export interface components {
              * @default false
              */
             likedByMe: boolean;
+            /** Placeratings */
+            placeRatings?: components["schemas"]["ReviewPlaceRatingView"][];
         };
         /** ReviewLikeResponse */
         ReviewLikeResponse: {
@@ -2042,6 +2207,28 @@ export interface components {
             items: components["schemas"]["ReviewSummary"][];
             /** Nextcursor */
             nextCursor?: string | null;
+        };
+        /** ReviewPlaceRatingView */
+        ReviewPlaceRatingView: {
+            /**
+             * Placeid
+             * Format: uuid
+             */
+            placeId: string;
+            /** Rating */
+            rating: string;
+            /** Placename */
+            placeName: string;
+        };
+        /** ReviewPlaceRatingWrite */
+        ReviewPlaceRatingWrite: {
+            /**
+             * Placeid
+             * Format: uuid
+             */
+            placeId: string;
+            /** Rating */
+            rating: number | string;
         };
         /**
          * ReviewStatus
@@ -2113,6 +2300,8 @@ export interface components {
             title: string;
             /** Planid */
             planId?: string | null;
+            /** Covermediaid */
+            coverMediaId?: string | null;
             /**
              * Originstationid
              * Format: uuid
@@ -2135,6 +2324,8 @@ export interface components {
             blocks: components["schemas"]["ReviewBlock"][];
             /** Tags */
             tags?: string[];
+            /** Placeratings */
+            placeRatings?: components["schemas"]["ReviewPlaceRatingWrite"][];
         };
         /** RouteCompareRequest */
         RouteCompareRequest: {
@@ -3113,6 +3304,26 @@ export interface operations {
             };
         };
     };
+    listDeletedPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedPlanPage"];
+                };
+            };
+        };
+    };
     getPlan: {
         parameters: {
             query?: never;
@@ -3198,6 +3409,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoreDeletedPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanView"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -3831,6 +4073,103 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getRecruitmentPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recruitment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listRecruitmentComments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recruitment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentCommentPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    createRecruitmentComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recruitment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecruitmentCommentCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentCommentView"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -144,6 +144,21 @@ class PlanningService:
         )
         self.db.commit()
 
+    def list_deleted(self, owner_id: UUID) -> list[Plan]:
+        self.repository.purge_expired_deleted(owner_id)
+        self.db.commit()
+        return self.repository.list_deleted_owned(owner_id)
+
+    def restore(self, plan_id: UUID, owner_id: UUID) -> Plan:
+        plan = self.repository.get_deleted_owned(plan_id, owner_id)
+        if not plan:
+            raise ApiError(404, "DELETED_PLAN_NOT_FOUND", "복원할 수 있는 삭제 일정이 없습니다.")
+        plan.deleted_at = None
+        plan.visibility = PlanVisibility.PRIVATE
+        plan.version += 1
+        self.db.commit()
+        return self.repository.get(plan.id) or plan
+
     def create_share_link(
         self,
         plan_id: UUID,

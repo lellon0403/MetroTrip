@@ -1,6 +1,7 @@
 "use client";
 
 import type { components } from "@metrotrip/contracts";
+import { CalendarDays, ChevronRight, Eye, MessageCircle, Search, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -105,7 +106,7 @@ export default function RecruitmentsPage() {
 
       <div className="recruitmentToolbar">
         <label className="feedSearch">
-          <span aria-hidden>⌕</span>
+          <Search size={17} aria-hidden />
           <span className="srOnly">모집 검색</span>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="여행지, 제목, 내용 검색" />
         </label>
@@ -138,23 +139,22 @@ export default function RecruitmentsPage() {
 
       {error ? <div className="inlineError reviewError" role="alert"><p>{error}</p><button type="button" onClick={() => setError(null)}>닫기</button></div> : null}
 
-      <section className="recruitmentFeed" aria-label="모집글 목록">
+      <section className="recruitmentFeed redditFeed" aria-label="모집글 목록">
         {items.map((item) => (
-          <Link key={item.id} href={`/recruitments/${item.id}`} className="recruitmentPost" prefetch={false}>
+          <article key={item.id} className="recruitmentPost">
             <span className="feedAvatar" aria-hidden>{item.ownerName.slice(0, 1)}</span>
             <article>
               <header>
-                <strong>{item.ownerName}</strong>
-                <span>·</span>
+                <strong>r/{item.ownerName}</strong><span className="routeSlash">/</span><b>{item.routeLabel}</b><span>·</span>
                 <time>{timeLabel(item.createdAt)}</time>
                 <span className={`statusPill ${item.status.toLowerCase()}`}>{item.status === "OPEN" ? "모집 중" : item.status === "CLOSED" ? "마감" : "취소"}</span>
               </header>
-              <h2>{item.title}</h2>
+              <Link href={`/recruitments/${item.id}`} prefetch={false}><h2>{item.title}</h2></Link>
               <p>{item.body}</p>
-              <div className="postSchedule"><span>◷ {timeLabel(item.meetingAt)}</span><span>신청 마감 {timeLabel(item.deadline)}</span></div>
-              <footer><span>◉ 조회 {item.viewCount}</span><span>♙ {item.acceptedCount}/{item.capacity}명</span><span>일정 보기 →</span></footer>
+              <div className="postSchedule"><span><CalendarDays size={14} aria-hidden /> {timeLabel(item.meetingAt)}</span><span>신청 마감 {timeLabel(item.deadline)}</span></div>
+              <footer><span><Eye size={13} aria-hidden /> 조회 {item.viewCount}</span><span><MessageCircle size={13} aria-hidden /> 질문</span><span><Users size={13} aria-hidden /> {item.acceptedCount}/{item.capacity}명</span><Link href={`/discover?recruitmentPlan=${item.id}`}><CalendarDays size={13} aria-hidden /> 일정</Link><Link className="recruitmentApplyLink" href={`/recruitments/${item.id}?mode=apply`}><UserPlus size={14} aria-hidden /> 신청하기 <ChevronRight size={13} aria-hidden /></Link></footer>
             </article>
-          </Link>
+          </article>
         ))}
       </section>
       {items.length === 0 ? <div className="emptyState"><strong>현재 조건의 모집이 없어요</strong><p>첫 여행 모집을 열어보세요.</p></div> : null}

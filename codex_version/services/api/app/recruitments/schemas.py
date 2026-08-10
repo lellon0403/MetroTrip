@@ -4,7 +4,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 
 from app.core.schemas import ApiModel
-from app.recruitments.models import ApplicationStatus, RecruitmentStatus
+from app.recruitments.models import ApplicationStatus, RecruitmentCommentKind, RecruitmentStatus
 
 
 class RecruitmentWriteRequest(ApiModel):
@@ -27,6 +27,7 @@ class RecruitmentSummary(ApiModel):
     owner_id: UUID
     owner_name: str
     plan_id: UUID | None
+    route_label: str
     title: str
     body: str
     capacity: int
@@ -41,6 +42,7 @@ class RecruitmentSummary(ApiModel):
 
 class RecruitmentDetail(RecruitmentSummary):
     my_application_status: ApplicationStatus | None = None
+    comments: list["RecruitmentCommentView"] = Field(default_factory=list)
 
 
 class RecruitmentPage(ApiModel):
@@ -69,3 +71,22 @@ class ApplicationView(ApiModel):
 
 class ApplicationPage(ApiModel):
     items: list[ApplicationView]
+
+
+class RecruitmentCommentCreateRequest(ApiModel):
+    kind: RecruitmentCommentKind = RecruitmentCommentKind.QUESTION
+    body: str = Field(min_length=1, max_length=1000)
+
+
+class RecruitmentCommentView(ApiModel):
+    id: UUID
+    recruitment_id: UUID
+    author_id: UUID
+    author_name: str
+    kind: RecruitmentCommentKind
+    body: str
+    created_at: datetime
+
+
+class RecruitmentCommentPage(ApiModel):
+    items: list[RecruitmentCommentView]

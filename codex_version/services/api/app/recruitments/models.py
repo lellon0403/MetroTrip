@@ -35,6 +35,11 @@ class ApplicationStatus(StrEnum):
     CANCELED = "CANCELED"
 
 
+class RecruitmentCommentKind(StrEnum):
+    QUESTION = "QUESTION"
+    APPLICATION = "APPLICATION"
+
+
 class Recruitment(Base):
     __tablename__ = "recruitments"
     __table_args__ = (
@@ -78,6 +83,9 @@ class Recruitment(Base):
     applications: Mapped[list["RecruitmentApplication"]] = relationship(
         back_populates="recruitment", cascade="all, delete-orphan"
     )
+    comments: Mapped[list["RecruitmentComment"]] = relationship(
+        back_populates="recruitment", cascade="all, delete-orphan", order_by="RecruitmentComment.created_at"
+    )
 
 
 class RecruitmentApplication(Base):
@@ -108,6 +116,26 @@ class RecruitmentApplication(Base):
     )
 
     recruitment: Mapped[Recruitment] = relationship(back_populates="applications")
+
+
+class RecruitmentComment(Base):
+    __tablename__ = "recruitment_comments"
+    __table_args__ = (Index("ix_recruitment_comment_created", "recruitment_id", "created_at"),)
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    recruitment_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("recruitments.id", ondelete="CASCADE"), nullable=False
+    )
+    author_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    kind: Mapped[RecruitmentCommentKind] = mapped_column(
+        Enum(RecruitmentCommentKind, name="recruitment_comment_kind", native_enum=True), nullable=False
+    )
+    body: Mapped[str] = mapped_column(String(1000), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    recruitment: Mapped[Recruitment] = relationship(back_populates="comments")
 
 
 class OutboxEvent(Base):

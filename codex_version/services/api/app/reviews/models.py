@@ -53,6 +53,9 @@ class Review(Base):
     plan_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("plans.id", ondelete="SET NULL")
     )
+    cover_media_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("media_assets.id", ondelete="SET NULL")
+    )
     origin_station_id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("transit_stations.id", ondelete="RESTRICT"), nullable=False
     )
@@ -85,6 +88,9 @@ class Review(Base):
     )
     media: Mapped[list["ReviewMedia"]] = relationship(
         back_populates="review", cascade="all, delete-orphan", order_by="ReviewMedia.position"
+    )
+    place_ratings: Mapped[list["ReviewPlaceRating"]] = relationship(
+        back_populates="review", cascade="all, delete-orphan"
     )
 
     @property
@@ -167,6 +173,24 @@ class ReviewMedia(Base):
 
     review: Mapped[Review] = relationship(back_populates="media")
     asset: Mapped[MediaAsset] = relationship()
+
+
+class ReviewPlaceRating(Base):
+    __tablename__ = "review_place_ratings"
+    __table_args__ = (
+        CheckConstraint("rating_twice >= 2 AND rating_twice <= 10", name="ck_review_place_rating_range"),
+    )
+
+    review_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), primary_key=True
+    )
+    place_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("places.id", ondelete="RESTRICT"), primary_key=True
+    )
+    rating_twice: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    review: Mapped[Review] = relationship(back_populates="place_ratings")
+    place: Mapped["Place"] = relationship()
 
 
 class ReviewLike(Base):

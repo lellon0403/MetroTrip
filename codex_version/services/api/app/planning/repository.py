@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
@@ -61,6 +61,45 @@ class PlanningRepository:
                 )
             )
         return list(self.db.scalars(statement))
+
+    def list_deleted_owned(self, owner_id: UUID, retention_days: int = 3) -> list[Plan]:
+        threshold = datetime.now(UTC) - timedelta(days=retention_days)
+        return list(
+            self.db.scalars(
+                select(Plan)
+                .where(
+                    Plan.owner_id == owner_id,
+                    Plan.deleted_at.is_not(None),
+                    Plan.deleted_at >= threshold,
+                )
+                .order_by(Plan.deleted_at.desc(), Plan.id.desc())
+            )
+        )
+
+    def get_deleted_owned(self, plan_id: UUID, owner_id: UUID, retention_days: int = 3) -> Plan | None:
+        threshold = datetime.now(UTC) - timedelta(days=retention_days)
+        return self.db.scalar(
+            select(Plan)
+            .options(self._with_tree())
+            .where(
+                Plan.id == plan_id,
+                Plan.owner_id == owner_id,
+                Plan.deleted_at.is_not(None),
+                Plan.deleted_at >= threshold,
+            )
+        )
+
+    def purge_expired_deleted(self, owner_id: UUID, retention_days: int = 3) -> None:
+        threshold = datetime.now(UTC) - timedelta(days=retention_days)
+        expired = self.db.scalars(
+            select(Plan).where(
+                Plan.owner_id == owner_id,
+                Plan.deleted_at.is_not(None),
+                Plan.deleted_at < threshold,
+            )
+        ).all()
+        for plan in expired:
+            self.db.delete(plan)
 
     def get_share_for_update(self, token_hash: str) -> PlanShareLink | None:
         return self.db.scalar(

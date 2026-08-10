@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import List
 from uuid import UUID, uuid4
 
 from sqlalchemy import or_, select
@@ -7,16 +8,20 @@ from sqlalchemy.orm import Session
 from app.core.errors import ApiError
 from app.identity.models import User
 from app.planning.models import Plan
+from app.transit.models import Station
 from app.recruitments.models import (
     ApplicationStatus,
     OutboxEvent,
     Recruitment,
     RecruitmentApplication,
+    RecruitmentComment,
+    RecruitmentCommentKind,
     RecruitmentStatus,
 )
 from app.recruitments.schemas import (
     ApplicationView,
     RecruitmentDetail,
+    RecruitmentCommentView,
     RecruitmentSummary,
     RecruitmentWriteRequest,
 )
@@ -41,6 +46,30 @@ class RecruitmentService:
         user = self.db.get(User, owner_id)
         return user.display_name if user else "탈퇴한 사용자"
 
+    def _route_label(self, plan_id: UUID | None) -> str:
+        if not plan_id:
+            return "일정 미연결"
+        plan = self.db.get(Plan, plan_id)
+        if not plan:
+            return "삭제된 일정"
+        station_ids = [
+            item.station_id
+            for day in plan.days
+            for item in day.items
+            if item.station_id is not None
+        ]
+        if not station_ids:
+            return "여행 일정"
+        stations = {
+            station.id: station.name
+            for station in self.db.scalars(select(Station).where(Station.id.in_(station_ids)))
+        }
+        first = stations.get(station_ids[0])
+        last = stations.get(station_ids[-1])
+        if not first:
+            return "여행 일정"
+        return f"{first}역 → {last}역" if last and last != first else f"{first}역"
+
     def _get_owned_active_plan(self, plan_id: UUID, owner_id: UUID) -> Plan:
         plan = self.db.get(Plan, plan_id)
         if not plan or plan.owner_id != owner_id or plan.deleted_at is not None:
@@ -53,6 +82,7 @@ class RecruitmentService:
             owner_id=item.owner_id,
             owner_name=self._owner_name(item.owner_id),
             plan_id=item.plan_id,
+            route_label=self._route_label(item.plan_id),
             title=item.title,
             body=item.body,
             capacity=item.capacity,
@@ -107,6 +137,41 @@ class RecruitmentService:
         return RecruitmentDetail(
             **self.summary(item).model_dump(),
             my_application_status=application.status if application else None,
+            comments=[self.comment_view(comment) for comment in item.comments],
+        )
+
+    def add_comment(
+        self, recruitment_id: UUID, author_id: UUID, kind: RecruitmentCommentKind, body: str
+    ) -> RecruitmentComment:
+        item = self._get(recruitment_id)
+        if kind is RecruitmentCommentKind.APPLICATION:
+            self.apply(recruitment_id, author_id, body)
+        comment = RecruitmentComment(
+            id=uuid4(), recruitment_id=item.id, author_id=author_id, kind=kind, body=body
+        )
+        self.db.add(comment)
+        self.db.commit()
+        return comment
+
+    def comments(self, recruitment_id: UUID) -> List[RecruitmentComment]:
+        self._get(recruitment_id)
+        return list(
+            self.db.scalars(
+                select(RecruitmentComment)
+                .where(RecruitmentComment.recruitment_id == recruitment_id)
+                .order_by(RecruitmentComment.created_at)
+            )
+        )
+
+    def comment_view(self, comment: RecruitmentComment) -> RecruitmentCommentView:
+        return RecruitmentCommentView(
+            id=comment.id,
+            recruitment_id=comment.recruitment_id,
+            author_id=comment.author_id,
+            author_name=self._owner_name(comment.author_id),
+            kind=comment.kind,
+            body=comment.body,
+            created_at=comment.created_at,
         )
 
     def create(self, owner_id: UUID, body: RecruitmentWriteRequest) -> Recruitment:

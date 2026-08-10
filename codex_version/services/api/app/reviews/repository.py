@@ -12,6 +12,7 @@ from app.reviews.models import (
     Review,
     ReviewLike,
     ReviewMedia,
+    ReviewPlaceRating,
     ReviewStatus,
     ReviewTag,
     Tag,
@@ -38,6 +39,7 @@ class ReviewRepository:
         return (
             selectinload(Review.tags).selectinload(ReviewTag.tag),
             selectinload(Review.media).selectinload(ReviewMedia.asset),
+            selectinload(Review.place_ratings).selectinload(ReviewPlaceRating.place),
         )
 
     def get(self, review_id: UUID, *, for_update: bool = False) -> Review | None:

@@ -1,4 +1,5 @@
 import type { components } from "@metrotrip/contracts";
+import { ArrowRight, Bell, CalendarDays } from "lucide-react";
 import Link from "next/link";
 
 type HomeResponse = components["schemas"]["HomeResponse"];
@@ -37,7 +38,7 @@ export default async function HomePage() {
   return (
     <main className="homePage">
       <section className="homeHero contentShell">
-        <div>
+        <div className="homeHeroCopy">
           <p className="eyebrow">CHEONAN · ASAN METRO JOURNEY</p>
           <h1>역에서 시작하는<br /><em>나만의 하루.</em></h1>
           <p className="lead">
@@ -45,22 +46,22 @@ export default async function HomePage() {
           </p>
           <div className="heroActions">
             <Link className="primaryButton" href="/discover">여행 시작하기</Link>
-            <Link className="textLink" href="/plans">내 일정 보기 →</Link>
+            <Link className="textLink" href="/plans">내 일정 보기 <ArrowRight size={15} aria-hidden /></Link>
           </div>
         </div>
-        <div className="homeHeroMap" aria-hidden="true">
-          <span className="heroStation one">천안역</span>
-          <span className="heroPlace two">빵집</span>
-          <span className="heroPlace three">카페</span>
-          <span className="heroStation four">아산역</span>
-          <svg viewBox="0 0 600 380"><path d="M80 280 C180 80 300 340 510 100" /></svg>
-        </div>
+        <aside className="homeHeroNotice" aria-label="공지사항">
+          <header><span className="iconBadge"><Bell size={18} aria-hidden /></span><div><p className="eyebrow">NOTICE</p><h2>공지사항</h2></div></header>
+          {notices.length ? <div className="heroNoticeList">{notices.slice(0, 4).map((notice) => (
+            <article key={notice.id}><strong>{notice.title}</strong><time>{notice.publishedAt ? new Date(notice.publishedAt).toLocaleDateString("ko-KR") : "새 소식"}</time></article>
+          ))}</div> : <p className="heroNoticeEmpty">새로운 공지사항이 없습니다.</p>}
+          {events.slice(0, 1).map((event) => <div className="heroEvent" key={event.id}><CalendarDays size={16} aria-hidden /><span><b>{event.title}</b><small>{event.endsAt ? `${new Date(event.endsAt).toLocaleDateString("ko-KR")}까지` : "진행 중"}</small></span></div>)}
+        </aside>
       </section>
 
       <section className="homeSection contentShell">
         <header className="homeSectionHeader">
           <div><p className="eyebrow">PICK FOR YOU</p><h2>오늘 가볼 만한 장소</h2></div>
-          <Link href="/discover">맵에서 모두 보기 →</Link>
+          <Link href="/discover">맵에서 모두 보기 <ArrowRight size={15} aria-hidden /></Link>
         </header>
         {places.length ? (
           <div className="homePlaceGrid">
@@ -98,7 +99,7 @@ export default async function HomePage() {
         <div>
           <header className="homeSectionHeader">
             <div><p className="eyebrow">RECRUITMENT</p><h2>함께 떠날 사람을 찾아요</h2></div>
-            <Link href="/recruitments">모집 더 보기 →</Link>
+            <Link href="/recruitments">모집 더 보기 <ArrowRight size={15} aria-hidden /></Link>
           </header>
           <div className="homeFeed">
             {[...popularRecruitments, ...recruitments]

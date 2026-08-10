@@ -10,12 +10,14 @@ from sqlalchemy.orm import Session
 from app.core.errors import ApiError
 from app.identity.models import User
 from app.planning.models import Plan
+from app.discovery.models import Place
 from app.providers.storage import S3StorageProvider
 from app.reviews.models import (
     MediaAsset,
     MediaStatus,
     Review,
     ReviewMedia,
+    ReviewPlaceRating,
     ReviewStatus,
     ReviewTag,
     Tag,
@@ -29,6 +31,7 @@ from app.reviews.schemas import (
     ReviewBlockKind,
     ReviewDetail,
     ReviewMediaView,
+    ReviewPlaceRatingView,
     ReviewSummary,
     ReviewWriteRequest,
 )
@@ -146,6 +149,27 @@ class ReviewService:
             if not plan or plan.owner_id != author_id:
                 raise ApiError(422, "INVALID_REVIEW_PLAN", "연결할 수 없는 일정입니다.")
 
+    def _replace_place_ratings(self, review: Review, body: ReviewWriteRequest) -> None:
+        seen: set[UUID] = set()
+        allowed_place_ids: set[UUID] | None = None
+        if body.plan_id:
+            plan = self.db.get(Plan, body.plan_id)
+            allowed_place_ids = {
+                item.place_id for day in plan.days for item in day.items if item.place_id is not None
+            } if plan else set()
+        review.place_ratings.clear()
+        for item in body.place_ratings:
+            if item.place_id in seen:
+                raise ApiError(422, "DUPLICATE_PLACE_RATING", "장소별 평점은 한 번만 등록할 수 있습니다.")
+            if allowed_place_ids is not None and item.place_id not in allowed_place_ids:
+                raise ApiError(422, "INVALID_REVIEW_PLACE", "연결한 일정에 없는 장소입니다.")
+            if not self.db.get(Place, item.place_id):
+                raise ApiError(422, "INVALID_REVIEW_PLACE", "평점을 남길 장소를 찾을 수 없습니다.")
+            seen.add(item.place_id)
+            review.place_ratings.append(
+                ReviewPlaceRating(place_id=item.place_id, rating_twice=int(item.rating * 2))
+            )
+
     def _assets_for_blocks(
         self,
         author_id: UUID,
@@ -200,6 +224,7 @@ class ReviewService:
     ) -> None:
         review.title = body.title
         review.plan_id = body.plan_id
+        review.cover_media_id = body.cover_media_id
         review.origin_station_id = body.origin_station_id
         review.destination_station_id = body.destination_station_id
         review.rating = body.rating
@@ -212,6 +237,8 @@ class ReviewService:
             relation.asset.status = MediaStatus.UPLOADED
         review.media.clear()
         asset_by_id = {asset.id: asset for asset in assets}
+        if body.cover_media_id and body.cover_media_id not in asset_by_id:
+            raise ApiError(422, "INVALID_REVIEW_COVER", "대표 이미지는 본문에 넣은 이미지여야 합니다.")
         position = 0
         for block in body.blocks:
             if block.kind is not ReviewBlockKind.IMAGE or not block.media_id:
@@ -228,6 +255,7 @@ class ReviewService:
                 )
             )
         self._replace_tags(review, body.tags)
+        self._replace_place_ratings(review, body)
 
     def create(self, author_id: UUID, body: ReviewWriteRequest) -> Review:
         self._validate_context(author_id, body)
@@ -273,7 +301,11 @@ class ReviewService:
             if review.destination_station_id
             else None
         )
-        cover = review.media[0].asset if review.media else None
+        cover_relation = next(
+            (relation for relation in review.media if relation.media_id == review.cover_media_id),
+            review.media[0] if review.media else None,
+        )
+        cover = cover_relation.asset if cover_relation else None
         return ReviewSummary(
             id=review.id,
             author_id=review.author_id,
@@ -330,6 +362,14 @@ class ReviewService:
             ],
             updated_at=review.updated_at,
             liked_by_me=self.repository.liked(review.id, viewer_id),
+            place_ratings=[
+                ReviewPlaceRatingView(
+                    place_id=relation.place_id,
+                    place_name=relation.place.name,
+                    rating=relation.rating_twice / 2,
+                )
+                for relation in review.place_ratings
+            ],
         )
 
     def set_like(self, review_id: UUID, user_id: UUID, liked: bool) -> int:

@@ -12,6 +12,7 @@ from app.recruitments.models import (
     ApplicationStatus,
     Recruitment,
     RecruitmentApplication,
+    RecruitmentCommentKind,
     RecruitmentStatus,
 )
 from app.recruitments.schemas import (
@@ -19,12 +20,16 @@ from app.recruitments.schemas import (
     ApplicationDecisionRequest,
     ApplicationPage,
     ApplicationView,
+    RecruitmentCommentCreateRequest,
+    RecruitmentCommentPage,
+    RecruitmentCommentView,
     RecruitmentDetail,
     RecruitmentPage,
     RecruitmentSummary,
     RecruitmentWriteRequest,
 )
 from app.recruitments.service import RecruitmentService
+from app.planning.schemas import PlanView
 
 router = APIRouter(tags=["recruitments"])
 
@@ -65,6 +70,48 @@ def get_recruitment(
     detail = RecruitmentService(db).detail(recruitment_id, user.id if user else None)
     response.headers["ETag"] = f'W/"{detail.version}"'
     return detail
+
+
+@router.get(
+    "/recruitments/{recruitment_id}/plan",
+    operation_id="getRecruitmentPlan",
+    response_model=PlanView,
+)
+def get_recruitment_plan(
+    recruitment_id: UUID, db: Annotated[Session, Depends(get_db)]
+) -> PlanView:
+    service = RecruitmentService(db)
+    item = service._get(recruitment_id)
+    if not item.plan_id:
+        raise ApiError(404, "RECRUITMENT_PLAN_NOT_FOUND", "연결된 일정이 없습니다.")
+    plan = service._get_owned_active_plan(item.plan_id, item.owner_id)
+    return PlanView.model_validate(plan)
+
+
+@router.get(
+    "/recruitments/{recruitment_id}/comments",
+    operation_id="listRecruitmentComments",
+    response_model=RecruitmentCommentPage,
+)
+def list_comments(recruitment_id: UUID, db: Annotated[Session, Depends(get_db)]) -> RecruitmentCommentPage:
+    service = RecruitmentService(db)
+    return RecruitmentCommentPage(items=[service.comment_view(item) for item in service.comments(recruitment_id)])
+
+
+@router.post(
+    "/recruitments/{recruitment_id}/comments",
+    operation_id="createRecruitmentComment",
+    response_model=RecruitmentCommentView,
+    status_code=201,
+)
+def create_comment(
+    recruitment_id: UUID,
+    body: RecruitmentCommentCreateRequest,
+    user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> RecruitmentCommentView:
+    service = RecruitmentService(db)
+    return service.comment_view(service.add_comment(recruitment_id, user.id, body.kind, body.body))
 
 
 @router.post(

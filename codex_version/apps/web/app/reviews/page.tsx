@@ -1,6 +1,7 @@
 import type { components } from "@metrotrip/contracts";
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import { MapPin, Search, Star, ThumbsUp } from "lucide-react";
 
 type ReviewPage = components["schemas"]["ReviewPage"];
 
@@ -51,7 +52,7 @@ export default async function ReviewsPage({
         <Link className="primaryButton" href="/reviews/new">후기 작성</Link>
       </header>
       <form className="reviewFilters">
-        <label className="reviewSearchField"><span aria-hidden>⌕</span><span className="srOnly">후기 검색</span><input name="query" defaultValue={query} placeholder="제목, 여행지로 검색" /></label>
+        <label className="reviewSearchField"><Search size={17} aria-hidden /><span className="srOnly">후기 검색</span><input name="query" defaultValue={query} placeholder="제목, 여행지로 검색" /></label>
         <label><span className="srOnly">태그 필터</span><input name="tag" defaultValue={tag} placeholder="태그" /></label>
         <select name="sort" defaultValue={sort} aria-label="정렬"><option value="latest">최신순</option><option value="popular">인기순</option></select>
         <button type="submit">검색</button>
@@ -66,13 +67,13 @@ export default async function ReviewsPage({
           return (
             <Link className="reviewCard" href={`/reviews/${review.id}`} key={review.id} prefetch={false}>
               <div className="reviewCover" style={coverStyle(review)}>
-                <strong className="reviewRouteOverlay">⌖ {route}</strong>
+                <strong className="reviewRouteOverlay"><MapPin size={13} aria-hidden /> {route}</strong>
                 <span>{review.coverUrl ? "" : "METROTRIP"}</span>
               </div>
               <div className="reviewCardBody">
                 <div className="reviewCardMeta"><span>{review.authorName}</span><time>{review.travelDate}</time></div>
                 <h2>{review.title}</h2>
-                <div className="reviewStats"><span>★ {review.rating}</span><span>조회 {review.viewCount}</span><span>♥ {review.likeCount}</span></div>
+                <div className="reviewStats"><span><Star size={14} fill="currentColor" aria-hidden /> {review.rating}</span><span className="reviewEngagement">조회 {review.viewCount}<i /> <ThumbsUp size={13} aria-hidden /> 도움 {review.likeCount}</span></div>
                 <div className="tagRow">{review.tags.slice(0, 3).map((item) => <span key={item}>#{item}</span>)}{review.tags.length > 3 ? <span>+{review.tags.length - 3}</span> : null}</div>
               </div>
             </Link>

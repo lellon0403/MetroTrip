@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { SessionRequestError, useSession } from "@/lib/session";
 
@@ -96,7 +97,7 @@ export default function LoginPage() {
         <p className="eyebrow">YOUR NEXT STOP</p>
         <h1>여행을 저장하고,<br /><em>다시 이어가세요.</em></h1>
         <p>즐겨찾기와 일정, 여행 기록은 로그인한 계정에 안전하게 연결됩니다.</p>
-        <Link href="/discover">먼저 둘러보기 →</Link>
+        <Link href="/discover">먼저 둘러보기 <ArrowRight size={15} aria-hidden /></Link>
       </section>
       <section className="authPanel" aria-labelledby="auth-title">
         <div className="segmented authModes" role="tablist" aria-label="계정 작업">

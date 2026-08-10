@@ -32,6 +32,7 @@ class ReviewBlock(ApiModel):
 class ReviewWriteRequest(ApiModel):
     title: str = Field(min_length=2, max_length=160)
     plan_id: UUID | None = None
+    cover_media_id: UUID | None = None
     origin_station_id: UUID
     destination_station_id: UUID | None = None
     rating: Decimal = Field(ge=1, le=5, decimal_places=1)
@@ -40,6 +41,7 @@ class ReviewWriteRequest(ApiModel):
     status: ReviewStatus = ReviewStatus.PUBLISHED
     blocks: list[ReviewBlock] = Field(min_length=1, max_length=100)
     tags: list[str] = Field(default_factory=list, max_length=5)
+    place_ratings: list["ReviewPlaceRatingWrite"] = Field(default_factory=list, max_length=30)
 
     @field_validator("rating")
     @classmethod
@@ -65,6 +67,22 @@ class ReviewWriteRequest(ApiModel):
         if not any(block.kind is ReviewBlockKind.PARAGRAPH for block in self.blocks):
             raise ValueError("review requires at least one paragraph")
         return self
+
+
+class ReviewPlaceRatingWrite(ApiModel):
+    place_id: UUID
+    rating: Decimal = Field(ge=1, le=5, decimal_places=1)
+
+    @field_validator("rating")
+    @classmethod
+    def validate_rating_step(cls, value: Decimal) -> Decimal:
+        if value * 2 != (value * 2).to_integral_value():
+            raise ValueError("rating must use 0.5 increments")
+        return value
+
+
+class ReviewPlaceRatingView(ReviewPlaceRatingWrite):
+    place_name: str
 
 
 class ReviewMediaView(ApiModel):
@@ -107,6 +125,7 @@ class ReviewDetail(ReviewSummary):
     media: list[ReviewMediaView]
     updated_at: datetime
     liked_by_me: bool = False
+    place_ratings: list[ReviewPlaceRatingView] = Field(default_factory=list)
 
 
 class ReviewPage(ApiModel):

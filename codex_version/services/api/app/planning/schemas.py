@@ -105,6 +105,15 @@ class PlanPage(ApiModel):
     next_cursor: str | None = None
 
 
+class DeletedPlanSummary(PlanSummary):
+    deleted_at: datetime
+    expires_at: datetime
+
+
+class DeletedPlanPage(ApiModel):
+    items: list[DeletedPlanSummary]
+
+
 class ShareLinkRequest(ApiModel):
     expires_in_days: int | None = Field(default=7, ge=1, le=90)
     max_uses: int | None = Field(default=None, ge=1, le=10000)
