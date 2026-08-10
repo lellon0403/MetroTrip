@@ -1,9 +1,9 @@
 # 백엔드 연동 인수인계 문서
 
-초기 MVP의 지도 기능은 프론트 단독으로 동작하지만, 현재 회원가입·로그인·비밀번호 재설정은 백엔드와 연결되어 있습니다. 회원 조회·수정·탈퇴 백엔드도 구현되어 있어 이 문서를 기준으로 마이페이지 프론트 연동을 진행합니다.
+초기 MVP의 지도 기능은 아직 프론트 정적 데이터를 사용하지만, 인증·회원·후기·모집 게시판은 백엔드와 연결되어 있습니다. 공개 노선·역·시간표·주변 장소 조회 백엔드도 구현되어 있어 이 문서를 기준으로 transit 프론트 연동을 진행합니다.
 
 > 대상: 백엔드(윤홍규), DB(김유진), 프론트(우진, 황지성)
-> 상태: 2026-08-07 기준 — 인증, 회원 조회·수정·탈퇴, 역 즐겨찾기와 마이페이지 목록 API 백엔드 구현 완료, 프론트 회원 관리 연동 필요
+> 상태: 2026-08-09 기준 — 공개 transit API 구현 및 Swagger 검증 완료, 프론트 transit 연동 필요
 
 ---
 
@@ -15,10 +15,10 @@
 그래서 데이터 접근은 반드시 **각 Feature의 `api/` 또는 shared 데이터 접근 함수 한 겹을 거쳐서** 합니다.
 
 ```
-역 Feature  →  frontend/src/shared/lib/stations.ts  →  (지금) shared/data/stations.json
-                                                     →  (나중) GET /api/v1/stations
-장소 Feature → frontend/src/features/station-map/api/places.ts → (지금) places.json
-                                                                → (나중) 백엔드 API
+역 Feature  →  frontend/src/shared/lib/stations.ts  →  (현재 FE) shared/data/stations.json
+                                                     →  (연동 대상) GET /api/v1/stations (백엔드 준비됨)
+장소 Feature → frontend/src/features/station-map/api/places.ts → (현재 FE) places.json/카카오 API
+                                                                → (연동 대상) GET /api/v1/stations/{id}/places (백엔드 준비됨)
 ```
 
 컴포넌트에서 `import stations from '../data/stations.json'` 처럼 **직접 import 하지 않습니다.**
@@ -48,7 +48,7 @@ export async function searchStations(keyword: string): Promise<Station[]>;
 | 현재 (MVP) | 교체 후 (P1) | 영향 파일 |
 |---|---|---|
 | `stations.json` 정적 로드 | `GET /api/v1/stations` | `frontend/src/shared/lib/stations.ts` |
-| 카카오 로컬 API 프론트 직접 호출 | 백엔드 프록시 경유 (키 은닉 + 캐싱) | `frontend/src/features/station-map/api/places.ts` |
+| 정적 장소/카카오 로컬 API 직접 호출 | `GET /api/v1/stations/{id}/places` | `frontend/src/features/station-map/api/places.ts` |
 | 인증 API별 개별 `fetch` | Access Token 첨부·갱신·공통 오류 처리를 담당하는 API 클라이언트 | `frontend/src/shared/lib/apiClient.ts` (신규) |
 | 프론트에서 그래프 탐색으로 경로 계산 | `GET /api/v1/routes` (**계약에 없음 — 신설 필요**) | `frontend/src/features/route-plan/api/routes.ts` |
 | DB 시드를 변환한 정적 시간표 | `GET /api/v1/stations/{id}/timetables` | `frontend/src/features/route-plan/api/timetables.ts` |
@@ -199,8 +199,58 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | POST | `/api/v1/admin/places` | 장소 추가 |
 | PATCH | `/api/v1/admin/places/{place_id}` | 장소 수정 |
 | DELETE | `/api/v1/admin/places/{place_id}` | 장소 삭제 |
+| DELETE | `/api/v1/admin/reviews/{review_id}` | 관리자 후기 삭제 |
+| DELETE | `/api/v1/admin/posts/{post_id}` | 관리자 모집 게시글 삭제 |
 
-현재 인증 API, 내 회원 정보 조회·수정·탈퇴, 역 즐겨찾기, 내가 작성한 후기·모집 글·참여 모집 글 목록 API와 `/health`는 실제 구현되어 있습니다. 그 외 비즈니스 API는 계약만 구현되어 있으며 호출 시 `501 Not Implemented`를 반환합니다.
+현재 인증·회원·즐겨찾기·여행 계획 CRUD·읽기 전용 공유·후기·모집 게시판, 공지사항, 공개 노선·역·시간표·주변 장소와 관리자 장소 변경·콘텐츠 삭제 API 및 `/health`가 실제 구현되어 있습니다.
+
+### 4-1. 공개 transit API 연동 계약
+
+- `GET /lines`: DB V1.10의 노선을 표시 순서대로 반환합니다.
+- `GET /lines/suggestions`: 최근 1시간의 `line_view_logs`를 집계해 상위 3개 노선을 반환합니다.
+- `POST /lines/{line_id}/views`: 인증 선택 API입니다. 인증 헤더가 없으면 익명 기록을, 유효한 Bearer Access Token이 있으면 회원 기록을 저장합니다. 잘못되거나 만료된 토큰은 `401`입니다.
+- `GET /stations`: `keyword`, `line_id`, `page`, `size`를 지원하고 좌표와 소속 노선을 함께 반환합니다. 전체 역을 프론트에서 보관하려면 현재 데이터 범위에서 `size=100`으로 한 번 조회할 수 있습니다.
+- `GET /stations/{station_id}`: 역 좌표, 주소, 소속 노선을 반환합니다.
+- `GET /stations/{station_id}/timetables`: `line_id`, `day_type`, `direction`이 필수입니다. `day_type`은 `WEEKDAY|WEEKEND`, `direction`은 `UP|DOWN`입니다. V1.10의 `train_no`는 `trainNo`로 반환하며, `24:00:00` 이후 시각을 보존하기 위해 도착·출발 시각은 문자열입니다.
+- `GET /stations/{station_id}/places`: 선택한 역과 V1.10의 `place_stations`로 연결된 반경 1km 이내 장소를 반환하며 `category`, `page`, `size`를 지원합니다.
+- `POST/PATCH/DELETE /admin/places`: `ADMIN` 권한이 필요합니다. 장소는 한 개 이상의 역과 연결되어야 하며 생성·수정 응답에는 `stationIds`가 포함됩니다. PATCH에서 역·이미지 목록을 전달하면 전체 교체하고 생략하면 유지합니다. 장소 삭제 시 참조 중인 여행 계획 항목을 먼저 삭제하고 계획 자체는 유지합니다.
+- `DELETE /admin/reviews/{review_id}`, `DELETE /admin/posts/{post_id}`: `ADMIN` 권한으로 작성자와 관계없이 후기와 모집 게시글을 삭제합니다. 후기 태그·미디어 DB 행과 모집 참여 신청은 DB CASCADE로 함께 삭제됩니다.
+
+역 목록을 프론트에 캐시해 이름 검색과 지도 선택을 처리할 수 있습니다. DB의 역 정보가 바뀌면 다시 조회해야 하므로 정적 파일로 영구 복제하기보다는 애플리케이션 시작 시 한 번 조회하는 방식을 권장합니다.
+
+### 4-2. 관리자 API 운영 및 후속 검토
+
+- 관리자 전용 장소 목록·상세 조회 API는 아직 없습니다. 공개 주변 장소 조회는 역과 반경을
+  기준으로 하고 전체 `stationIds`를 반환하지 않으므로, 관리자 화면의 전체 목록·수정 진입을
+  위해 `GET /api/v1/admin/places`와 `GET /api/v1/admin/places/{place_id}`를 우선 추가하는
+  것이 좋습니다.
+- 후기 삭제 시 `review_media` DB 행은 삭제되지만 로컬 저장소의 물리 파일은 삭제되지
+  않습니다. 기존 파일 URL 접근을 차단해야 한다면 저장소 삭제 인터페이스와 실패 처리 정책을
+  먼저 정해야 합니다.
+- 관리자 삭제 이력·삭제 사유를 저장하는 감사 로그는 현재 DB V1.10에 없습니다. 운영 감사가
+  필요하면 스키마와 보존 기간을 먼저 합의해야 합니다.
+- 현재 장소 이름·주소·이미지 URL의 길이는 검증하지만 공백만 입력된 문자열은 별도로
+  거부하지 않습니다. 관리자 UI에서 공백 입력을 막고, 백엔드 정규화 정책은 후속으로
+  확정해야 합니다.
+
+### 4-3. 여행 계획·읽기 전용 공유 연동 계약
+
+- `GET /plans`: 현재 사용자의 계획을 `createdAt`, `planId` 내림차순으로 페이지 조회합니다. 각 항목에는 전체 일정과 역·장소 이름이 포함됩니다.
+- `POST /plans`: `planTitle`, `startStationId`, `endStationId`, `items`로 계획을 작성합니다. 출발·도착역과 각 장소가 실제로 존재해야 하며, `stationId`가 있는 일정은 DB V1.10의 `place_stations`에 해당 장소·역 조합이 있어야 합니다.
+- `GET /plans/{plan_id}`: 본인 계획만 상세 조회합니다. 없는 계획은 `404 PLAN_NOT_FOUND`, 다른 사용자의 계획은 `403 PLAN_FORBIDDEN`입니다.
+- `PATCH /plans/{plan_id}`: 전달한 기본 필드만 변경하지만, `items`는 전체 스냅샷으로 처리합니다. 기존 항목은 `planItemId`를 포함하고 새 항목은 이를 생략합니다. 요청 배열에서 누락된 기존 항목은 삭제되며 `items: []`는 전체 일정 삭제, `items` 생략은 일정 유지입니다. 수정 필드의 명시적 `null`은 허용하지 않습니다.
+- `DELETE /plans/{plan_id}`: 본인 계획을 삭제하고 `travel_plan_items`와 공유 링크는 CASCADE 삭제합니다. 연결된 후기와 모집 게시글의 `plan_id`는 DB V1.10에 따라 `NULL`이 됩니다.
+- `POST /plans/{plan_id}/share-links`: 본인 계획에 대해 기본 7일짜리 읽기 전용 링크를 발급합니다. 응답의 `shareToken`은 URL-safe 22자 원문이고 `shareUrl`은 프론트 공개 경로입니다. DB에는 원문 대신 SHA-256 64자 해시만 저장합니다.
+- `GET /shared-plans/{share_token}`: 인증 없이 현재 계획 내용을 읽습니다. 소유자와 작성·수정 시각은 공개하지 않으며, 변조·만료·폐기·삭제된 링크는 모두 `404 SHARED_PLAN_NOT_FOUND`로 응답합니다.
+
+프론트는 토큰 입력창 대신 `shareUrl`의 `/shared-plans/{shareToken}` 경로를 공개 페이지로 등록하고, 경로 파라미터를 공개 조회 API에 전달합니다. 공유 링크가 올바른 프론트 주소를 가리키도록 배포 환경에서 다음 값을 설정해야 합니다.
+
+```env
+METROTRIP_PUBLIC_FRONTEND_URL=https://프론트엔드-도메인
+METROTRIP_SHARE_LINK_EXPIRE_DAYS=7
+```
+
+`travel_plan_share_links`는 DB V1.10 원본에 없는 공유 기능 확장 테이블입니다. 공유 API 배포 전에 운영 MySQL에 해당 테이블과 `travel_plans(plan_id) ON DELETE CASCADE` FK, `token_hash CHAR(64) UNIQUE`, 만료·폐기 시각 컬럼이 실제로 적용됐는지 확인해야 합니다. 테이블이 없으면 두 공유 API는 정상 동작할 수 없습니다.
 
 내 회원 정보 수정과 탈퇴는 Access Token과 `X-Reauthentication-Token` 헤더를 함께 요구합니다. 재인증 토큰은 `/api/v1/auth/reauthenticate`에서 현재 비밀번호와 목적(`PROFILE_UPDATE`, `PASSWORD_CHANGE`, `WITHDRAWAL`)을 확인한 후 발급되며, 별도 DB 저장 없이 5분 동안 유효합니다. 각 API는 자신의 목적과 일치하는 재인증 토큰만 허용합니다. 일반 회원 정보 수정은 이름과 닉네임만 허용하고, 비밀번호는 `/api/v1/users/me/password`에서 별도로 변경합니다. 회원 탈퇴 시 사용자 행과 DB에서 `ON DELETE CASCADE`로 연결된 회원 소유 데이터를 함께 하드 딜리트합니다.
 
@@ -238,9 +288,13 @@ metrotrip-access-token
 metrotrip-refresh-token
 ```
 
-Access Token 만료 시간은 기본 30분, Refresh Token 만료 시간은 기본 14일입니다. 백엔드에는 `POST /api/v1/auth/refresh`가 구현되어 있지만 프론트의 자동 갱신과 401 재시도 로직은 아직 없습니다.
+Access Token 만료 시간은 기본 30분, Refresh Token 만료 시간은 기본 14일입니다. 프론트는 `frontend/src/shared/lib/apiClient.ts`에서 인증 요청의 401 응답을 한 번만 Refresh Token으로 갱신하고 원래 요청을 재시도합니다. 여러 요청이 동시에 만료되어도 갱신 요청은 하나만 실행하며, Refresh Token까지 만료되거나 거부된 경우에만 로컬 세션을 정리합니다.
 
-현재 프론트 로그아웃은 로컬 토큰만 제거합니다. 서버의 활성 Refresh Token까지 폐기하려면 로컬 토큰 제거 전에 `POST /api/v1/auth/logout`을 Access Token과 함께 호출해야 합니다.
+현재 프론트 로그아웃은 로컬 토큰을 제거하기 전에 `POST /api/v1/auth/logout`을 호출하며,
+서버는 해당 사용자의 활성 Refresh Token을 모두 폐기합니다. 이미 발급된 Access Token은
+별도로 폐기되지 않아 기본 30분 만료 시점까지 유효하므로, 프론트는 로그아웃 즉시 로컬
+Access Token을 제거해야 합니다. 관리자 계정의 즉시 세션 무효화가 필요하면 Access Token
+차단 목록이나 토큰 버전 정책을 별도로 설계해야 합니다.
 
 ### 5-2. 내 회원 정보 조회
 
@@ -362,13 +416,13 @@ Request Body는 없습니다. 성공 후 프론트는 로컬 토큰을 모두 �
 
 ### 5-7. 프론트 구현 권장 순서
 
-1. 인증 헤더와 공통 오류 처리를 담당하는 `apiClient.ts`를 추가합니다.
+1. 인증 헤더와 공통 오류 처리를 담당하는 `apiClient.ts`를 유지·확장합니다.
 2. `getMyProfile`, `reauthenticate`, `updateProfile`, `changePassword`, `withdraw` API 함수를 추가합니다.
 3. 마이페이지 진입 시 `GET /users/me`로 실제 회원 정보를 불러옵니다.
 4. 계정 관리 진입 전에 목적을 선택해 재인증합니다.
 5. 재인증 토큰은 화면 메모리에만 보관하고 만료 시 비밀번호 입력 단계로 되돌립니다.
 6. 비밀번호 변경·탈퇴 성공 시 로컬 토큰을 제거하고 로그인 화면으로 이동합니다.
-7. Access Token 만료에 대비해 Refresh Token 갱신과 요청 재시도를 공통 API 클라이언트에 연결합니다.
+7. Access Token 만료 시 Refresh Token 갱신과 원래 요청 재시도를 공통 API 클라이언트에서 처리합니다.
 
 ### 5-8. 역 즐겨찾기
 

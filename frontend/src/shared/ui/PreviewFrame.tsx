@@ -6,15 +6,19 @@ import { Icon } from './Icon';
 type PreviewFrameProps = {
   title: string;
   description: string;
-  notice: string;
+  notice?: string;
   wide?: boolean;
+  contentWidth?: 'default' | 'board';
   children: ReactNode;
 };
 
-export function PreviewFrame({ title, description, notice, wide = false, children }: PreviewFrameProps) {
+export function PreviewFrame({ title, description, notice, wide = false, contentWidth = 'default', children }: PreviewFrameProps) {
   return (
     <div className="responsive-frame h-full overflow-y-auto bg-background">
-      <div className={cn('responsive-frame-content flex flex-col gap-[var(--layout-gap)] p-[var(--layout-gutter)]', wide ? 'w-full' : 'mx-auto max-w-4xl')}>
+      <div className={cn(
+        'responsive-frame-content flex flex-col gap-[var(--layout-gap)] p-[var(--layout-gutter)]',
+        wide ? 'w-full' : contentWidth === 'board' ? 'mx-auto w-full max-w-[var(--board-content-width)]' : 'mx-auto max-w-4xl',
+      )}>
         <header className="responsive-frame-header flex flex-col gap-sm pt-xs sm:pt-sm">
           <span className="w-fit rounded-full bg-primary-container px-sm py-xs text-label-caps text-on-primary-container">METROTRIP</span>
           <div>
@@ -23,10 +27,10 @@ export function PreviewFrame({ title, description, notice, wide = false, childre
           </div>
         </header>
 
-        <Card className="responsive-frame-notice flex items-start gap-sm border-tertiary/25 bg-tertiary-container/10 p-md shadow-none">
+        {notice && <Card className="responsive-frame-notice flex items-start gap-sm border-tertiary/25 bg-tertiary-container/10 p-md shadow-none">
           <Icon name="info" className="mt-[2px] shrink-0 text-[19px] text-tertiary" />
           <p className="text-body-md text-on-surface-variant">{notice}</p>
-        </Card>
+        </Card>}
 
         {children}
       </div>

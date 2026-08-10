@@ -72,7 +72,12 @@ const lineNameById = new Map(
 const stationById = new Map(
   parseTuples(read('seed_03_stations.sql')).map((row) => [
     row[0],
-    { name: withSuffix(row[1]), lat: Number(row[2]), lng: Number(row[3]) },
+    {
+      id: Number(row[0]),
+      name: withSuffix(row[1]),
+      lat: Number(row[2]),
+      lng: Number(row[3]),
+    },
   ]),
 );
 
@@ -177,6 +182,7 @@ for (const [placeId, stationId] of parseTuples(read('seed_06_place_stations.sql'
 // 같은 역이 여러 노선에 속하면 대표 노선 하나만 적는다.
 // 환승 판정은 lineOrder 로 하므로 이 값은 표시용이다.
 const stations = [...stationById.values()].map((station) => ({
+  id: station.id,
   name: station.name,
   lat: station.lat,
   lng: station.lng,

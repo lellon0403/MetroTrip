@@ -36,10 +36,10 @@ CREATE DATABASE IF NOT EXISTS metrotrip
 
 **새로 만드는 경우**
 
-1. `schema/mysql/schema_mysql_V1.10.sql`
+1. `schema/mysql/schema_mysql_V1.11.sql`
 2. `seed/` 하위 파일을 **번호 순서대로**. 파일명 앞 번호가 FK 의존 순서입니다.
 
-Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V1.10.sql`을 사용합니다 (Oracle Database 19c 기준, MySQL 장애 시 읽기 전용 대체 조회 용도).
+Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V1.11.sql`을 사용합니다 (Oracle Database 19c 기준, MySQL 장애 시 읽기 전용 대체 조회 용도).
 
 | 파일 | 테이블 | 건수 | 선행 |
 | --- | --- | --- | --- |
@@ -58,16 +58,16 @@ Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V
 ### 실행 결과 확인
 
 ```sql
--- 테이블 22개
+-- 테이블 23개
 SHOW TABLES;
 
--- PRIMARY KEY 22 / UNIQUE 10 / FOREIGN KEY 34
+-- PRIMARY KEY 23 / UNIQUE 11 / FOREIGN KEY 35
 SELECT constraint_type, COUNT(*)
 FROM information_schema.table_constraints
 WHERE table_schema = 'metrotrip'
 GROUP BY constraint_type;
 
--- CHECK 20
+-- CHECK 22
 SELECT COUNT(*) FROM information_schema.check_constraints
 WHERE constraint_schema = 'metrotrip';
 ```
@@ -80,12 +80,12 @@ WHERE constraint_schema = 'metrotrip';
 
 | 항목 | 수 |
 | --- | --- |
-| 테이블 | 22 |
-| 컬럼 | 140 |
-| PRIMARY KEY | 22 |
-| UNIQUE | 10 |
-| FOREIGN KEY | 34 (CASCADE 15 / RESTRICT 12 / SET NULL 7) |
-| CHECK | 20 |
+| 테이블 | 23 |
+| 컬럼 | 146 |
+| PRIMARY KEY | 23 |
+| UNIQUE | 11 |
+| FOREIGN KEY | 35 (CASCADE 16 / RESTRICT 12 / SET NULL 7) |
+| CHECK | 22 |
 
 ### 테이블 목록
 
@@ -94,7 +94,7 @@ WHERE constraint_schema = 'metrotrip';
 | 회원 | `users` `user_agreements` `social_accounts` `auth_tokens` `email_verifications` |
 | 지하철 | `subway_lines` `stations` `line_stations` `train_timetables` `line_view_logs` |
 | 장소 | `places` `place_stations` `place_images` |
-| 회원 활동 | `station_favorites` `travel_plans` `travel_plan_items` `reviews` `review_media` `review_tags` |
+| 회원 활동 | `station_favorites` `travel_plans` `travel_plan_items` `travel_plan_share_links` `reviews` `review_media` `review_tags` |
 | 게시판 | `board_posts` `post_participants` |
 | 공지 | `notices` |
 
@@ -114,11 +114,18 @@ WHERE constraint_schema = 'metrotrip';
 `post_participants` 는 `board_posts` 에 CASCADE 로 묶여 있어, 작성자가 탈퇴하면 참여 신청 내역이
 DB 레벨에서 조용히 삭제됩니다. FK CASCADE 는 애플리케이션을 거치지 않으므로,
 **탈퇴 처리 직전에 참여자 목록을 읽어 취소 알림을 보내야** 합니다. 삭제 후에는 조회할 방법이 없습니다.
+관리자 모집 글 삭제 API도 같은 CASCADE를 사용하며, 현재 백엔드에는 참여자 알림과 관리자
+삭제 감사 로그가 구현되어 있지 않습니다.
 
 **마스터 테이블 FK 정책**
 `subway_lines` `stations` `places` 를 참조하는 FK 는 `ON DELETE RESTRICT` 로 통일했습니다.
 예외로 `train_timetables.destination_station_id`(종착역)와 `travel_plan_items.station_id`(경유역)는
 부가 정보이므로 `SET NULL` 입니다.
+
+`travel_plan_items.place_id`의 RESTRICT 정책은 유지합니다. 관리자 장소 삭제 API는 같은
+트랜잭션에서 해당 장소를 참조하는 계획 항목을 명시적으로 먼저 삭제하고, 영향받은 계획의
+`updated_at`을 갱신한 다음 장소를 삭제합니다. 계획 자체는 유지됩니다. 애플리케이션을 거치지
+않고 장소를 직접 삭제하면 DB가 계속 거부합니다.
 
 **역 코드를 보유하지 않습니다**
 `stations` 에 외부 코드 컬럼이 없습니다. 공공데이터 출처마다 체계가 달라
@@ -170,6 +177,21 @@ ORDER BY COALESCE(departure_time, arrival_time)
 취소·거절 후 재신청은 `(post_id, user_id)` 복합 UNIQUE 때문에 새 행을 넣을 수 없습니다.
 기존 행을 `APPLIED` 로 되돌리는 방식으로 처리합니다.
 
+**여행 계획 공유 링크**
+`travel_plan_share_links` 는 계획을 읽기 전용으로 공유하는 링크를 담습니다.
+**토큰 원문은 저장하지 않고 SHA-256 해시만 보관**하므로 DB 가 유출돼도 링크를 복원할 수 없습니다.
+`auth_tokens.refresh_token`, `email_verifications.code_hash` 와 같은 방식입니다.
+
+계획 1건에 여러 링크를 발급할 수 있고, 만료(`expires_at`)와 폐기(`revoked_at`)를 분리해 관리합니다.
+유효한 링크 조회 조건은 아래와 같습니다.
+
+```sql
+WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > NOW()
+```
+
+`created_at` 이 `DEFAULT CURRENT_TIMESTAMP` 이므로 **INSERT 시 `created_at` 을 명시해야**
+`CHECK (expires_at > created_at)` 이 의도대로 평가됩니다.
+
 **여행 계획 동선 정렬**
 `travel_plan_items` 에 순번 컬럼이 없습니다. 동선 순서는 `visit_time` 오름차순으로 결정합니다.
 같은 시각이 둘 이상일 수 있으므로 조회 시 아래처럼 정렬해야 순서가 흔들리지 않습니다.
@@ -192,9 +214,156 @@ ORDER BY visit_time, plan_item_id
 `users` `places` `travel_plans` `reviews` `notices` `board_posts` 입니다.
 
 **인덱스**
-현재 PK / UNIQUE / FK 인덱스만 있습니다. 조회 성능용 인덱스는 기능 개발 후
-`EXPLAIN` 으로 확인하며 `migrations/` 에 추가할 예정입니다. 후보 목록과 우선순위는
-데이터베이스 명세서의 인덱스 시트에 정리되어 있습니다.
+아래 별도 섹션에서 다룹니다. 후보 목록과 우선순위는 데이터베이스 명세서의 인덱스 시트에 있습니다.
+
+---
+
+## 인덱스
+
+### 인덱스가 하는 일
+
+책 뒤의 색인과 같습니다. 없으면 조건에 맞는 행을 찾기 위해 테이블을 처음부터 끝까지 읽고(풀 스캔),
+있으면 해당 위치로 바로 갑니다.
+
+**인덱스는 컬럼이 아닙니다.** 데이터를 담지 않고 기존 컬럼을 정렬해 둔 보조 구조일 뿐입니다.
+그래서 아래가 성립합니다.
+
+- `SELECT` 대상이 될 수 없습니다. 쿼리에 인덱스 이름을 쓰지 않습니다
+- 인덱스를 만들어도 **쿼리를 고칠 필요가 없습니다.** MySQL 이 알아서 판단해 사용합니다
+- 잘못 만들어도 **결과가 틀리지 않습니다.** 느려질 뿐입니다
+- `DROP INDEX` 한 줄로 원상복구됩니다
+
+되돌리기가 가장 쉬운 결정이라 부담 없이 실험할 수 있습니다.
+반대로 UNIQUE 는 데이터가 쌓인 뒤 추가하면 중복 때문에 실패하므로 성격이 다릅니다.
+
+### 대가
+
+- INSERT·UPDATE·DELETE 마다 인덱스도 함께 갱신 → 쓰기가 느려집니다
+- 디스크 공간을 차지합니다
+- 너무 많으면 옵티마이저가 엉뚱한 인덱스를 고르기도 합니다
+
+그래서 "일단 다 만들어두자" 는 통하지 않습니다.
+**행이 수백 개인 테이블에서는 풀 스캔이 더 빠릅니다.** 인덱스를 만들어도 옵티마이저가 무시합니다.
+
+### FK 컬럼에는 이미 인덱스가 있습니다
+
+InnoDB 는 FK 를 만들 때 자식 컬럼에 인덱스를 자동 생성합니다.
+`(user_id, created_at)` 같은 복합 인덱스는 `user_id` 부분이 이미 커버되어 있고
+**뒤의 정렬 컬럼만 새로 얻는 것**입니다. 효과를 과대평가하지 마세요.
+
+UNIQUE 제약도 인덱스 역할을 겸합니다. 예를 들어 `uk_line_stations (line_id, station_id)` 가 있으면
+`WHERE line_id = ?` 조회는 이미 인덱스를 탑니다.
+
+---
+
+### 필수 — 3건
+
+없으면 실제로 느려지거나, 나중에 만들면 비싸지는 것들입니다.
+
+```sql
+-- 역별 배차표 조회. train_timetables 는 현재 가장 큰 테이블
+-- 등호 조건 3개 뒤에 정렬 컬럼을 두는 배치. 순서를 바꾸면 인덱스를 타지 않는다
+CREATE INDEX idx_timetables_lookup
+  ON train_timetables (station_id, day_type, direction, arrival_time);
+
+-- 역명 검색. 서비스의 첫 관문이고 노선 추가에 따라 계속 늘어남
+CREATE INDEX idx_stations_name ON stations (station_name);
+
+-- 노선 조회 로그. 조회 1회당 1행씩 쌓여 가장 빨리 커진다
+-- 성능이 아니라 '시점' 때문에 미리 만든다. 커진 뒤 만들면 그동안 테이블이 잠긴다
+CREATE INDEX idx_line_view_logs_time ON line_view_logs (viewed_at, line_id);
+```
+
+### 선택 — 조건이 맞으면
+
+```sql
+-- 열차 여정 추적(WHERE train_no = 'K1904')을 실제로 쓸 때만
+CREATE INDEX idx_timetables_train ON train_timetables (train_no, day_type, direction);
+
+-- 노선도 화면을 자주 그린다면. uk_line_stations 가 line_id 필터까지는 이미 커버한다
+CREATE INDEX idx_line_stations_order ON line_stations (line_id, station_order);
+```
+
+목록 조회용 4건은 대상 테이블이 비어 있어 지금은 효과가 0 입니다.
+다만 **비어 있을 때 만드는 비용도 0** 이므로, 백엔드에서 쿼리 모양이 확정됐다면 미리 넣어도 됩니다.
+확정 전이라면 컬럼 순서를 다시 잡게 되므로 미루세요.
+
+```sql
+CREATE INDEX idx_board_posts_created ON board_posts (created_at DESC);
+CREATE INDEX idx_reviews_created     ON reviews (created_at DESC);
+CREATE INDEX idx_review_tags_name    ON review_tags (tag_name, review_id);
+CREATE INDEX idx_board_posts_recruit ON board_posts (recruit_status, recruit_deadline);
+```
+
+`idx_review_tags_name` 이 `review_id` 를 포함하는 이유는 **커버링 인덱스** 구성 때문입니다.
+필요한 컬럼이 인덱스 안에 다 있으면 테이블을 읽지 않고 인덱스만 보고 답합니다.
+
+### 만들지 않습니다
+
+| 인덱스 | 이유 |
+| --- | --- |
+| `idx_place_stations_lookup` | 수십 행. 풀 스캔이 더 빠름 |
+| `idx_email_verif_lookup` | 만료 후 삭제되는 테이블이라 거의 비어 있음 |
+| `idx_notices_type` | 공지는 거의 쌓이지 않음 |
+| `idx_auth_tokens_active` | FK 자동 인덱스가 `user_id` 를 이미 커버 |
+| `idx_post_participants_post` | `uk_post_participants` 가 `post_id` 로 시작 |
+| `idx_*_user` 4건 | FK 자동 인덱스 + 회원당 데이터가 소량 |
+
+마지막 항목은 `board_posts` `reviews` `travel_plans` `post_participants` 의 "내 ~ 목록" 인덱스입니다.
+
+---
+
+### 적용 방법
+
+`migrations/` 에 번호 파일로 추가하고 팀 채널에 알립니다.
+이전 변경분은 `schema/` 에 병합되어 있으므로 이번 파일이 `001` 입니다.
+
+```sql
+-- migrations/001__add_indexes.sql
+CREATE INDEX idx_timetables_lookup
+  ON train_timetables (station_id, day_type, direction, arrival_time);
+CREATE INDEX idx_stations_name ON stations (station_name);
+CREATE INDEX idx_line_view_logs_time ON line_view_logs (viewed_at, line_id);
+
+-- rollback:
+-- DROP INDEX idx_timetables_lookup ON train_timetables;
+-- DROP INDEX idx_stations_name ON stations;
+-- DROP INDEX idx_line_view_logs_time ON line_view_logs;
+```
+
+### 확인 방법
+
+만들기 전후로 같은 쿼리에 `EXPLAIN` 을 붙여 비교합니다.
+
+```sql
+EXPLAIN SELECT arrival_time, departure_time, destination_station_id
+FROM train_timetables
+WHERE station_id = 93 AND day_type = 'WEEKDAY' AND direction = 'UP';
+```
+
+| 칼럼 | 볼 것 |
+| --- | --- |
+| `key` | 사용된 인덱스 이름. `NULL` 이면 안 타는 것 |
+| `rows` | 읽을 것으로 추정한 행 수. 작을수록 좋음 |
+| `type` | `ALL` 이면 풀 스캔. `ref` / `range` 면 인덱스 사용 |
+
+현재 만들어진 인덱스 목록은 이렇게 봅니다.
+
+```sql
+SELECT table_name, index_name, GROUP_CONCAT(column_name ORDER BY seq_in_index) AS 컬럼
+FROM information_schema.statistics
+WHERE table_schema = 'metrotrip'
+GROUP BY table_name, index_name
+ORDER BY table_name, index_name;
+```
+
+### 인덱스가 걸리지 않는 경우
+
+만들어도 무력화되는 패턴이 있습니다.
+
+- **컬럼에 함수를 씌울 때** — `ORDER BY COALESCE(departure_time, arrival_time)` 은 정렬에 인덱스를 쓰지 못합니다. 필터링까지만 인덱스가 걸립니다
+- **선두 컬럼을 건너뛸 때** — `(station_id, day_type, direction)` 인덱스에 `WHERE day_type = ?` 만 주면 타지 않습니다
+- **중간 일치 검색** — `LIKE '%천안%'` 은 인덱스를 못 씁니다. 앞 일치(`'천안%'`)만 가능하며, 중간 일치가 필요하면 FULLTEXT 로 전환해야 합니다
 
 ---
 
@@ -249,9 +418,9 @@ ORDER BY visit_time, plan_item_id
 
 | 문서 | 위치 |
 | --- | --- |
-| 데이터베이스 명세서 V1.10 | 팀 공유 드라이브 |
+| 데이터베이스 명세서 V1.11 | 팀 공유 드라이브 |
 | 요구사항 정의서 V1.3 | [Google Sheets](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) |
-| ERD | `erd/ERD_V1.10.mmd` |
+| ERD | `erd/ERD_V1.11.mmd` |
 | 백엔드 연동 지점 | [docs/BACKEND-HANDOFF.md](../docs/BACKEND-HANDOFF.md) |
 
 담당: 김유진

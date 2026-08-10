@@ -1,11 +1,17 @@
-"""Travel plan and read-only share API contracts."""
+"""여행 계획과 읽기 전용 공유 API."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
 
-from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, not_implemented
+from app.config import get_settings
+from app.database import get_db
+from app.routers.contract import (
+    AUTH_REQUIRED,
+    ERROR_RESPONSES,
+    CurrentUserId,
+)
 from app.schemas.plans import (
     PlanCreateRequest,
     PlanListResponse,
@@ -14,6 +20,7 @@ from app.schemas.plans import (
     SharedPlanResponse,
     ShareLinkResponse,
 )
+from app.services import plans as plan_service
 
 router = APIRouter(
     prefix="/plans",
@@ -21,6 +28,7 @@ router = APIRouter(
     dependencies=AUTH_REQUIRED,
 )
 shared_router = APIRouter(prefix="/shared-plans", tags=["여행 계획 공유"])
+DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get(
@@ -30,10 +38,13 @@ shared_router = APIRouter(prefix="/shared-plans", tags=["여행 계획 공유"])
     responses=ERROR_RESPONSES,
 )
 def list_plans(
+    db: DatabaseSession,
+    user_id: CurrentUserId,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> JSONResponse:
-    return not_implemented()
+) -> PlanListResponse:
+    """현재 사용자의 여행 계획을 생성 최신순으로 조회한다."""
+    return plan_service.list_plans(db, user_id, page=page, size=size)
 
 
 @router.post(
@@ -43,8 +54,13 @@ def list_plans(
     summary="여행 계획 작성",
     responses=ERROR_RESPONSES,
 )
-def create_plan(_: PlanCreateRequest) -> JSONResponse:
-    return not_implemented()
+def create_plan(
+    request: PlanCreateRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> PlanResponse:
+    """현재 사용자의 새 여행 계획을 작성한다."""
+    return plan_service.create_plan(db, user_id, request)
 
 
 @router.get(
@@ -53,8 +69,13 @@ def create_plan(_: PlanCreateRequest) -> JSONResponse:
     summary="여행 계획 상세 조회",
     responses=ERROR_RESPONSES,
 )
-def get_plan(plan_id: int) -> JSONResponse:
-    return not_implemented()
+def get_plan(
+    plan_id: int,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> PlanResponse:
+    """본인이 작성한 여행 계획의 상세 정보를 조회한다."""
+    return plan_service.get_plan(db, plan_id, user_id)
 
 
 @router.patch(
@@ -63,8 +84,14 @@ def get_plan(plan_id: int) -> JSONResponse:
     summary="여행 계획 수정",
     responses=ERROR_RESPONSES,
 )
-def update_plan(plan_id: int, _: PlanUpdateRequest) -> JSONResponse:
-    return not_implemented()
+def update_plan(
+    plan_id: int,
+    request: PlanUpdateRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> PlanResponse:
+    """본인의 여행 계획과 일정 항목을 수정한다."""
+    return plan_service.update_plan(db, plan_id, user_id, request)
 
 
 @router.delete(
@@ -73,8 +100,13 @@ def update_plan(plan_id: int, _: PlanUpdateRequest) -> JSONResponse:
     summary="여행 계획 삭제",
     responses=ERROR_RESPONSES,
 )
-def delete_plan(plan_id: int) -> JSONResponse:
-    return not_implemented()
+def delete_plan(
+    plan_id: int,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> None:
+    """본인이 작성한 여행 계획을 삭제한다."""
+    plan_service.delete_plan(db, plan_id, user_id)
 
 
 @router.post(
@@ -84,8 +116,18 @@ def delete_plan(plan_id: int) -> JSONResponse:
     summary="읽기 전용 공유 링크 발급",
     responses=ERROR_RESPONSES,
 )
-def create_share_link(plan_id: int) -> JSONResponse:
-    return not_implemented()
+def create_share_link(
+    plan_id: int,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+) -> ShareLinkResponse:
+    """본인 여행 계획의 읽기 전용 공유 링크를 발급한다."""
+    return plan_service.create_share_link(
+        db,
+        plan_id,
+        user_id,
+        get_settings(),
+    )
 
 
 @shared_router.get(
@@ -95,5 +137,9 @@ def create_share_link(plan_id: int) -> JSONResponse:
     description="로그인 없이 읽기만 가능하며 수정 API는 제공하지 않습니다.",
     responses=ERROR_RESPONSES,
 )
-def get_shared_plan(share_token: str) -> JSONResponse:
-    return not_implemented()
+def get_shared_plan(
+    share_token: str,
+    db: DatabaseSession,
+) -> SharedPlanResponse:
+    """유효한 공유 토큰의 여행 계획을 로그인 없이 조회한다."""
+    return plan_service.get_shared_plan(db, share_token)

@@ -54,15 +54,24 @@ def _require_plan(repository: ReviewRepository, plan_id: int | None) -> None:
         raise _error("PLAN_NOT_FOUND", "존재하지 않는 여행 계획입니다.", 400)
 
 
+def _find_review(
+    repository: ReviewRepository,
+    review_id: int,
+) -> Review:
+    """후기를 조회하고 존재하지 않으면 404 오류를 발생시킨다."""
+    review = repository.find_review_by_id(review_id)
+    if not review:
+        raise _error("REVIEW_NOT_FOUND", "후기를 찾을 수 없습니다.", 404)
+    return review
+
+
 def _find_owned_review(
     repository: ReviewRepository,
     review_id: int,
     user_id: int,
 ) -> Review:
     """후기를 조회하고 요청자가 작성자인지 확인한다."""
-    review = repository.find_review_by_id(review_id)
-    if not review:
-        raise _error("REVIEW_NOT_FOUND", "후기를 찾을 수 없습니다.", 404)
+    review = _find_review(repository, review_id)
     if review.user_id != user_id:
         raise _error(
             "REVIEW_FORBIDDEN",
@@ -144,6 +153,7 @@ def _build_responses(
 def list_reviews(
     db: Session,
     *,
+    user_id: int | None = None,
     keyword: str | None,
     search_field: ReviewSearchField,
     station_id: int | None,
@@ -154,6 +164,7 @@ def list_reviews(
     """검색 조건에 맞는 후기 목록을 페이지 단위로 조회한다."""
     repository = ReviewRepository(db)
     reviews, total = repository.list_reviews(
+        user_id=user_id,
         keyword=keyword,
         search_field=search_field.value,
         station_id=station_id,
@@ -278,6 +289,14 @@ def delete_review(db: Session, review_id: int, user_id: int) -> None:
     """본인이 작성한 후기를 삭제한다."""
     repository = ReviewRepository(db)
     review = _find_owned_review(repository, review_id, user_id)
+    repository.delete_review(review)
+    db.commit()
+
+
+def delete_review_as_admin(db: Session, review_id: int) -> None:
+    """관리자가 작성자와 관계없이 후기를 삭제한다."""
+    repository = ReviewRepository(db)
+    review = _find_review(repository, review_id)
     repository.delete_review(review)
     db.commit()
 

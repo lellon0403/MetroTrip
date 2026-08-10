@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.routers.contract import AUTH_REQUIRED, ERROR_RESPONSES, CurrentUserId
+from app.routers.contract import (
+    ADMIN_REQUIRED,
+    AUTH_REQUIRED,
+    ERROR_RESPONSES,
+    CurrentUserId,
+)
 from app.schemas.reviews import (
     MediaUploadRequest,
     MediaUploadResponse,
@@ -19,6 +24,11 @@ from app.schemas.reviews import (
 from app.services import reviews as review_service
 
 router = APIRouter(prefix="/reviews", tags=["여행 후기"])
+admin_router = APIRouter(
+    prefix="/admin/reviews",
+    tags=["관리자"],
+    dependencies=ADMIN_REQUIRED,
+)
 media_router = APIRouter(
     prefix="/review-media",
     tags=["여행 후기"],
@@ -115,6 +125,17 @@ def delete_review(
 ) -> None:
     """본인이 작성한 후기를 삭제한다."""
     review_service.delete_review(db, review_id, user_id)
+
+
+@admin_router.delete(
+    "/{review_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="관리자 후기 삭제",
+    responses=ERROR_RESPONSES,
+)
+def delete_review_as_admin(review_id: int, db: DatabaseSession) -> None:
+    """관리자가 작성자와 관계없이 후기를 삭제한다."""
+    review_service.delete_review_as_admin(db, review_id)
 
 
 @media_router.post(

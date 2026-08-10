@@ -2,8 +2,7 @@
 
 V1.10 개정으로 board_posts는 인원 모집 전용이 되어(일반 게시판 제외) 별도
 post_type 구분이 없다. 실제 MySQL 없이도 검증할 수 있도록 SQLite 인메모리
-DB를 사용한다. travel_plans는 community 도메인이 소유하지 않는 테이블이라
-테스트에서도 최소 컬럼만 가진 별도 Core 테이블로 채워 넣는다.
+DB를 사용한다.
 """
 
 import datetime as dt
@@ -11,7 +10,7 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import Column, Integer, MetaData, Table, create_engine
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base
@@ -27,21 +26,12 @@ from app.schemas.community import (
 )
 from app.services import community as community_service
 
-_support_metadata = MetaData()
-
-_travel_plans_table = Table(
-    "travel_plans",
-    _support_metadata,
-    Column("plan_id", Integer, primary_key=True),
-)
-
 
 @pytest.fixture
 def db() -> Iterator[Session]:
     """SQLite 인메모리 세션에 최소 픽스처 사용자를 채워 반환한다."""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    _support_metadata.create_all(engine)
 
     session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = session_factory()
@@ -71,7 +61,6 @@ def db() -> Iterator[Session]:
                 ),
             ]
         )
-        session.execute(_travel_plans_table.insert(), {"plan_id": 1})
         session.commit()
         yield session
     finally:

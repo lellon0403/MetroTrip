@@ -1,8 +1,7 @@
 """여행 후기 서비스 계층 테스트.
 
 실제 MySQL 없이도 검증할 수 있도록 SQLite 인메모리 DB를 사용한다.
-stations/travel_plans는 reviews 도메인이 소유하지 않는 테이블이라
-테스트에서도 최소 컬럼만 가진 별도 Core 테이블로 채워 넣는다.
+stations는 reviews 도메인이 소유하지 않으므로 최소 컬럼의 Core 테이블로 접근한다.
 """
 
 from collections.abc import Iterator
@@ -40,13 +39,6 @@ _stations_table = Table(
     Column("latitude", Numeric(10, 7), nullable=False),
     Column("longitude", Numeric(10, 7), nullable=False),
 )
-
-_travel_plans_table = Table(
-    "travel_plans",
-    _support_metadata,
-    Column("plan_id", Integer, primary_key=True),
-)
-
 
 @pytest.fixture
 def db() -> Iterator[Session]:

@@ -4,19 +4,21 @@ import { Button } from '../../shared/ui/Button';
 import { Icon } from '../../shared/ui/Icon';
 import type { ViewId } from '../view';
 import { NAV_ITEMS } from './navItems';
+import { getReviewPath, navigate } from '../route';
 
 const LOGO_IMAGE = 'logo.png';
 
 type TopNavProps = {
   current: ViewId;
+  reviewActive: boolean;
+  isAuthenticated: boolean;
   onNavigate: (view: ViewId) => void;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 };
 
-export function TopNav({ current, onNavigate, theme, onToggleTheme }: TopNavProps) {
+export function TopNav({ current, reviewActive, isAuthenticated, onNavigate, theme, onToggleTheme }: TopNavProps) {
   const [logoMissing, setLogoMissing] = useState(false);
-  const isAuthenticated = Boolean(window.localStorage.getItem('metrotrip-access-token'));
 
   return (
     <header className="app-top-nav fixed inset-x-0 bottom-0 z-50 flex h-16 shrink-0 items-center gap-sm border-t border-outline-variant/70 bg-surface-bright/95 px-sm shadow-[0_-8px_24px_rgb(29_37_44_/_8%)] backdrop-blur-xl lg:inset-y-0 lg:left-0 lg:right-auto lg:h-dvh lg:w-20 lg:flex-col lg:gap-md lg:border-r lg:border-t-0 lg:px-sm lg:py-md lg:shadow-sm">
@@ -40,9 +42,9 @@ export function TopNav({ current, onNavigate, theme, onToggleTheme }: TopNavProp
 
       <nav className="flex min-w-0 flex-1 items-center justify-around gap-xs overflow-x-auto lg:w-full lg:flex-col lg:items-stretch lg:justify-start lg:overflow-visible">
         {NAV_ITEMS.filter((item) => item.view !== 'mypage').map((item) => {
-          const isCurrent = item.view === current;
+          const isCurrent = item.view === current && !reviewActive;
           return (
-            <button
+          <button
               key={item.view}
               type="button"
               onClick={() => onNavigate(item.view)}
@@ -59,6 +61,16 @@ export function TopNav({ current, onNavigate, theme, onToggleTheme }: TopNavProp
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => navigate(getReviewPath({ kind: 'list' }))}
+          aria-label="후기"
+          aria-current={reviewActive ? 'page' : undefined}
+          className={`flex h-14 min-w-14 flex-1 shrink-0 flex-col items-center justify-center gap-px rounded-xl px-xs text-center text-[11px] leading-tight transition-all lg:h-auto lg:min-w-0 lg:flex-none lg:gap-xs lg:px-xs lg:py-sm lg:text-body-md ${reviewActive ? 'bg-primary-container font-bold text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'}`}
+        >
+          <Icon name="rate_review" className="text-[20px]" />
+          <span className="block lg:text-[11px] lg:leading-tight">후기</span>
+        </button>
       </nav>
 
       <button

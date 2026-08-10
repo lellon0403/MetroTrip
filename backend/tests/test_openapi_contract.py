@@ -1,10 +1,15 @@
 """OpenAPI contract regression tests."""
 
-import asyncio
-
-import httpx
-
 from app.main import app
+
+
+def test_openapi_description_matches_current_implementation() -> None:
+    """Swagger 설명이 DB V1.10과 현재 구현 범위를 안내하는지 확인한다."""
+    description = app.openapi()["info"]["description"]
+
+    assert "V1.10" in description
+    assert "V1.8" not in description
+    assert "공개 노선 및 역 조회 API는 구현" in description
 
 
 def test_openapi_contains_agreed_api_contract() -> None:
@@ -22,10 +27,14 @@ def test_openapi_contains_agreed_api_contract() -> None:
         "/api/v1/users/me/posts",
         "/api/v1/users/me/reviews",
         "/api/v1/stations",
+        "/api/v1/stations/{station_id}",
+        "/api/v1/stations/{station_id}/timetables",
         "/api/v1/stations/{station_id}/places",
         "/api/v1/plans/{plan_id}/share-links",
         "/api/v1/shared-plans/{share_token}",
         "/api/v1/reviews",
+        "/api/v1/admin/reviews/{review_id}",
+        "/api/v1/admin/posts/{post_id}",
         "/api/v1/notices",
         "/api/v1/posts",
         "/api/v1/posts/{post_id}/participants/{participant_id}",
@@ -82,24 +91,67 @@ def test_posts_contract_excludes_sort_and_uses_camel_case_body() -> None:
 
 
 def test_protected_and_shared_plan_security_contract() -> None:
+    """계획 CRUD는 인증이 필요하고 공유 조회는 비회원 접근을 유지하는지 확인한다."""
     schema = app.openapi()
 
     assert schema["paths"]["/api/v1/plans"]["get"]["security"]
+    assert schema["paths"]["/api/v1/plans/{plan_id}/share-links"]["post"][
+        "security"
+    ]
+    update_item = schema["components"]["schemas"]["PlanItemUpdateInput"]
+    assert "planItemId" in update_item["properties"]
+    share_response = schema["components"]["schemas"]["ShareLinkResponse"]
+    assert "expiresAt" in share_response["properties"]
     assert (
         "security" not in schema["paths"]["/api/v1/shared-plans/{share_token}"]["get"]
     )
 
 
-def test_contract_endpoint_returns_standard_not_implemented_error() -> None:
-    async def request_lines() -> httpx.Response:
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            return await client.get("/api/v1/lines")
+def test_line_view_optional_security_contract() -> None:
+    """노선 조회 기록 API가 회원과 비회원 요청을 모두 문서화하는지 확인한다."""
+    schema = app.openapi()
+    operation = schema["paths"]["/api/v1/lines/{line_id}/views"]["post"]
 
-    response = asyncio.run(request_lines())
+    assert operation["security"] == [{"HTTPBearer": []}, {}]
+    assert all(
+        parameter["name"] != "authorization"
+        for parameter in operation["parameters"]
+    )
 
-    assert response.status_code == 501
-    assert response.json()["code"] == "NOT_IMPLEMENTED"
+
+def test_timetable_contract_matches_database_v1_10() -> None:
+    """시간표 응답이 열차번호와 문자열 시각을 노출하는지 확인한다."""
+    timetable = app.openapi()["components"]["schemas"]["TimetableResponse"]
+    properties = timetable["properties"]
+
+    assert "trainNo" in properties
+    for field in ("arrivalTime", "departureTime"):
+        assert any(
+            branch.get("type") == "string"
+            for branch in properties[field]["anyOf"]
+        )
+
+
+def test_admin_place_contract_requires_auth_and_exposes_station_ids() -> None:
+    """관리자 장소 CUD가 인증과 접근역 응답 계약을 공개하는지 확인한다."""
+    schema = app.openapi()
+    paths = schema["paths"]
+    create_operation = paths["/api/v1/admin/places"]["post"]
+    update_operation = paths["/api/v1/admin/places/{place_id}"]["patch"]
+    delete_operation = paths["/api/v1/admin/places/{place_id}"]["delete"]
+    response_properties = schema["components"]["schemas"][
+        "PlaceAdminResponse"
+    ]["properties"]
+
+    assert create_operation["security"]
+    assert update_operation["security"]
+    assert delete_operation["security"]
+    assert "stationIds" in response_properties
+
+
+def test_admin_content_delete_contract_requires_authentication() -> None:
+    """관리자 후기·모집 게시글 삭제가 인증 계약을 공개하는지 확인한다."""
+    paths = app.openapi()["paths"]
+
+    assert paths["/api/v1/admin/reviews/{review_id}"]["delete"]["security"]
+    assert paths["/api/v1/admin/posts/{post_id}"]["delete"]["security"]

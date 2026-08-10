@@ -19,6 +19,10 @@ class AuthRepository:
         """이메일로 사용자를 조회한다."""
         return self.session.scalar(select(User).where(User.email == email))
 
+    def find_user_by_id(self, user_id: int) -> User | None:
+        """식별자로 사용자를 조회한다."""
+        return self.session.get(User, user_id)
+
     def nickname_exists(self, nickname: str) -> bool:
         """닉네임이 이미 사용 중인지 확인한다."""
         return self.session.scalar(

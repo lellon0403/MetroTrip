@@ -5,6 +5,7 @@ import { useAuthForm } from '../hooks/useAuthForm';
 import { AuthField } from './AuthField';
 import { AuthMessage } from './AuthMessage';
 import { Button } from '../../../shared/ui/Button';
+import { saveAuthTokens } from '../../../shared/auth/session';
 
 export function LoginForm() {
   const [email, setEmail] = useState('');
@@ -15,8 +16,7 @@ export function LoginForm() {
     event.preventDefault();
     const tokens = await run(() => loginAccount(email, password));
     if (tokens) {
-      window.localStorage.setItem('metrotrip-access-token', tokens.accessToken);
-      window.localStorage.setItem('metrotrip-refresh-token', tokens.refreshToken);
+      saveAuthTokens(tokens);
       navigate(getPath('map'));
     }
   }

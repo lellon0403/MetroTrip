@@ -2,21 +2,25 @@
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.database import get_db
+from app.models.auth import User
 from app.schemas.auth import ReauthenticationPurpose
 from app.schemas.common import ErrorResponse
 from app.services import auth
 
 bearer_scheme = HTTPBearer(description="로그인 시 발급된 Access Token")
 
-""" 
+"""
 공통 인프라
 get_current_user_id 의존성 추가
 """
+
+
 def get_current_user_id(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
 ) -> int:
@@ -25,6 +29,46 @@ def get_current_user_id(
 
 AUTH_REQUIRED = [Depends(get_current_user_id)]
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
+
+
+def get_optional_current_user_id(
+    request: Request,
+) -> int | None:
+    """토큰이 있으면 사용자를 인증하고 없으면 비회원으로 처리한다."""
+    authorization = request.headers.get("Authorization")
+    if authorization is None:
+        return None
+    scheme, separator, token = authorization.partition(" ")
+    if not separator or scheme.lower() != "bearer" or not token:
+        raise HTTPException(
+            401,
+            detail="유효하지 않은 액세스 토큰입니다.",
+            headers={"X-Error-Code": "INVALID_TOKEN"},
+        )
+    return auth.authenticate_access(token, get_settings())
+
+
+OptionalCurrentUserId = Annotated[int | None, Depends(get_optional_current_user_id)]
+
+
+def get_current_admin_id(
+    user_id: CurrentUserId,
+    db: Annotated[Session, Depends(get_db)],
+) -> int:
+    """현재 사용자가 관리자인지 확인하고 사용자 ID를 반환한다."""
+    user = db.get(User, user_id)
+    if not user or user.role != "ADMIN":
+        raise HTTPException(
+            403,
+            detail="관리자만 사용할 수 있는 기능입니다.",
+            headers={"X-Error-Code": "ADMIN_ONLY"},
+        )
+    return user_id
+
+
+ADMIN_REQUIRED = [Depends(get_current_admin_id)]
+CurrentAdminId = Annotated[int, Depends(get_current_admin_id)]
+
 
 def _get_reauthenticated_user_id(
     current_user_id: CurrentUserId,
@@ -99,17 +143,4 @@ ERROR_RESPONSES = {
     404: {"model": ErrorResponse, "description": "리소스 없음"},
     409: {"model": ErrorResponse, "description": "현재 상태와 요청 충돌"},
     422: {"model": ErrorResponse, "description": "입력값 검증 실패"},
-    501: {"model": ErrorResponse, "description": "계약만 정의된 미구현 API"},
 }
-
-def not_implemented() -> JSONResponse:
-    return JSONResponse(
-        status_code=501,
-        content={
-            "code": "NOT_IMPLEMENTED",
-            "message": (
-                "API 계약만 정의되었으며 비즈니스 로직은 아직 구현되지 않았습니다."
-            ),
-            "details": None,
-        },
-    )

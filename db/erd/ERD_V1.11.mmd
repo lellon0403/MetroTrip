@@ -1,6 +1,6 @@
 %% 지하철 노선 기반 관광 추천 서비스 (MetroTrip) ERD
-%% 근거 문서 : 데이터베이스 명세서 V1.10
-%% 22개 테이블 / 140컬럼 / FK 34건 / UNIQUE 10 / CHECK 20
+%% 근거 문서 : 데이터베이스 명세서 V1.11
+%% 23개 테이블 / 146컬럼 / FK 35건 / UNIQUE 11 / CHECK 22
 %% 표기 : ||--o{ = 부모 필수(자식 FK NOT NULL) / |o--o{ = 부모 선택(자식 FK NULL 허용)
 
 erDiagram
@@ -38,6 +38,7 @@ erDiagram
     travel_plans |o--o{ board_posts : "plan_id"
     board_posts ||--o{ post_participants : "post_id"
     users ||--o{ post_participants : "user_id"
+    travel_plans ||--o{ travel_plan_share_links : "plan_id"
 
     users {
         BIGINT user_id PK
@@ -222,4 +223,12 @@ erDiagram
         VARCHAR_20 status
         DATETIME applied_at
         DATETIME responded_at "nullable"
+    }
+    travel_plan_share_links {
+        BIGINT share_link_id PK
+        BIGINT plan_id FK
+        VARCHAR_64 token_hash UK
+        DATETIME created_at
+        DATETIME expires_at
+        DATETIME revoked_at "nullable"
     }

@@ -2,14 +2,14 @@
 -- 지하철 노선 기반 관광 추천 서비스 (MetroTrip)
 -- 테이블 생성 스크립트
 --
--- 근거 문서 : 데이터베이스 명세서 V1.10
+-- 근거 문서 : 데이터베이스 명세서 V1.11
 -- 대상 DBMS : MySQL 8.0
--- 구성      : 22개 테이블 / PK 22 / UNIQUE 10 / FK 34 / CHECK 20
+-- 구성      : 23개 테이블 / PK 23 / UNIQUE 11 / FK 35 / CHECK 22 / 인덱스 3
 --
--- 비고 : 조회 성능용 인덱스(CREATE INDEX)는 포함하지 않는다.
---        기능 개발 후 EXPLAIN 으로 확인하며 migrations/ 에 추가한다.
---        테이블은 FK 의존 순서대로 정렬되어 있으므로 위에서부터
+-- 비고 : 테이블은 FK 의존 순서대로 정렬되어 있으므로 위에서부터
 --        그대로 실행하면 참조 오류가 발생하지 않는다.
+--        조회 성능용 인덱스는 파일 마지막에 있다. 추가·변경은 이 파일이 아니라
+--        migrations/ 에 번호 파일로 남긴 뒤 이곳에 병합한다.
 -- =====================================================================
 
 -- 데이터베이스 생성. MySQL 8.0 의 기본 콜레이션을 사용한다.
@@ -25,7 +25,8 @@ USE metrotrip;
 -- SET FOREIGN_KEY_CHECKS = 0;
 -- DROP TABLE IF EXISTS post_participants, board_posts, line_view_logs,
 --   notices, review_tags, review_media, reviews, travel_plan_items,
---   travel_plans, station_favorites, place_images, place_stations,
+--   travel_plan_share_links, travel_plans, station_favorites,
+--   place_images, place_stations,
 --   places, train_timetables, line_stations, stations, subway_lines,
 --   email_verifications, auth_tokens, social_accounts, user_agreements,
 --   users;
@@ -430,8 +431,37 @@ CREATE TABLE post_participants (
 
 
 -- =====================================================================
--- 외래키 제약 (34건)
--- CASCADE 15 / RESTRICT 12 / SET NULL 7
+-- 23. travel_plan_share_links : 여행 계획 공유 링크
+-- 근거 요구사항 : MB-018
+--
+-- 여행 계획을 읽기 전용으로 공유하기 위한 링크. 토큰 원문은 저장하지 않고
+-- SHA-256 해시(hex 64자)만 보관하므로, DB 가 유출되어도 링크를 복원할 수 없다.
+-- 계획 1건에 여러 링크를 발급할 수 있으며 만료(expires_at)와
+-- 폐기(revoked_at)를 분리해 관리한다.
+--
+-- 주의 : created_at 이 DEFAULT CURRENT_TIMESTAMP 이므로 CHECK 평가 시점에
+--        기본값이 적용되지 않을 수 있다. INSERT 시 created_at 을 명시할 것.
+--          INSERT INTO travel_plan_share_links
+--            (plan_id, token_hash, created_at, expires_at)
+--          VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 7 DAY));
+-- =====================================================================
+CREATE TABLE travel_plan_share_links (
+  share_link_id  BIGINT      NOT NULL AUTO_INCREMENT COMMENT '공유 링크 식별자',
+  plan_id        BIGINT      NOT NULL                COMMENT 'travel_plans.plan_id',
+  token_hash     VARCHAR(64) NOT NULL                COMMENT '공유 토큰 SHA-256 해시(hex). 원문은 저장하지 않음',
+  created_at     DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '발급 시각',
+  expires_at     DATETIME    NOT NULL                COMMENT '만료 시각',
+  revoked_at     DATETIME    NULL                    COMMENT '폐기 시각. NULL이면 미폐기',
+  CONSTRAINT pk_travel_plan_share_links            PRIMARY KEY (share_link_id),
+  CONSTRAINT uk_travel_plan_share_links_token_hash UNIQUE (token_hash),
+  CONSTRAINT ck_travel_plan_share_links_expires_at CHECK (expires_at > created_at),
+  CONSTRAINT ck_travel_plan_share_links_revoked_at CHECK (revoked_at IS NULL OR revoked_at >= created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='여행 계획 공유 링크';
+
+
+-- =====================================================================
+-- 외래키 제약 (35건)
+-- CASCADE 16 / RESTRICT 12 / SET NULL 7
 -- 번호는 데이터베이스 명세서 '관계 정의(FK)' 시트와 일치한다.
 -- =====================================================================
 
@@ -537,3 +567,48 @@ ALTER TABLE post_participants ADD CONSTRAINT fk_post_participants_post_id
 -- 34
 ALTER TABLE post_participants ADD CONSTRAINT fk_post_participants_user_id
   FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE;              -- 신청자 탈퇴 시 신청 내역 삭제(개인 데이터)
+-- 35
+ALTER TABLE travel_plan_share_links ADD CONSTRAINT fk_travel_plan_share_links_plan_id
+  FOREIGN KEY (plan_id) REFERENCES travel_plans (plan_id) ON DELETE CASCADE;       -- 계획 삭제 시 공유 링크도 함께 삭제
+
+
+-- =====================================================================
+-- 조회 성능용 인덱스 (3건)
+--
+-- PK / UNIQUE / FK 인덱스는 위에서 이미 만들어진다.
+-- InnoDB 는 FK 를 만들 때 자식 컬럼에 인덱스를 자동 생성하므로,
+-- FK 컬럼을 선두로 하는 인덱스는 뒤쪽 정렬 컬럼만 새로 얻는다.
+-- 수백 행 규모의 테이블은 풀 스캔이 더 빠르므로 대상에서 제외했다.
+--
+-- 이력 : migrations/001__add_indexes.sql
+-- =====================================================================
+
+-- 역별 배차표 조회. train_timetables 는 가장 큰 테이블이며 인덱스가 없으면
+-- 매 조회마다 전체를 훑는다. 등호 조건 3개 뒤에 정렬 컬럼을 배치했으며
+-- 순서를 바꾸면 인덱스를 타지 않는다.
+CREATE INDEX idx_timetables_lookup
+  ON train_timetables (station_id, day_type, direction, arrival_time);
+
+-- 역명 검색. 서비스의 첫 진입 경로이고 노선 추가에 따라 계속 늘어난다.
+-- 앞 일치 검색 전제이며, 중간 일치가 필요해지면 FULLTEXT 로 전환한다.
+CREATE INDEX idx_stations_name ON stations (station_name);
+
+-- 인기 노선 집계(CM-003). 조회 1회당 1행씩 쌓여 가장 빨리 커지는 테이블이다.
+-- 기간 조건이 선두여야 하며, 순서를 바꾸면 걸리지 않는다.
+CREATE INDEX idx_line_view_logs_time ON line_view_logs (viewed_at, line_id);
+
+
+-- ---------------------------------------------------------------------
+-- 보류 항목 — 조건이 맞으면 migrations/ 에 추가한 뒤 이곳에 병합한다
+-- ---------------------------------------------------------------------
+-- 열차 여정 추적(WHERE train_no = ?)을 실제로 사용할 때
+-- CREATE INDEX idx_timetables_train ON train_timetables (train_no, day_type, direction);
+--
+-- 노선도 화면을 자주 그린다면. uk_line_stations 가 line_id 필터까지는 이미 커버
+-- CREATE INDEX idx_line_stations_order ON line_stations (line_id, station_order);
+--
+-- 목록 조회용. 대상 테이블이 비어 있고 백엔드 쿼리 모양이 미확정
+-- CREATE INDEX idx_board_posts_created ON board_posts (created_at DESC);
+-- CREATE INDEX idx_reviews_created     ON reviews (created_at DESC);
+-- CREATE INDEX idx_review_tags_name    ON review_tags (tag_name, review_id);
+-- CREATE INDEX idx_board_posts_recruit ON board_posts (recruit_status, recruit_deadline);
