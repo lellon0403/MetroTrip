@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.db_failover import get_db, get_read_db
 from app.routers.contract import (
     ADMIN_REQUIRED,
     AUTH_REQUIRED,
@@ -35,6 +35,7 @@ media_router = APIRouter(
     dependencies=AUTH_REQUIRED,
 )
 DatabaseSession = Annotated[Session, Depends(get_db)]
+ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get(
@@ -44,7 +45,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
     responses=ERROR_RESPONSES,
 )
 def list_reviews(
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     keyword: Annotated[str | None, Query(max_length=100)] = None,
     search_field: Annotated[
         ReviewSearchField, Query(alias="searchField")
@@ -89,7 +90,7 @@ def create_review(
     summary="후기 상세 조회",
     responses=ERROR_RESPONSES,
 )
-def get_review(review_id: int, db: DatabaseSession) -> ReviewResponse:
+def get_review(review_id: int, db: ReadDatabaseSession) -> ReviewResponse:
     """후기 상세를 조회한다."""
     return review_service.get_review(db, review_id)
 

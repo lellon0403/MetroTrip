@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.database import get_db
+from app.db_failover import get_db
 from app.models.auth import User
 from app.schemas.auth import ReauthenticationPurpose
 from app.schemas.common import ErrorResponse

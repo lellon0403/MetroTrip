@@ -11,7 +11,8 @@ from sqlalchemy.dialects.mysql.pymysql import MySQLDialect_pymysql
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base, get_db
+from app.database import Base
+from app.db_failover import get_db, get_read_db
 from app.main import app
 from app.models.transit import (
     LineStation,
@@ -204,6 +205,7 @@ def test_list_stations_searches_filters_and_paginates(db: Session) -> None:
             return first_page, searched, filtered, unknown_line
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         first_page, searched, filtered, unknown_line = asyncio.run(
             request_station_lists()
@@ -240,6 +242,7 @@ def test_get_station_returns_detail_and_ordered_lines(db: Session) -> None:
             return await client.get("/api/v1/stations/1")
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         response = asyncio.run(request_station())
     finally:
@@ -273,6 +276,7 @@ def test_list_timetables_returns_train_number_and_ordered_times(
             )
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         response = asyncio.run(request_timetables())
     finally:
@@ -321,6 +325,7 @@ def test_timetable_returns_empty_list_for_valid_conditions(db: Session) -> None:
             )
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         response = asyncio.run(request_empty_timetables())
     finally:
@@ -359,6 +364,7 @@ def test_timetable_rejects_unknown_relationships(db: Session) -> None:
             return unknown_station, invalid_relation
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         unknown_station, invalid_relation = asyncio.run(
             request_invalid_timetables()
@@ -390,6 +396,7 @@ def test_station_detail_and_places_reject_unknown_station(db: Session) -> None:
             return detail, places
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         detail, places = asyncio.run(request_unknown_station())
     finally:
@@ -424,6 +431,7 @@ def test_list_station_places_filters_paginates_and_deduplicates(
             return all_places, cafes
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         all_places, cafes = asyncio.run(request_places())
     finally:

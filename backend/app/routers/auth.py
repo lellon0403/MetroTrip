@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.database import get_db
+from app.db_failover import get_db
 from app.routers.contract import ERROR_RESPONSES, CurrentUserId, bearer_scheme
 from app.schemas.auth import (
     EmailVerificationConfirmRequest,

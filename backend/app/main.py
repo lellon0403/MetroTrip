@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +11,7 @@ from app.config import get_settings
 from app.integrations.local_storage import media_root
 from app.routers import api_router
 from app.routers.health import router as health_router
+from app.scheduler import start_scheduler, stop_scheduler
 
 OPENAPI_TAGS = [
     {"name": "인증", "description": "회원가입, 로그인, 토큰 갱신과 로그아웃"},
@@ -59,6 +63,18 @@ def validation_exception_handler(
     )
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """앱 기동 시 Oracle 동기화 스케줄러를 시작하고 종료 시 정리한다.
+
+    docs/DB-FAILOVER.md §8.6 — 여러 워커에서 중복 실행되므로 반드시
+    `uvicorn --workers 1`로 기동해야 한다.
+    """
+    start_scheduler()
+    yield
+    stop_scheduler()
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
@@ -72,6 +88,7 @@ def create_app() -> FastAPI:
         debug=settings.debug,
         version="0.1.0",
         openapi_tags=OPENAPI_TAGS,
+        lifespan=lifespan,
     )
 
     application.add_middleware(

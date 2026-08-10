@@ -49,6 +49,11 @@ Copy-Item .env.example .env
 uvicorn app.main:app --reload
 ```
 
+> **`--workers 1`로만 기동합니다.** 앱 기동 시 Oracle 동기화 스케줄러가 함께 뜨는데, 워커가
+> 여러 개면 워커마다 스케줄러가 중복 실행됩니다. Oracle 접속 설정(읽기 전용/동기화 계정,
+> MySQL 장애 시 자동 폴백)은 [docs/DB-FAILOVER.md](../docs/DB-FAILOVER.md)를 참고합니다.
+> `METROTRIP_ORACLE_*` 환경변수를 비워 두면 스케줄러는 시작하지 않고 조회 API는 MySQL만 사용합니다.
+
 서버 확인:
 
 ```text
@@ -170,7 +175,7 @@ pytest
 ruff check .
 ```
 
-현재 전체 자동화 테스트 기준은 105개입니다.
+현재 전체 자동화 테스트 기준은 132개입니다.
 
 ## 데이터베이스
 

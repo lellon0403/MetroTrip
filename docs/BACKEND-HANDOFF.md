@@ -143,6 +143,7 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | Method | Path | 용도 |
 |---|---|---|
 | GET | `/health` | 서버 상태 확인 |
+| GET | `/api/v1/health/db` | 현재 DB 라우팅 대상(`mysql`/`oracle`)과 마지막 동기화 시각 |
 | POST | `/api/v1/auth/register` | 회원가입 |
 | POST | `/api/v1/auth/login` | 로그인 |
 | POST | `/api/v1/auth/reauthenticate` | 회원 정보 수정 전 현재 비밀번호 재인증 |
@@ -203,6 +204,19 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | DELETE | `/api/v1/admin/posts/{post_id}` | 관리자 모집 게시글 삭제 |
 
 현재 인증·회원·즐겨찾기·여행 계획 CRUD·읽기 전용 공유·후기·모집 게시판, 공지사항, 공개 노선·역·시간표·주변 장소와 관리자 장소 변경·콘텐츠 삭제 API 및 `/health`가 실제 구현되어 있습니다.
+
+### MySQL 장애 시 쓰기 API 응답
+
+MySQL이 정상이 아닐 때 모든 쓰기(POST/PATCH/DELETE) API는 아래처럼 `503`을 반환합니다. 조회(GET) API는 자동으로 Oracle 읽기 전용 복제본으로 전환되어 계속 `200`을 반환하지만, 데이터가 최대 동기화 주기(기본 10분)만큼 과거 상태일 수 있습니다.
+
+```http
+HTTP/1.1 503 Service Unavailable
+Retry-After: 60
+
+{"code": "HTTP_503", "message": "일시적으로 등록·수정 기능을 사용할 수 없습니다. 조회는 정상 이용 가능합니다.", "details": null}
+```
+
+프론트는 이 메시지를 그대로 노출해 "조회는 된다"는 점을 사용자에게 알려야 합니다. 설계 근거는 [docs/DB-FAILOVER.md](DB-FAILOVER.md)를 참고합니다.
 
 ### 4-1. 공개 transit API 연동 계약
 

@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
-from app.database import Base, get_db
+from app.database import Base
+from app.db_failover import get_db, get_read_db
 from app.integrations.security import hash_value, sign_token
 from app.main import app
 from app.models.auth import User
@@ -589,6 +590,7 @@ def test_plan_api_crud_flow_uses_camel_case_contract(db: Session) -> None:
             return created, listed, detail, updated, deleted, missing
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_db] = override_get_db
     try:
         created, listed, detail, updated, deleted, missing = asyncio.run(
             request_flow()
@@ -646,6 +648,7 @@ def test_share_api_issues_link_and_allows_public_read(db: Session) -> None:
             return issued, public, invalid
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_db] = override_get_db
     try:
         issued, public, invalid = asyncio.run(request_flow())
     finally:

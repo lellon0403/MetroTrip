@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
-from app.database import Base, get_db
+from app.database import Base
+from app.db_failover import get_db, get_read_db
 from app.integrations.security import sign_token
 from app.main import app
 from app.models.auth import User
@@ -135,6 +136,7 @@ def test_favorite_api_flow(db: Session) -> None:
             return empty, created, listed, duplicate, deleted, deleted_again
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_db] = override_get_db
     try:
         empty, created, listed, duplicate, deleted, deleted_again = asyncio.run(
             request_flow()
@@ -176,6 +178,7 @@ def test_add_favorite_rejects_unknown_station(db: Session) -> None:
             )
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_read_db] = override_get_db
     try:
         response = asyncio.run(request_unknown_station())
     finally:

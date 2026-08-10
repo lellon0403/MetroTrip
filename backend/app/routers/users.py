@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.db_failover import get_db, get_read_db
 from app.routers.contract import (
     AUTH_REQUIRED,
     ERROR_RESPONSES,
@@ -38,6 +38,7 @@ router = APIRouter(
     dependencies=AUTH_REQUIRED,
 )
 DatabaseSession = Annotated[Session, Depends(get_db)]
+ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get(
@@ -48,7 +49,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
 )
 def get_my_profile(
     current_user_id: CurrentUserId,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
 ) -> UserProfileResponse:
     """JWT로 식별한 현재 사용자의 회원 정보를 반환한다."""
     return users.get_profile(db, current_user_id)
@@ -108,7 +109,7 @@ def withdraw(
 )
 def list_favorites(
     current_user_id: CurrentUserId,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
 ) -> FavoriteListResponse:
     """현재 사용자가 즐겨찾기한 역 목록을 반환한다."""
     return users.list_favorites(db, current_user_id)
@@ -154,7 +155,7 @@ def delete_favorite(
 )
 def list_my_reviews(
     current_user_id: CurrentUserId,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> ReviewListResponse:
@@ -175,7 +176,7 @@ def list_my_reviews(
 )
 def list_my_posts(
     current_user_id: CurrentUserId,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> PostListResponse:
@@ -196,7 +197,7 @@ def list_my_posts(
 )
 def list_my_participating_posts(
     current_user_id: CurrentUserId,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     participant_status: Annotated[
         ParticipatingPostStatus,
         Query(alias="status"),

@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
-from app.database import Base, get_db
+from app.database import Base
+from app.db_failover import get_db
 from app.integrations.security import sign_token
 from app.main import app
 from app.models.auth import User

@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.db_failover import get_db, get_read_db
 from app.routers.contract import ADMIN_REQUIRED, ERROR_RESPONSES, CurrentAdminId
 from app.schemas.notices import (
     NoticeListResponse,
@@ -23,6 +23,7 @@ admin_router = APIRouter(
     dependencies=ADMIN_REQUIRED,
 )
 DatabaseSession = Annotated[Session, Depends(get_db)]
+ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get(
@@ -32,7 +33,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
     responses=ERROR_RESPONSES,
 )
 def list_notices(
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     notice_type: Annotated[NoticeType | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -49,7 +50,7 @@ def list_notices(
     summary="공지사항 상세 조회",
     responses=ERROR_RESPONSES,
 )
-def get_notice(notice_id: int, db: DatabaseSession) -> NoticeResponse:
+def get_notice(notice_id: int, db: ReadDatabaseSession) -> NoticeResponse:
     """공지사항 상세를 조회한다."""
     return notice_service.get_notice(db, notice_id)
 

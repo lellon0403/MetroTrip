@@ -9,8 +9,10 @@ description = "MetroTrip REST API server"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "apscheduler>=3.10",
     "fastapi>=0.115",
     "pydantic-settings>=2.6",
+    "oracledb>=2.4",
     "pymysql>=1.1",
     "sqlalchemy>=2.0",
     "uvicorn[standard]>=0.30",

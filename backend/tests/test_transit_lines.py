@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
-from app.database import Base, get_db
+from app.database import Base
+from app.db_failover import get_db, get_read_db
 from app.integrations.security import sign_token
 from app.main import app
 from app.models.auth import User
@@ -127,6 +128,7 @@ def test_list_lines_returns_display_order(db: Session) -> None:
             return await client.get("/api/v1/lines")
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         response = asyncio.run(request_lines())
     finally:
@@ -155,6 +157,7 @@ def test_record_line_view_supports_guest_and_member(db: Session) -> None:
             return guest, member
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         guest, member = asyncio.run(request_views())
     finally:
@@ -194,6 +197,7 @@ def test_record_line_view_rejects_unknown_line_and_invalid_token(
             return unknown, invalid_token, invalid_scheme
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         unknown, invalid_token, invalid_scheme = asyncio.run(request_invalid_views())
     finally:
@@ -231,6 +235,7 @@ def test_suggest_lines_returns_top_three_recent_views(db: Session) -> None:
             return await client.get("/api/v1/lines/suggestions")
 
     app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
     try:
         response = asyncio.run(request_suggestions())
     finally:

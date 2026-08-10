@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.database import get_db
+from app.db_failover import get_db, get_read_db
 from app.routers.contract import (
     AUTH_REQUIRED,
     ERROR_RESPONSES,
@@ -29,6 +29,7 @@ router = APIRouter(
 )
 shared_router = APIRouter(prefix="/shared-plans", tags=["여행 계획 공유"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
+ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get(
@@ -38,7 +39,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
     responses=ERROR_RESPONSES,
 )
 def list_plans(
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     user_id: CurrentUserId,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -71,7 +72,7 @@ def create_plan(
 )
 def get_plan(
     plan_id: int,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     user_id: CurrentUserId,
 ) -> PlanResponse:
     """본인이 작성한 여행 계획의 상세 정보를 조회한다."""
@@ -139,7 +140,7 @@ def create_share_link(
 )
 def get_shared_plan(
     share_token: str,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
 ) -> SharedPlanResponse:
     """유효한 공유 토큰의 여행 계획을 로그인 없이 조회한다."""
     return plan_service.get_shared_plan(db, share_token)

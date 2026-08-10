@@ -16,6 +16,9 @@ backend/
 │  ├─ services/
 │  ├─ config.py
 │  ├─ database.py
+│  ├─ database_oracle.py
+│  ├─ db_failover.py
+│  ├─ scheduler.py
 │  └─ main.py
 ├─ scripts/
 ├─ tests/
@@ -63,6 +66,16 @@ SQLAlchemy 데이터베이스 기반 설정을 관리한다.
 - 요청 단위 세션 의존성 `get_db()`
 
 테이블별 모델과 구체적인 조회 쿼리는 이 파일에 작성하지 않는다.
+
+### `app/database_oracle.py` / `app/db_failover.py` / `app/scheduler.py`
+
+MySQL/Oracle 이중화(DB-FAILOVER.md)를 담당한다.
+
+- `database_oracle.py`: Oracle 읽기 전용(RO) 엔진과 세션 팩토리. flush/commit 시도를 즉시 예외로 막는다.
+- `db_failover.py`: MySQL 헬스체크(서킷브레이커)와 `get_db()`(쓰기, 장애 시 503), `get_read_db()`(조회, 장애 시 Oracle 폴백) 의존성.
+- `scheduler.py`: 앱 기동 시(lifespan) APScheduler로 `scripts/sync_to_oracle.py`의 동기화 로직을 주기 실행한다.
+
+자세한 설계 근거는 [docs/DB-FAILOVER.md](../docs/DB-FAILOVER.md)를 참고한다.
 
 ## 역할별 디렉터리
 
@@ -183,6 +196,8 @@ API 요청·응답 형식은 `schemas/`에서 별도로 관리한다. DB 모델�
 | `test_transit_stations.py` | 역 목록·상세·시간표·주변 장소 API와 서비스 검증 |
 | `test_admin_places.py` | 관리자 장소 등록·수정·삭제와 계획 항목 정리 검증 |
 | `test_admin_content.py` | 관리자 후기·모집 게시글 삭제와 권한·CASCADE 검증 |
+| `test_db_failover.py` | MySQL 헬스체크 판정, 읽기 Oracle 폴백, 쓰기 503 검증 |
+| `test_sync_to_oracle.py` | TIME 변환, FK 순서, 빈 문자열 점검, 전체 재적재 원자성 검증 |
 
 기능별 서비스와 HTTP 계약을 대상 파일명을 따라 함께 검증한다.
 
@@ -204,6 +219,9 @@ tests/test_community_service.py
 - 운영 시 필요한 일회성 작업
 
 애플리케이션 실행에 필수인 로직은 `scripts/`에 두지 않는다.
+
+예외로 `scripts/sync_to_oracle.py`는 `python -m scripts.sync_to_oracle`로 수동 실행(백필·검증)도
+지원하지만, 주기 실행은 `app/scheduler.py`가 그 로직을 함수 단위로 호출한다.
 
 ## 루트 설정 파일
 

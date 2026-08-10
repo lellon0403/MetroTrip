@@ -422,5 +422,6 @@ ORDER BY table_name, index_name;
 | 요구사항 정의서 V1.3 | [Google Sheets](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) |
 | ERD | `erd/ERD_V1.11.mmd` |
 | 백엔드 연동 지점 | [docs/BACKEND-HANDOFF.md](../docs/BACKEND-HANDOFF.md) |
+| DB 이중화(MySQL/Oracle 페일오버) 설계 | [docs/DB-FAILOVER.md](../docs/DB-FAILOVER.md) |
 
 담당: 김유진

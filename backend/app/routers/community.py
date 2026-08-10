@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.db_failover import get_db, get_read_db
 from app.routers.contract import (
     ADMIN_REQUIRED,
     AUTH_REQUIRED,
@@ -33,6 +33,7 @@ admin_router = APIRouter(
     dependencies=ADMIN_REQUIRED,
 )
 DatabaseSession = Annotated[Session, Depends(get_db)]
+ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get(
@@ -43,7 +44,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
     responses=ERROR_RESPONSES,
 )
 def list_posts(
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     keyword: Annotated[str | None, Query(max_length=100)] = None,
     recruit_status: Annotated[RecruitStatus | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -82,7 +83,7 @@ def create_post(
     summary="게시글 상세 조회",
     responses=ERROR_RESPONSES,
 )
-def get_post(post_id: int, db: DatabaseSession) -> PostDetailResponse:
+def get_post(post_id: int, db: ReadDatabaseSession) -> PostDetailResponse:
     """게시글 상세를 조회한다."""
     return community_service.get_post(db, post_id)
 
@@ -174,7 +175,7 @@ def cancel_my_application(
 )
 def list_participants(
     post_id: int,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     user_id: CurrentUserId,
     participant_status: Annotated[
         ParticipantStatus | None,

@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.db_failover import get_db, get_read_db
 from app.routers.contract import (
     ADMIN_REQUIRED,
     ERROR_RESPONSES,
@@ -36,6 +36,7 @@ admin_router = APIRouter(
     dependencies=ADMIN_REQUIRED,
 )
 DatabaseSession = Annotated[Session, Depends(get_db)]
+ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
 
 
 @router.get(
@@ -44,7 +45,7 @@ DatabaseSession = Annotated[Session, Depends(get_db)]
     summary="노선 목록 조회",
     responses=ERROR_RESPONSES,
 )
-def list_lines(db: DatabaseSession) -> LineListResponse:
+def list_lines(db: ReadDatabaseSession) -> LineListResponse:
     """DB에 등록된 노선 목록을 화면 표시 순서대로 반환한다."""
     return transit_service.list_lines(db)
 
@@ -56,7 +57,7 @@ def list_lines(db: DatabaseSession) -> LineListResponse:
     description="최근 1시간의 노선 조회 기록을 기준으로 추천합니다.",
     responses=ERROR_RESPONSES,
 )
-def suggest_lines(db: DatabaseSession) -> LineSuggestionResponse:
+def suggest_lines(db: ReadDatabaseSession) -> LineSuggestionResponse:
     """최근 1시간 조회수가 높은 상위 세 개 노선을 반환한다."""
     return transit_service.suggest_lines(db)
 
@@ -86,7 +87,7 @@ def record_line_view(
     responses=ERROR_RESPONSES,
 )
 def list_stations(
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     keyword: Annotated[str | None, Query(max_length=100)] = None,
     line_id: Annotated[int | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
@@ -110,7 +111,7 @@ def list_stations(
 )
 def get_station(
     station_id: int,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
 ) -> StationDetailResponse:
     """역의 좌표, 주소, 소속 노선을 반환한다."""
     return transit_service.get_station(db, station_id)
@@ -125,7 +126,7 @@ def get_station(
 )
 def list_timetables(
     station_id: int,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     line_id: Annotated[int, Query()],
     day_type: Annotated[DayType, Query()],
     direction: Annotated[Direction, Query()],
@@ -148,7 +149,7 @@ def list_timetables(
 )
 def list_station_places(
     station_id: int,
-    db: DatabaseSession,
+    db: ReadDatabaseSession,
     category: Annotated[PlaceCategory | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 20,

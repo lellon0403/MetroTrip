@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     media_root_dir: str = "media"
     media_upload_expire_minutes: int = 15
 
+    # DB 이중화 (docs/DB-FAILOVER.md)
+    oracle_ro_url: str | None = None
+    oracle_sync_url: str | None = None
+    failover_cache_seconds: float = 5.0
+    failover_fail_threshold: int = 2
+    failover_recover_threshold: int = 2
+    sync_interval_minutes: int = 10
+    sync_exclude_tables: list[str] = Field(default_factory=list)
+
 
 @lru_cache
 def get_settings() -> Settings:

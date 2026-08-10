@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app.config import get_settings
-from app.database import get_db
+from app.db_failover import get_db
 from app.integrations.security import (
     hash_password,
     sign_token,
