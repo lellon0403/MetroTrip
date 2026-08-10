@@ -3,9 +3,17 @@
 > 데스크톱에서 작업하던 내용을 **노트북 등 다른 PC에서 그대로 이어받기 위한 문서**입니다.
 > 이 문서만 읽으면 지금까지의 맥락 없이도 이어서 작업할 수 있습니다.
 >
-> 마지막 갱신: 2026-08-06 / 기준 브랜치: `develop`
+> 마지막 갱신: 2026-08-10 / 기준 브랜치: `experiment/codex-implementation`
 
 ---
+
+## 0. 2026-08-10 — Codex 독립 버전 작업 안내
+
+현재 대규모 독립 버전은 기존 `frontend/`·`backend/`가 아니라 `codex_version/`에서 진행 중입니다. 학교 PC에서 이어서 작업할 때는 먼저 [`codex_version/docs/22_SCHOOL_HANDOFF.md`](../codex_version/docs/22_SCHOOL_HANDOFF.md)를 읽으세요.
+
+- 실행 기준: Docker Desktop + `http://localhost:3100`
+- 현재 상태: Phase A~H 구현·자동 검증 완료, 최신 Web 재빌드 후 카카오 지도 반경 원 최종 확인만 남음
+- 주의: 아래 1장 이후 내용은 기존 Vite/MySQL 버전의 과거 인수인계 기록입니다.
 
 ## 1. 지금 상태 요약
 

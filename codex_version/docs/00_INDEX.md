@@ -2,9 +2,9 @@
 
 ## 1. 문서 목적
 
-이 디렉터리는 기존 MetroTrip을 그대로 복제하지 않고, 확인된 문제와 자산을 근거로 제품·UX·기술 구조를 다시 설계한 구현 전 명세다. 앱 코드는 포함하지 않는다.
+이 디렉터리는 기존 MetroTrip을 그대로 복제하지 않고, 확인된 문제와 자산을 근거로 제품·UX·기술 구조를 다시 설계한 명세다. Phase 1 설계 기준과 실제 구현·검증 상태를 분리해 기록하며, 현재 상태는 `21_IMPLEMENTATION_STATUS.md`를 기준으로 한다.
 
-기준일은 2026-08-09이며, 원격 갱신 확인을 위한 `git fetch`는 `.git/FETCH_HEAD` 쓰기 권한 오류로 실패했다. 따라서 저장소 근거는 로컬 `d8334e8` 스냅샷을 기준으로 한다.
+기준일은 2026-08-10이다. 현재 구현·검증 상태는 `21_IMPLEMENTATION_STATUS.md`, 학교 PC에서 이어서 작업하는 절차는 `22_SCHOOL_HANDOFF.md`를 기준으로 한다.
 
 ## 2. 증거 상태 표기
 
@@ -70,6 +70,9 @@
 | [18_IMPLEMENTATION_PLAN.md](18_IMPLEMENTATION_PLAN.md) | 의존 순서와 단계별 완료 기준은 무엇인가 |
 | [19_GAP_ANALYSIS.md](19_GAP_ANALYSIS.md) | 현행과 목표 사이의 차이는 무엇인가 |
 | [20_DECISION_LOG.md](20_DECISION_LOG.md) | 주요 선택과 기각한 대안은 무엇인가 |
+| [21_IMPLEMENTATION_STATUS.md](21_IMPLEMENTATION_STATUS.md) | Phase A~H의 실제 구현·검증·제약 상태는 무엇인가 |
+| [22_SCHOOL_HANDOFF.md](22_SCHOOL_HANDOFF.md) | 학교 PC에서 무엇을 실행하고 마지막으로 무엇을 확인해야 하는가 |
+| [MOBILE_RELEASE_CHECKLIST.md](MOBILE_RELEASE_CHECKLIST.md) | iOS·Android 배포 전에 무엇을 실기기로 확인해야 하는가 |
 | [99_OPEN_QUESTIONS.md](99_OPEN_QUESTIONS.md) | 구현 전에 남은 결정은 무엇인가 |
 
 ## 5. 일관성 규칙

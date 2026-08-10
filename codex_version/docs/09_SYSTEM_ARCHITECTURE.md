@@ -93,6 +93,8 @@ docs/                    제품·운영·ADR
 - 이메일·푸시, 이미지 변형, 조회수 집계, 검색 색인, 외부 데이터 동기화
 - API 트랜잭션에서 outbox 이벤트를 함께 저장하고 워커가 멱등 소비한다.
 
+현재 구현은 설치 가능한 API package에 outbox 소비 로직을 두고 `services/worker`를 별도 process entrypoint로 유지한다. PostgreSQL pending index와 `FOR UPDATE SKIP LOCKED`로 여러 worker의 중복 선점을 막고, provider 실패는 `available_at`을 뒤로 미뤄 최대 300초 지수 backoff로 재시도한다. 개발 publisher는 payload를 출력하지 않고 이벤트 ID·종류·aggregate metadata만 구조화 로그에 남긴다. 전달 보장은 at-least-once이므로 실제 email/push adapter는 event ID 기반 멱등성을 구현해야 한다.
+
 ## 외부 연동 정책
 
 - 외부 제공자 ID를 도메인 기본키로 사용하지 않는다.
@@ -109,4 +111,3 @@ docs/                    제품·운영·ADR
 - 팀 소유권이 분리되어 같은 릴리스 주기가 병목임
 - DB 부하가 모듈별로 격리해야 할 수준임
 - 분산 트랜잭션·운영 비용을 감당할 관측·플랫폼 역량이 있음
-

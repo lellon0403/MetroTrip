@@ -1,0 +1,35 @@
+name: Codex Version Verify
+on:
+  pull_request:
+    paths: ["codex_version/**", ".github/workflows/codex-version.yml"]
+  push:
+    branches: [develop]
+    paths: ["codex_version/**", ".github/workflows/codex-version.yml"]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults: { run: { working-directory: codex_version } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm, cache-dependency-path: codex_version/package-lock.json }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: npm ci
+      - run: python -m pip install -e "services/api[dev]"
+      - run: docker compose up -d --wait postgres
+      - run: python -m alembic upgrade head
+      - run: python db/seed/seed.py
+      - run: npm run contracts:generate
+      - run: git diff --exit-code -- packages/contracts/src/schema.d.ts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build:web
+      - run: python -m ruff check services/api/app services/api/tests db
+      - run: python -m ruff format --check services/api/app services/api/tests db
+      - run: METROTRIP_RUN_POSTGRES_TESTS=1 python -m pytest services/api/tests
+      - run: npm exec --workspace @metrotrip/mobile -- expo export --platform web --output-dir ../../dist-web-ci
+      - run: docker compose build api worker web
+      - run: docker compose config --quiet

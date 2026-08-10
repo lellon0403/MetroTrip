@@ -1,0 +1,37 @@
+{
+  "source": {
+    "name": "metrotrip-development-fixture",
+    "version": "2026-08-09.1",
+    "uri": "local://db/import/cheonanasan_transit_fixture.json",
+    "licenseNote": "Development fixture only. Not asserted as production or realtime transit truth."
+  },
+  "lines": [
+    {
+      "externalId": "line-1-pilot",
+      "name": "수도권 1호선 파일럿",
+      "shortName": "1",
+      "color": "#0052A4",
+      "textColor": "#FFFFFF",
+      "sortOrder": 1,
+      "stations": [
+        {"externalId": "P166", "name": "성환", "code": "P166", "sequence": 1, "latitude": 36.9162, "longitude": 127.1267, "address": "충청남도 천안시 서북구 성환읍"},
+        {"externalId": "P167", "name": "직산", "code": "P167", "sequence": 2, "latitude": 36.8707, "longitude": 127.1438, "address": "충청남도 천안시 서북구 직산읍"},
+        {"externalId": "P168", "name": "두정", "code": "P168", "sequence": 3, "latitude": 36.8338, "longitude": 127.1489, "address": "충청남도 천안시 서북구 두정동"},
+        {"externalId": "P169", "name": "천안", "code": "P169", "sequence": 4, "latitude": 36.8100, "longitude": 127.1467, "address": "충청남도 천안시 동남구 대흥동"},
+        {"externalId": "P170", "name": "봉명", "code": "P170", "sequence": 5, "latitude": 36.8012, "longitude": 127.1350, "address": "충청남도 천안시 동남구 봉명동"},
+        {"externalId": "P171", "name": "쌍용(나사렛대)", "code": "P171", "sequence": 6, "latitude": 36.7936, "longitude": 127.1214, "address": "충청남도 천안시 서북구 쌍용동"},
+        {"externalId": "P172", "name": "아산", "code": "P172", "sequence": 7, "latitude": 36.7921, "longitude": 127.1045, "address": "충청남도 아산시 배방읍"},
+        {"externalId": "P173", "name": "탕정", "code": "P173", "sequence": 8, "latitude": 36.7886, "longitude": 127.0802, "address": "충청남도 아산시 탕정면"},
+        {"externalId": "P174", "name": "배방", "code": "P174", "sequence": 9, "latitude": 36.7770, "longitude": 127.0528, "address": "충청남도 아산시 배방읍"},
+        {"externalId": "P176", "name": "온양온천", "code": "P176", "sequence": 10, "latitude": 36.7805, "longitude": 127.0038, "address": "충청남도 아산시 온천동"}
+      ]
+    }
+  ],
+  "calendars": [
+    {"externalId": "daily-2026", "weekdays": [true, true, true, true, true, true, true], "startDate": "2026-01-01", "endDate": "2026-12-31", "exceptions": []}
+  ],
+  "servicePatterns": [
+    {"externalId": "eastbound", "lineExternalId": "line-1-pilot", "calendarExternalId": "daily-2026", "direction": 0, "headsign": "성환", "stationOrder": "reverse", "startTimes": ["05:30", "07:00", "09:00", "12:00", "15:00", "18:00", "21:00", "23:40"], "minutesBetweenStops": 6},
+    {"externalId": "westbound", "lineExternalId": "line-1-pilot", "calendarExternalId": "daily-2026", "direction": 1, "headsign": "온양온천", "stationOrder": "forward", "startTimes": ["05:40", "07:10", "09:10", "12:10", "15:10", "18:10", "21:10", "24:05"], "minutesBetweenStops": 6}
+  ]
+}

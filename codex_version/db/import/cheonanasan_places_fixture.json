@@ -1,0 +1,17 @@
+{
+  "source": {"name": "metrotrip-place-fixture", "version": "2026-08-09.1", "licenseNote": "Synthetic development fixture. Names and details are illustrative, not external provider truth."},
+  "places": [
+    {"externalId": "cheonan-market", "name": "천안 중앙시장 산책", "category": "SHOPPING", "address": "천안역 동쪽 시장권", "latitude": 36.8066, "longitude": 127.1514, "summary": "천안역에서 걸어서 둘러보는 로컬 시장 동선입니다."},
+    {"externalId": "cheonan-bread-lab", "name": "호두과자 연구소", "category": "FOOD", "address": "천안역 앞 여행자 거리", "latitude": 36.8091, "longitude": 127.1492, "summary": "천안 대표 간식을 주제로 만든 개발용 장소 데이터입니다."},
+    {"externalId": "cheonan-record-cafe", "name": "레코드 카페 파란선", "category": "CAFE", "address": "천안역 서부광장 인근", "latitude": 36.8115, "longitude": 127.1422, "summary": "음악과 여행 기록을 함께 즐기는 조용한 카페 콘셉트입니다."},
+    {"externalId": "bonmyeong-noodle", "name": "봉명 온면집", "category": "FOOD", "address": "봉명역 남쪽 골목", "latitude": 36.7976, "longitude": 127.1366, "summary": "가벼운 한 끼를 위한 개발용 음식점 fixture입니다."},
+    {"externalId": "ssangyong-bookroom", "name": "쌍용 여행책방", "category": "CULTURE", "address": "쌍용역 대학가", "latitude": 36.7919, "longitude": 127.1240, "summary": "지역 여행책과 독립 출판물을 소개하는 작은 책방 콘셉트입니다."},
+    {"externalId": "asan-lake-window", "name": "호수창 카페", "category": "CAFE", "address": "아산역 남쪽 산책로", "latitude": 36.7878, "longitude": 127.1068, "summary": "넓은 창과 휴식을 주제로 한 개발용 카페 fixture입니다."},
+    {"externalId": "asan-art-platform", "name": "아산 작은 예술창고", "category": "CULTURE", "address": "아산역 북쪽 문화거리", "latitude": 36.7960, "longitude": 127.1014, "summary": "지역 작가 전시를 가정한 개발용 문화공간입니다."},
+    {"externalId": "tangjeong-greenway", "name": "탕정 초록길", "category": "NATURE", "address": "탕정역 수변 연결로", "latitude": 36.7898, "longitude": 127.0741, "summary": "짧은 도보 여행을 위한 수변 산책 콘셉트입니다."},
+    {"externalId": "tangjeong-roastery", "name": "탕정 로스터리 1번선", "category": "CAFE", "address": "탕정역 서쪽 상가", "latitude": 36.7870, "longitude": 127.0839, "summary": "직접 볶은 원두를 주제로 한 개발용 장소입니다."},
+    {"externalId": "baebang-table", "name": "배방 계절식탁", "category": "FOOD", "address": "배방역 앞 골목", "latitude": 36.7752, "longitude": 127.0560, "summary": "제철 식재료 메뉴를 가정한 개발용 식당입니다."},
+    {"externalId": "onyang-bath-archive", "name": "온양 온천기록관", "category": "CULTURE", "address": "온양온천역 문화광장", "latitude": 36.7819, "longitude": 127.0071, "summary": "온천 도시의 이야기를 소개하는 개발용 전시 공간입니다."},
+    {"externalId": "onyang-footbath", "name": "온양 족욕정원", "category": "NATURE", "address": "온양온천역 남쪽 정원", "latitude": 36.7778, "longitude": 127.0053, "summary": "여정 마지막에 쉬어가는 야외 휴식 공간 콘셉트입니다."}
+  ]
+}

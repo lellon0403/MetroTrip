@@ -1,0 +1,123 @@
+name: metrotrip-codex
+
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-metrotrip}
+      POSTGRES_USER: ${POSTGRES_USER:-metrotrip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-metrotrip-local-only}
+    ports:
+      - "55432:5432"
+    volumes:
+      - metrotrip_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-metrotrip} -d ${POSTGRES_DB:-metrotrip}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "56379:6379"
+    volumes:
+      - metrotrip_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-metrotrip}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-metrotrip-local-only}
+    ports:
+      - "59000:9000"
+      - "59001:9001"
+    volumes:
+      - metrotrip_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-07-21T05-28-08Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >-
+      /bin/sh -c "mc alias set local http://minio:9000 ${S3_ACCESS_KEY:-metrotrip} ${S3_SECRET_KEY:-metrotrip-local-only} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-metrotrip-media} &&
+      mc anonymous set download local/${S3_BUCKET:-metrotrip-media}"
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "58025:1025"
+      - "58080:8025"
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://metrotrip:${POSTGRES_PASSWORD:-metrotrip-local-only}@postgres:5432/metrotrip
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_PUBLIC_URL: http://localhost:59000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-metrotrip}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-metrotrip-local-only}
+      S3_BUCKET: ${S3_BUCKET:-metrotrip-media}
+      WEB_ORIGIN: http://localhost:3100
+      PROVIDER_MODE: ${PROVIDER_MODE:-fixture}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-me-32-chars}
+      PUSH_TOKEN_ENCRYPTION_SECRET: ${PUSH_TOKEN_ENCRYPTION_SECRET:-local-push-token-secret-change-me}
+    command: ["sh", "-c", "python -m alembic upgrade head && python db/seed/seed.py && uvicorn app.main:app --app-dir services/api --host 0.0.0.0 --port 8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://metrotrip:${POSTGRES_PASSWORD:-metrotrip-local-only}@postgres:5432/metrotrip
+      REDIS_URL: redis://redis:6379/0
+      WORKER_POLL_SECONDS: 1
+    command: ["python", "-m", "services.worker.main"]
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        API_INTERNAL_BASE_URL: http://api:8000
+        NEXT_PUBLIC_KAKAO_JS_KEY: ${NEXT_PUBLIC_KAKAO_JS_KEY:-}
+    environment:
+      API_INTERNAL_BASE_URL: http://api:8000
+    depends_on:
+      api: { condition: service_healthy }
+    ports: ["3100:3100"]
+
+volumes:
+  metrotrip_postgres:
+  metrotrip_redis:
+  metrotrip_minio:

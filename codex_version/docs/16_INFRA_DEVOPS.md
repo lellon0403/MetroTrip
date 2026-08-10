@@ -13,12 +13,13 @@
 
 ## 2. 로컬 구성
 
-Docker Compose는 PostgreSQL/PostGIS, Redis, S3 호환 개발 저장소, 메일 캡처 도구를 제공한다. 웹·모바일·API 프로세스는 빠른 재시작을 위해 호스트 실행을 허용한다.
+Docker Compose는 PostgreSQL/PostGIS, Redis, S3 호환 개발 저장소, 메일 캡처 도구와 API·outbox worker·Web을 제공한다. 웹·모바일·API 프로세스는 빠른 재시작을 위해 호스트 실행도 허용한다. 2026-08-09 일반 사용자 PowerShell에서 PostgreSQL/PostGIS 17/3.5.2, Redis, MinIO, Mailpit 기동과 health를 확인했다. API·worker·Web 이미지 기동은 런북의 최종 체크포인트로 별도 기록한다.
 
 - 한 명령으로 의존 서비스 시작
 - 버전된 migration과 idempotent seed
 - `.env.example`에는 키 이름과 안전한 설명만
 - 개발용 기본 비밀은 운영에서 부팅 실패하도록 환경 검증
+- worker는 pending outbox를 `FOR UPDATE SKIP LOCKED`로 가져오고 실패 시 최대 300초 지수 backoff로 재시도
 
 ## 3. CI 파이프라인
 
@@ -44,6 +45,7 @@ main 병합 후 staging, 수동/정책 승인 후 production으로 승격한다.
 - 객체: versioning·수명주기·비공개 버킷·CDN signed/public policy.
 
 롤링 또는 blue/green 배포를 사용하고 health/readiness를 분리한다. readiness는 DB 연결과 필수 설정을 검증하되 느린 외부 제공자 상태 때문에 전체 인스턴스를 제거하지 않는다.
+HTTPS 강제 전환과 HSTS는 TLS를 종료하는 ingress/CDN에서 적용한다. 로컬 HTTP 검증을 깨뜨리지 않도록 애플리케이션 CSP에 `upgrade-insecure-requests`를 무조건 넣지 않는다.
 
 ## 5. DB 변경
 
@@ -96,4 +98,3 @@ main 병합 후 staging, 수동/정책 승인 후 production으로 승격한다.
 - 비용 분석에서 명확한 이점이 있음
 
 단순히 계획서에 적혀 있다는 이유로 도입하지 않는다.
-

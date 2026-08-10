@@ -1,5 +1,7 @@
 # API 명세
 
+> 이 문서의 2~10절은 Phase 1 목표 계약을 보존한다. 현재 Phase A~H에서 실제 실행되는 계약의 source of truth는 `generated/openapi.json`과 `packages/contracts/src/schema.d.ts`이며, 구현 경로와 목표안의 차이는 12절에 명시한다.
+
 ## 1. 공통 규칙
 
 - Base URL: `/api/v1`
@@ -56,7 +58,7 @@
 | `GET /me` | 회원 | 없음 | `{user,preferences,agreements}` | 본인만 |
 | `PATCH /me` | 회원+재인증 | 이름/닉네임/프로필 이미지 | 갱신 user | `If-Match`, 본인만 |
 | `PATCH /me/password` | 회원+재인증 | `{newPassword}` | `204` | 모든 세션 폐기 정책 |
-| `DELETE /me` | 회원+재인증 | `{reason?,confirmation}` | `202 {deletionRequestId}` | 개인정보 처리 비동기, 취소 기간 `OPEN` |
+| `DELETE /me` | 회원+현재 비밀번호 | `{password,confirmation:"DELETE"}` | `204` | 즉시 PII 익명화·전 세션 폐기; 취소 유예 정책은 `OPEN` |
 | `GET /me/sessions` | 회원 | cursor | session 목록 | 본인만, 토큰 값 비노출 |
 | `DELETE /me/sessions/{sessionId}` | 회원 | 없음 | `204` | 본인 session만 |
 | `POST /auth/oauth/{provider}/authorize` | 공개 | `{redirectUri,codeChallenge}` | `{authorizationUrl,state}` | P1, provider allowlist |
@@ -220,3 +222,30 @@
 - 각 mutation의 owner/admin scope와 멱등 여부가 테스트에 있다.
 - cursor는 정렬 필드가 같아도 중복·누락이 없다.
 - ETag 충돌, 모집 동시 수락, refresh 재사용을 통합 테스트한다.
+
+## 12. Phase A~H 실제 구현 계약
+
+| 영역 | 실제 구현 경로 요약 | 목표안과의 차이 |
+|---|---|---|
+| Identity | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password-reset/request`, `/auth/password-reset/confirm`, `/me` | 세션을 리소스로 표현한 목표 경로를 단순화했다. Web refresh는 same-origin HttpOnly cookie, Mobile refresh는 요청 body를 사용한다. |
+| Transit | `/lines`, `/stations`, `/stations/{id}`, `/stations/{id}/departures` | 파일럿의 구조화 line/station/calendar/trip/stop-time 읽기를 제공한다. `/lines/{id}`와 서버 기반 `/stations/nearby`는 아직 없다. |
+| Discovery/route | `/places/nearby`, `/places/{id}`, `/me/favorites/*`, `/routes/compare`, `/providers/status` | `station_id` 또는 좌표·bounds 공간 검색을 제공한다. `PROVIDER_MODE=kakao`에서는 Kakao Local을 서버에서 조회해 PostGIS에 15분 캐시하고 `REAL/STALE` 출처 상태를 반환한다. 공급자 영업시간 원장이 없어 `openNow` 필터는 아직 없다. |
+| Planning | `/plans`, `/plans/{id}`, `/plans/{id}/copies`, `/plans/{id}/share-links`, `/shared/plans/{token}` | 전체 구조를 교체하는 mutation은 `PUT`+`If-Match`를 사용한다. PRIVATE 기본과 UNLISTED 공유·회수·복제를 구현한다. |
+| Reviews/media | `/reviews`, `/reviews/{id}`, `/reviews/{id}/like`, `/media/claims`, `/media/claims/{id}/complete`, `/me/reviews` | 구조화 본문·태그·좋아요·S3 claim을 구현했다. 별도 변환 파이프라인과 관리자 복구 API는 아직 없다. |
+| Recruitments | `/recruitments`, `/recruitments/{id}`, `/recruitments/{id}/applications`, `/me/recruitments`, `/me/recruitment-applications` | 신청 취소는 `DELETE`, 전체 수정은 `PUT`+`If-Match`다. row lock으로 정원과 자동 마감을 보장한다. |
+| Operations | `/notices`, `/devices`, `/reviews/{id}/reports`, `/recruitments/{id}/reports`, `/admin/*` | 단일 `ADMIN` role로 최소 운영 기능을 보호한다. 세분화 scope와 인앱 알림 읽음 API는 후속 운영 정책 대상이다. |
+
+현재 미구현인 목표 계약은 이메일 검증, 세션 목록·개별 폐기 UI, 목적 제한 reauthentication token, 프로필 이미지·약관, 장소 `openNow`, 인앱 알림 목록·설정이다. 이번 실행 버전은 비밀번호 재설정, 민감 탈퇴의 현재 비밀번호 재검증, foreground 위치 기반 클라이언트 최근접 역, 암호화 push device 등록과 transactional outbox까지 제공한다. 이를 구현된 것처럼 확장 해석하지 않는다.
+
+## 13. 2026-08-10 구현 계약 추가
+
+| API | 변경 계약 |
+|---|---|
+| `GET /home` | 추천 장소, 저장 인기 장소, 최신·인기 모집, 활성 이벤트, 공지를 반환 |
+| `GET /places/nearby` | 반복 `category` query로 복수 카테고리 검색; 공급자 결과 카테고리별 최대 3페이지; 조건 hash를 `place_search_syncs`에 기록하고 기본 24시간 재호출 방지 |
+| `POST /routes/compare` | 기본 mode는 `WALK`; 공개 제휴가 없으면 거리 기반 예상 경로와 `estimated=true`; Kakao Mobility 도보 제휴 설정을 명시적으로 켠 경우에만 공식 partner endpoint 호출 |
+| `GET /recruitments` | `sort=latest|popular|closing`; summary에 `viewCount` 포함 |
+| 후기 쓰기/읽기 | `destinationStationId` nullable, media claim과 응답에 `width`,`height` 포함 |
+| 공지 API | `kind=NOTICE|EVENT`, `bannerUrl`, `startsAt`, `endsAt`; 홈은 현재 활성 이벤트만 노출 |
+
+Kakao Local 장소 응답은 장소명, 분류, 주소, 전화, 장소 URL과 좌표 중심이다. 메뉴·상품 가격·상세 영업정보 계약으로 확장 해석하지 않는다.

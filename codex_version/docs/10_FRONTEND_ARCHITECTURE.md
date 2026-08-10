@@ -113,3 +113,10 @@ mutation에는 `Idempotency-Key`가 필요한 생성 작업을 지원한다. 401
 - route-level 오류 경계, 기능별 부분 오류, mutation 오류를 구분한다.
 - 클라이언트 이벤트에는 trace ID, route, resource type, app version을 포함한다.
 - 토큰·이메일·본문·정확한 위치는 로그에 넣지 않는다.
+
+## 2026-08-10 맵 상태 경계
+
+- 역 선택, 검색 중심, 선택 카테고리, 반경, 선택 장소, drawer, 일정 집중 모드는 페이지 로컬 상태로 분리한다.
+- 지도 SDK 객체와 overlay는 React state에 넣지 않고 ref로 수명주기를 관리한다. 장소 목록은 API 내부 UUID를 단일 식별자로 사용한다.
+- 일정은 `PlanView`를 편집한 뒤 650ms debounce와 ETag `If-Match`로 자동 저장한다. 재정렬은 키보드 접근 가능한 위/아래 버튼을 함께 제공한다.
+- 홈·후기 공개 목록은 서버 렌더링하고 맵·일정·모집 작성처럼 상호작용이 큰 화면만 client component로 둔다.

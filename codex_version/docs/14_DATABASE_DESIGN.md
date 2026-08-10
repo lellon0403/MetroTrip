@@ -126,7 +126,7 @@ erDiagram
 | `reports` | `id`, `reporter_user_id?`, `target_type/id`, `reason`, `detail`, `status`, `created_at` | reporter SET NULL; 중복 제한 partial UQ 후보 | status/created, target |
 | `moderation_actions` | `id`, `report_id?`, `actor_user_id`, `target_type/id`, `action`, `reason`, `expires_at?` | report SET NULL, actor RESTRICT | target/time, actor/time |
 | `audit_logs` | `id`, `actor_user_id?`, `action`, `resource_type/id`, `before_json`, `after_json`, `reason`, `request_id`, `created_at` | actor SET NULL; append only | resource/time, actor/time, request |
-| `outbox_events` | `id`, `event_type`, `aggregate_type/id`, `payload`, `schema_version`, `occurred_at`, `processed_at`, `attempts` | PK id | partial `(processed_at IS NULL, occurred_at)` |
+| `outbox_events` | `id`, `event_type`, `aggregate_type/id`, `payload`, `schema_version`, `occurred_at`, `available_at`, `processed_at`, `attempts`, `last_error` | PK id; `attempts >= 0`, `schema_version > 0` | partial pending index `(available_at, occurred_at) WHERE processed_at IS NULL` |
 | `idempotency_keys` | `scope_user_id?`, `key`, `request_hash`, `response_status/body`, `expires_at` | 복합 PK scope/key | expires 정리 |
 | `data_sync_jobs` | `id`, `source_id`, `status`, `dry_run`, `summary`, `started/finished_at`, `initiator_id` | source/initiator FK | source/status/time |
 
@@ -153,3 +153,13 @@ erDiagram
 - 시드는 외부 source/version/hash를 갖고 재실행해도 중복되지 않는다.
 - 운영 DB에서 baseline DDL을 재실행하지 않는다.
 - 스키마, ORM, OpenAPI 계약의 enum/nullability 차이를 CI에서 탐지한다.
+
+## 13. Migration 0009 — 제품 경험 보강
+
+- `place_search_syncs(cache_key PK, source_name, result_count, synced_at)`: 위치·반경·카테고리·검색어 조건의 외부 조회 ledger.
+- `notices.kind/banner_url/starts_at/ends_at`: 공지와 기간형 이벤트를 하나의 운영 리소스로 관리.
+- `recruitments.view_count`: 인기순 피드 신호.
+- `reviews.destination_station_id NULL`: 한 역만 방문한 후기 지원.
+- `media_assets.width/height`: 원본 비율 기반 후기 카드 배치.
+
+0009는 PostgreSQL에서 0008→0009 실제 적용 후 `0009 (head)`를 확인했다.

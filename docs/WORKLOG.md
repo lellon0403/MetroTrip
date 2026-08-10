@@ -2,6 +2,10 @@
 
 하루 작업이 끝나면 **3줄**만 남깁니다. 다른 PC에서 이어서 작업할 때 이 파일부터 봅니다.
 
+## 2026-08-10 — Codex 독립 버전 Phase A~H와 제품 경험 보강
+- 한 것: `codex_version/`에 Next Web·Expo Mobile·FastAPI·PostgreSQL/PostGIS·Redis·MinIO 기반 Phase A~H를 구현하고 홈, 맵 복수 필터·일정, 후기, 모집, 관리자 기능을 보강했다. 실제 DB 43개 테스트, Web lint·typecheck·JS 테스트·production build와 주요 브라우저 흐름을 확인했다.
+- 다음 할 것: `docker compose up -d --build web` 후 `http://localhost:3100/discover`에서 반경 원과 500m·1km·2km 변경만 최종 확인한다. 자세한 절차는 `codex_version/docs/22_SCHOOL_HANDOFF.md`를 따른다.
+- 막힌 것 / 공유할 것: 카카오 실 지도·장소·즐겨찾기·일정 순번은 확인했고 반경 원 누락 코드는 수정했다. Android/iOS 실기기와 운영 이메일·푸시·도메인·클라우드는 로컬 범위 밖이다.
 ## 2026-08-07 — 내가 작성·참여한 모집 글 목록 조회 백엔드 구현
 - 한 것: JWT 사용자 기준 작성 글과 `APPLIED`·`ACCEPTED` 참여 글 목록을 페이지 조회하고, 참여 상태·신청·응답 시각을 응답에 포함함. 상태별 최근 신청순·최근 수락순 검증을 포함해 Pytest 46개가 통과함.
 - 다음 할 것: 마이페이지 모집 글 탭에 `/users/me/posts`와 필수 `status`를 받는 `/users/me/participating-posts`를 연결함.

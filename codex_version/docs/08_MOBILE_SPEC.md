@@ -84,3 +84,12 @@
 - 테이블형 원본 시간표 다운로드
 - 영상 편집·트랜스코딩 설정
 
+## 현재 구현 메모
+
+- 하단의 사용자 노출 탭은 `홈`, `탐색`, `계획`, `커뮤니티`, `마이` 5개다. `today`, `reviews`, `together`는 기존 링크 호환을 위한 숨김 route다.
+- 홈과 당일 모드는 UTC가 아닌 `Asia/Seoul` 달력 날짜로 계획을 선택한다. 탐색은 foreground 위치 승인 시 전체 파일럿 역과 기기에서 거리를 계산해 가장 가까운 역을 선택하고, 위치를 서버에 보내거나 저장하지 않는다. 권한·센서·네트워크 오류 시 역 이름 검색으로 동일한 핵심 흐름을 제공한다.
+- 계획 상세는 SQLite에 마지막 성공 응답을 저장하며 마지막 동기화 시각, 오늘 모드, 완료 작업의 로컬 대기열을 표시한다.
+- SQLite 캐시는 로그인 사용자 ID와 묶고 계정이 바뀌거나 명시적으로 로그아웃하면 계획·진행 캐시를 제거한다. 네이티브 로그아웃은 SecureStore의 refresh token을 서버에 보내 세션을 폐기한 뒤 로컬 credential을 지운다.
+- 알림 payload의 `resourceType`과 `resourceId`는 앱 내부 계획·후기·모집·공지 경로로 변환한다.
+- 커뮤니티는 후기·모집을 동시에 불러오되 loading, empty, error/retry를 분리하고 API의 소문자 정렬 계약을 사용한다.
+- TypeScript와 Expo Web export는 검증됐지만 Android/iOS 실기기의 권한·오프라인·딥링크·푸시는 [MOBILE_RELEASE_CHECKLIST.md](MOBILE_RELEASE_CHECKLIST.md) 완료 전까지 `NOT VERIFIED`다.
