@@ -8,6 +8,12 @@ docs/DB-FAILOVER.md §3.4, §8 참고.
 제외 시) 1,000행 미만이라 전체 재적재가 수 초 내에 끝나므로 이 방식이
 증분보다 단순하면서도 더 안전하다.
 
+예외: UPSERT_ONLY_TABLES(subway_lines, stations)는 delete-all 대신 upsert로
+처리한다. train_timetables가 기본 동기화에서 제외되면서도(RESTRICT FK로)
+이 두 테이블을 참조하고 있어, delete-all을 시도하면 남아있는
+train_timetables 행이 삭제를 막는다(§8.1). 두 테이블은 사실상 정적
+참조 데이터라 삭제가 드물다는 전제로 upsert를 택했다.
+
 테이블 순서는 별도 목록으로 관리하지 않고 SQLAlchemy가 FK로부터 계산하는
 위상 정렬(Base.metadata.sorted_tables)을 그대로 사용한다 — 스키마가 바뀌어도
 순서표가 낡아 어긋나는 일이 없다. 삽입은 이 순서, 삭제는 역순.
@@ -27,7 +33,7 @@ import sys
 from collections.abc import Iterable
 from datetime import datetime, time, timedelta, timezone
 
-from sqlalchemy import Engine, Table, create_engine, func, select
+from sqlalchemy import Engine, Table, bindparam, create_engine, func, select
 from sqlalchemy.engine import Connection
 
 from app.config import get_settings
@@ -70,6 +76,13 @@ EMPTY_STRING_CHECKS: list[tuple[str, str]] = [
     ("travel_plans", "plan_title"),
     ("review_tags", "tag_name"),
 ]
+
+# train_timetables(RESTRICT FK로 subway_lines/stations 참조)는 기본 동기화에서
+# 제외된다(§3.4). Oracle에 이미 적재된 적이 있으면, 이 두 테이블을 delete-all
+# 하려는 순간 남아있는 train_timetables 행이 막아 ORA-02292가 난다(§8.1).
+# 그래서 이 두 테이블만 delete-all 대신 upsert(삽입/수정/원본에 없는 행만 삭제)로
+# 처리해 train_timetables를 건드리지 않고도 갱신한다.
+UPSERT_ONLY_TABLES: set[str] = {"subway_lines", "stations"}
 
 DEFAULT_BATCH_SIZE = 5000
 
@@ -135,6 +148,41 @@ def _table_count(conn: Connection, table: Table) -> int:
     return conn.execute(select(func.count()).select_from(table)).scalar_one()
 
 
+def _upsert_table(
+    mysql_conn: Connection,
+    oracle_conn: Connection,
+    table: Table,
+    *,
+    batch_size: int,
+) -> int:
+    """delete-all 대신 삽입/수정/원본에 없는 행만 삭제. UPSERT_ONLY_TABLES 전용."""
+    pk_col = next(iter(table.primary_key.columns))
+    rows = [
+        transform_row(table.name, dict(mapping))
+        for mapping in mysql_conn.execute(select(table)).mappings()
+    ]
+    mysql_pks = {row[pk_col.name] for row in rows}
+    oracle_pks = {pk for (pk,) in oracle_conn.execute(select(pk_col))}
+
+    to_insert = [row for row in rows if row[pk_col.name] not in oracle_pks]
+    to_update = [row for row in rows if row[pk_col.name] in oracle_pks]
+    to_delete = oracle_pks - mysql_pks
+
+    for start in range(0, len(to_insert), batch_size):
+        batch = to_insert[start : start + batch_size]
+        oracle_conn.execute(table.insert(), batch)
+
+    if to_update:
+        stmt = table.update().where(pk_col == bindparam("_pk"))
+        params = [{**row, "_pk": row[pk_col.name]} for row in to_update]
+        oracle_conn.execute(stmt, params)
+
+    if to_delete:
+        oracle_conn.execute(table.delete().where(pk_col.in_(to_delete)))
+
+    return len(rows)
+
+
 def run_sync(
     mysql_engine: Engine,
     oracle_engine: Engine,
@@ -142,15 +190,26 @@ def run_sync(
     *,
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> dict[str, int]:
-    """전체 재적재를 단일 트랜잭션으로 수행한다. 실패 시 전량 롤백한다."""
+    """전체 재적재를 단일 트랜잭션으로 수행한다. 실패 시 전량 롤백한다.
+
+    UPSERT_ONLY_TABLES에 속한 테이블은 delete-all 대신 upsert로 처리된다(§8.1).
+    """
+    reload_tables = [t for t in tables if t.name not in UPSERT_ONLY_TABLES]
+    upsert_tables = [t for t in tables if t.name in UPSERT_ONLY_TABLES]
+
     with mysql_engine.connect() as mysql_conn, oracle_engine.connect() as oracle_conn:
         transaction = oracle_conn.begin()
         try:
-            for table in reversed(tables):
+            for table in reversed(reload_tables):
                 oracle_conn.execute(table.delete())
 
             counts: dict[str, int] = {}
-            for table in tables:
+            for table in upsert_tables:
+                counts[table.name] = _upsert_table(
+                    mysql_conn, oracle_conn, table, batch_size=batch_size
+                )
+
+            for table in reload_tables:
                 rows = [
                     transform_row(table.name, dict(mapping))
                     for mapping in mysql_conn.execute(select(table)).mappings()
@@ -238,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     mysql_engine = create_engine(settings.database_url)
-    oracle_engine = create_engine(settings.oracle_sync_url)
+    oracle_engine = create_engine(settings.oracle_sync_url, connect_args=settings.oracle_connect_args())
 
     if args.verify:
         print("행 수 비교:")

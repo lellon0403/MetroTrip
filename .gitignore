@@ -24,6 +24,9 @@ certs/
 # 로컬에 저장되는 업로드 미디어 (오브젝트 스토리지 미연동 상태)
 backend/media/
 
+# Oracle 동기화 스크립트가 기록하는 로컬 런타임 상태(docs/DB-FAILOVER.md §8.6)
+backend/var/
+
 # 에디터 / 툴
 .claude/
 .vscode/*

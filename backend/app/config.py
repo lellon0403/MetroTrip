@@ -48,11 +48,22 @@ class Settings(BaseSettings):
     # DB 이중화 (docs/DB-FAILOVER.md)
     oracle_ro_url: str | None = None
     oracle_sync_url: str | None = None
+    oracle_wallet_dir: str | None = None
+    oracle_wallet_password: str | None = None
     failover_cache_seconds: float = 5.0
     failover_fail_threshold: int = 2
     failover_recover_threshold: int = 2
     sync_interval_minutes: int = 10
     sync_exclude_tables: list[str] = Field(default_factory=list)
+
+    def oracle_connect_args(self) -> dict[str, str]:
+        """Autonomous DB 지갑(mTLS) 접속 파라미터. 지갑 미사용 시 빈 dict."""
+        if not self.oracle_wallet_dir:
+            return {}
+        args = {"config_dir": self.oracle_wallet_dir, "wallet_location": self.oracle_wallet_dir}
+        if self.oracle_wallet_password:
+            args["wallet_password"] = self.oracle_wallet_password
+        return args
 
 
 @lru_cache

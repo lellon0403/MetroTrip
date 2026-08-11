@@ -15,7 +15,13 @@ from app.config import get_settings
 settings = get_settings()
 
 oracle_engine = (
-    create_engine(settings.oracle_ro_url, pool_size=2, max_overflow=1, pool_pre_ping=True)
+    create_engine(
+        settings.oracle_ro_url,
+        pool_size=2,
+        max_overflow=1,
+        pool_pre_ping=True,
+        connect_args=settings.oracle_connect_args(),
+    )
     if settings.oracle_ro_url
     else None
 )
