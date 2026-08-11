@@ -3,39 +3,13 @@
 > 데스크톱에서 작업하던 내용을 **노트북 등 다른 PC에서 그대로 이어받기 위한 문서**입니다.
 > 이 문서만 읽으면 지금까지의 맥락 없이도 이어서 작업할 수 있습니다.
 >
-> 마지막 갱신: 2026-08-10 / 작업 브랜치: `fix/fe-codex-ui-validation`
+> 마지막 갱신: 2026-08-06 / 기준 브랜치: `develop`
 
 ---
-
-## 0. 2026-08-10 프론트 교체 우선 안내
-
-이 문서 아래쪽의 Vite/Feature-based 구조 설명은 이전 구현 기록입니다. 현재 작업 브랜치에서는 `experiment/codex-implementation`의 Next.js 16 UI를 `frontend/` 루트로 이식했습니다.
-
-- 실행: `cd frontend && npm install && npm run dev` (5173)
-- 라우트: `frontend/app/`
-- 화면 컴포넌트: `frontend/src/components/`
-- API 클라이언트: `frontend/src/lib/api.ts`
-- 기존 FastAPI 변환: `frontend/src/lib/legacyApiAdapter.ts`, `legacyMappers.ts`
-- 타입 계약: `frontend/src/contracts/schema.d.ts`
-- 디자인 토큰: `frontend/src/styles/tokens.css`
-- 카카오 키: `NEXT_PUBLIC_KAKAO_JS_KEY` 권장. 기존 `VITE_KAKAO_MAP_KEY`도 호환.
-- API 주소: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1` 권장. 기존 `VITE_API_BASE_URL`도 호환.
-
-현재 백엔드로 실제 연결되는 영역은 인증/재인증, 역·시간표·역 주변 장소, 일정 CRUD, 모집 CRUD·신청, 후기 CRUD·미디어, 공지입니다. 백엔드 계약에 없는 장소 즐겨찾기는 브라우저 로컬 전용이며 후기 좋아요·신고, 모집 질문·신고, 삭제 일정 복원, 일부 관리자 기능은 미지원 응답을 표시합니다.
-
-### 0-1. 2026-08-10 런타임 검증 결과
-
-- `GET /api/v1/stations` 호환 응답을 `{ items, nextCursor }`로 맞춰 역 목록 무한 로딩을 해결했습니다.
-- 역 조회 한도를 100개로 올려 기본 역 `천안`이 포함되도록 했습니다.
-- 다중 카테고리 쿼리의 콤마 구분값을 분리하고 빈 위도·경도는 선택 역 좌표로 대체해 천안역 맛집 4건과 지도 마커가 정상 표시됩니다.
-- 홈, 로그인, 맵, 후기 목록·상세·작성 권한, 모집 목록·상세, 일정·삭제 일정, 마이페이지, 관리자 권한 가드를 실제 브라우저에서 확인했으며 콘솔 오류는 0건입니다.
-- `npm run lint`, `npm run typecheck`, `npm run build`가 통과했습니다. Codex 샌드박스에서는 `.env` 읽기 경고가 발생하지만 일반 사용자로 실행 중인 개발 서버에서는 Kakao 지도가 정상 로드됩니다.
 
 ## 1. 지금 상태 요약
 
 프론트엔드 MVP의 **1~5단계와 마커·인포윈도우까지 완료**되어 있습니다. Feature-based architecture와 shadcn 기반 공용 UI 구조를 사용하며, 이메일 인증 회원가입·로그인·비밀번호 재설정 화면이 백엔드 인증 API와 연결되어 있습니다. 백엔드에는 회원 조회, 목적별 비밀번호 재인증, 이름·닉네임 수정, 비밀번호 변경과 회원 탈퇴까지 구현되어 있으며 프론트 회원 관리 화면 연결이 남아 있습니다.
-
-백엔드/DB 쪽에는 MySQL 장애 시 조회를 Oracle 읽기 전용 복제본으로 자동 전환하는 이중화(1단계: 쓰기는 503, 조회는 폴백)가 구현되어 있습니다. 설계·구현 상세는 [docs/DB-FAILOVER.md](DB-FAILOVER.md)를 참고하세요. `METROTRIP_ORACLE_*` 환경변수를 채우지 않은 로컬 환경에서는 동기화 스케줄러가 자동으로 비활성화되므로 프론트 작업에는 영향이 없습니다.
 
 | SPEC 단계 | 내용 | 상태 |
 |---|---|---|
@@ -274,7 +248,15 @@ import { asset } from '../../shared/lib/asset';
 
 ---
 
-## 5. 배포 — GitHub Pages ✅ 완료
+## 5. 배포 — GitHub Pages ⛔ 중단 (2026-08-11)
+
+> **프론트·백엔드 모두 Docker로 배포하는 방향으로 바뀌면서 GitHub Pages 배포는 중단했습니다.**
+> `.github/workflows/deploy.yml`은 push 트리거를 지워 더 이상 자동 실행되지 않습니다
+> (수동 실행만 가능). 배포 주소 `https://lellon0403.github.io/MetroTrip/`도 이후 자동 갱신
+> 안 됩니다. 현재 배포 계획은 `docs/CICD.md` 4·5장을 참고하세요 — 배포 서버(self-hosted
+> runner)가 아직 없어 실제 Docker 배포는 진행 전입니다.
+>
+> 아래는 GitHub Pages를 썼을 때의 설정 기록입니다. 재활성화할 일이 생기면 참고하세요.
 
 **배포 주소: https://lellon0403.github.io/MetroTrip/**
 

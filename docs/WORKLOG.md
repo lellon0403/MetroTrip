@@ -2,10 +2,24 @@
 
 하루 작업이 끝나면 **3줄**만 남깁니다. 다른 PC에서 이어서 작업할 때 이 파일부터 봅니다.
 
-## 2026-08-10 — Codex Next.js UI 백엔드 연동 검증
-- 한 것: 새 Next.js UI의 전체 공개·상세·작성·권한 가드 페이지를 실제 브라우저에서 점검하고, 역 목록 응답 래핑·다중 장소 카테고리 파싱·빈 좌표 기본값 처리 오류를 수정해 천안역 맛집 목록과 Kakao 지도 마커가 정상 표시되는 것을 확인했다. 모집 상세의 잔여 “동행” 명칭도 모집·참여로 통일했다.
-- 다음 할 것: 로그인된 사용자·관리자 계정으로 내 일정, 마이페이지, 관리자 쓰기 동작을 추가 회귀 테스트한다.
-- 막힌 것 / 공유할 것: Codex 샌드박스가 `.git/FETCH_HEAD`와 `.git/refs` 잠금 파일 쓰기를 막아 브랜치 생성·커밋은 일반 사용자 PowerShell에서 실행해야 한다. lint, typecheck, build와 브라우저 콘솔 오류 0건은 확인했다.
+## 2026-08-12 — 서버 pull 자동화 방식을 cron으로 결정
+- 한 것: 배포 서버(우분투 + Docker, 메모리 1GB) 준비가 끝난 상태에서 이미지 pull·재기동 자동화 방식으로 cron을 확정했다(하드웨어 여유가 늘면 Watchtower로 전환 검토). `docs/CICD.md` 7.3절에 `deploy.sh` + crontab 예시(5분 간격, `docker image prune -f`로 옛 이미지 정리, 로그 파일 기록)를 추가했다.
+- 다음 할 것: 이 스크립트를 실제 서버 경로에 맞게 배치하고 crontab에 등록한 뒤, `main` push 후 몇 분 안에 컨테이너가 실제로 갱신되는지 끝까지 검증한다. 그 전에 Docker Hub 저장소 설정(`DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN`/`NEXT_PUBLIC_KAKAO_JS_KEY`/`DOCKERHUB_NAMESPACE`)이 먼저 등록돼 있어야 `cd-main.yml`이 이미지를 올릴 수 있다.
+- 막힌 것 / 공유할 것: cron 스크립트 자체는 아직 서버에 올린 적이 없어 미검증이다. `docs/CICD.md`의 경로(`/opt/metrotrip`)는 예시이니 실제 서버 배치 경로에 맞게 바꿔야 한다.
+- (추가) 배포 도메인이 `https://metrotrip.kro.kr`로 확정됐다. TLS는 기존 nginx/Caddy 리버스 프록시가 종단한다(이 저장소 밖에서 이미 구성됨) — `docker-compose.yml`은 그대로 둬도 되고, `frontend:5173` 하나만 프록시에 연결하면 `next.config.ts`의 rewrites가 `/api/v1`도 알아서 처리한다. `.env.example`의 `METROTRIP_CORS_ORIGINS`/`METROTRIP_PUBLIC_FRONTEND_URL`을 이 도메인으로 채워뒀다. 이 과정에서 실제 버그 가능성 하나를 발견했다: `backend/app/services/reviews.py`의 `create_media_upload`가 `request.url_for()`로 절대 URL을 만드는데 `backend/Dockerfile`의 uvicorn에 `--proxy-headers`가 없어서, 리버스 프록시 뒤에서 후기 업로드 미디어 URL이 `metrotrip.kro.kr`이 아니라 내부 연결 정보로 깨져 나올 수 있다 — 아직 코드는 안 고쳤고 실제로 후기 사진을 올려서 확인부터 필요하다(`docs/CICD.md` 7.3절·8장, `backend/.txt`에 기록).
+
+## 2026-08-11 — 배포 방식을 GitHub Pages → Docker로 전환 + develop 최신화 반영
+- 한 것: 프론트·백엔드를 모두 Docker로 배포하기로 결정하고 `deploy.yml`(GitHub Pages)을 비활성화했다(push 트리거 제거). 이후 develop을 최신화하니 프론트가 Vite SPA에서 Next.js SSR로, 백엔드에 MySQL/Oracle 이중화(`docs/DB-FAILOVER.md`)가 들어와 있어 CI/CD를 통째로 재검토했다: `ci-frontend.yml`을 eslint/`tsc --noEmit`/`next build`로 전면 재작성(Node 22→24, oxlint/vite 관련 내용 제거), `docker-compose.yml`을 `frontend/Dockerfile`(develop에 이미 있던 Next.js 3단계 빌드, 포트 5173)에 맞춰 다시 썼다 — 백엔드 서비스명을 `api`로 강제(Dockerfile의 `API_INTERNAL_BASE_URL` 기본값이 `http://api:8000`), `NEXT_PUBLIC_KAKAO_JS_KEY` 빌드 인자, 동기화 상태용 `backend_var` 볼륨 추가. 체크아웃 충돌로 생겼던 대피 파일들(`gitpx_deploy.yml`, 루트 `Dockerfile`, 예전 `frontend/nginx.conf`)은 확인 후 삭제. `ci-backend.yml`은 oracledb/apscheduler 추가 후에도 로컬에서 134개 테스트 전부 통과 재확인 — 변경 불필요.
+- 다음 할 것: Docker가 설치된 다른 PC에서 `docker compose up -d --build`로 실제 1차 검증까지 마쳤다 — `api`/`frontend` 둘 다 기동, `/health`·`/api/v1/health/db` 정상, 브라우저에서 홈 데이터도 정상 표시. 그 과정에서 진짜 버그를 하나 찾아 고쳤다: `app/scheduler.py`가 실행 시점에 `scripts.sync_to_oracle`을 import하는데 `backend/Dockerfile`이 `scripts/`를 이미지에 안 넣고 `pyproject.toml`도 그 패키지를 포함 안 해서 컨테이너에서 10분마다 `ModuleNotFoundError`가 났다 — Dockerfile에 `COPY scripts ./scripts` 추가, `pyproject.toml`의 `packages.find.include`에 `"scripts*"` 추가로 해결하고 격리된 venv에서 재현·검증했다(기존 ruff/pytest 134개도 그대로 통과). 카카오맵은 그 PC에서 "Kakao 지도 SDK를 불러오지 못했습니다"(스크립트 네트워크 에러)로 확인돼, 앱 설정이 아니라 그 PC/브라우저가 `dapi.kakao.com`에 못 나가는 것으로 원인을 좁혔다(방화벽/사내망/광고차단 추정, 그 PC에서 직접 확인 필요).
+- 브랜치 전략을 다시 정했다: **develop은 CI만, main은 CI + Docker 이미지 빌드·Docker Hub push까지만** 하고 나머지(이미지 pull, 컨테이너 재기동)는 서버에서 한다 — self-hosted runner를 GitHub Actions에 등록하는 방식은 안 쓴다. `deploy-develop.yml`(develop push 게이트 + 비활성 self-hosted deploy 잡)을 지웠다. 작업 중 `.github/workflows/.yaml`이라는 이름으로 팀원(jeonseho00 Docker Hub 계정)이 준 실제 참고 워크플로가 저장소에 이미 있는 걸 발견해서, 확인 후 그 구조를 그대로 `cd-main.yml`(워크플로 이름은 `Test and publish Docker images`)로 채택했다 — test-backend/test-frontend/publish 3개 잡을 인라인(ci-backend.yml/ci-frontend.yml을 workflow_call로 재사용하지 않음), `docker/build-push-action`으로 backend·frontend 이미지를 `main`+커밋SHA 태그로 push. 하드코딩돼 있던 `jeonseho00`만 저장소 Variable `DOCKERHUB_NAMESPACE`로 뺐다(팀원 계정을 쓰기로 해서). `ci-backend.yml`/`ci-frontend.yml`의 push 트리거에서는 `main`을 뺐다(develop만 직접 트리거 — main 검증은 이제 cd-main.yml이 독자적으로 함). `docker-compose.yml`에 `image:`(배포 서버용, `${DOCKERHUB_NAMESPACE}/metrotrip-*:main` pull)와 `build:`(로컬 검증용, 그대로 유지)를 같이 둬서 두 용도를 한 파일로 커버했다.
+- 다음 할 것: 저장소에 Variables(`DOCKERHUB_USERNAME`, `DOCKERHUB_NAMESPACE`, `NEXT_PUBLIC_KAKAO_JS_KEY`)와 Secret(`DOCKERHUB_TOKEN`)을 실제로 등록하고 main에 push해서 `cd-main.yml`이 실제로 Docker Hub까지 이미지를 올리는지 확인해야 한다(아직 미검증). 그다음 서버 쪽 pull·재기동 방식(수동/cron/Watchtower 등, `docs/CICD.md` 7장)을 정한다.
+- 막힌 것 / 공유할 것: 카카오맵 문제는 그 PC의 네트워크/브라우저 쪽 확인이 남아 있다. Oracle 지갑 파일도 아직 없어 `docker-compose.yml`에 볼륨 마운트를 추가하지 못했다.
+- (추가) 배포 서버 준비 완료 — 우분투 서버 + Docker, 메모리 1GB라 k3s는 못 쓴다(원래 설계대로 순수 `docker compose`로 간다는 뜻과 일치). 남은 건 서버 쪽 pull·재기동 자동화 방식(cron/수동/Watchtower/webhook, 메모리 제약상 cron 유력) 결정과 Docker Hub 저장소 설정 등록 후 `main` push로 `cd-main.yml` 실제 검증뿐이다. `docs/CICD.md` 7.3장·8장 갱신함.
+
+## 2026-08-10 — GitHub Actions CI 구성
+- 한 것: `ci-backend.yml`/`ci-frontend.yml`/`deploy-develop.yml`을 프로젝트에 맞게 작성했다. backend는 Python 3.10 + ruff + pytest(SQLite 인메모리라 MySQL 불필요), frontend는 Node 22 + oxlint + `tsc`/`vite build`로 검증한다. 로컬에서 두 CI 명령 모두 통과 확인(pytest 105개, lint/build 정상).
+- 다음 할 것: 배포 서버(self-hosted runner)와 `docker-compose.yml`이 준비되면 `deploy-develop.yml`의 `deploy` 잡(`if: false`로 비활성 중) 활성화. 자세한 설정과 사용법은 `docs/CICD.md` 참고.
+- 막힌 것 / 공유할 것: 백엔드를 올릴 서버가 아직 없어 실제 배포 자동화는 보류 상태다.
 
 ## 2026-08-09 — 관리자 장소·콘텐츠 관리 구현
 - 한 것: 장소 등록·부분 수정·삭제와 관리자 후기·모집 게시글 삭제를 구현하고 관리자 권한·연쇄 삭제 테스트와 문서를 보강해 Pytest 105개 통과를 확인했다.
@@ -224,13 +238,3 @@
 - 노선 범위: 1호선 천안·아산 구간 우선 (탕정, 아산, 배방, 온양온천, 천안). 전체 노선은 최종 목표
 - 발표 10분 = 아이디어 3분 + 프론트 시연 2분 + 백엔드 5분
 - 프론트 담당 분할은 보류 (Claude Code로 개발하므로 현재 불필요)
-
-## 2026-08-10 — Codex Next.js UI 루트 이식 및 FastAPI 호환 연결
-
-- `experiment/codex-implementation`의 `codex_version/apps/web`을 기존 `frontend/` 대신 루트 프론트로 이식했다. 기존 `.env*`는 유지했다.
-- 독립 실행 가능한 Next.js 16/React 19 패키지와 로컬 계약 타입·디자인 토큰을 구성했다.
-- 현재 FastAPI 경로/응답을 새 UI 계약으로 변환하는 `legacyApiAdapter.ts`, `legacyMappers.ts`를 추가했다.
-- 이메일 인증 가입, Refresh Token 회전, 프로필·탈퇴 재인증을 현재 백엔드 규칙에 맞췄다.
-- 홈·후기 서버 렌더링을 현재 공지/모집/역 주변 장소/후기 API에 연결했다.
-- `typecheck`, `lint`, 프로덕션 빌드 통과. 브라우저에서 홈/맵/후기 렌더링 확인.
-- 샌드박스에서는 `.env` 접근이 차단되어 DB가 연결된 백엔드 통합 검증은 일반 PowerShell에서 이어서 수행한다.
