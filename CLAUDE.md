@@ -74,6 +74,7 @@ MetroTrip — 지하철 역을 선택하면 반경 1km 내 장소를 지도에 �
 | `docs/CLAUDE-CODE-WORKFLOW.md` | Claude Code 사용법 (팀원용) |
 | `docs/SPEC.md` | 프론트엔드 MVP 범위 |
 | `docs/BACKEND-HANDOFF.md` | 프론트 ↔ 백엔드 연동 지점 |
+| `docs/CICD.md` | GitHub Actions CI/CD 구성 — 각 워크플로우 파일의 설정과 사용법 |
 | `docs/WORKLOG.md` | 작업 기록 — 세션 끝날 때 갱신 제안 |
 | `docs/PRESENTATION.md` | 발표 구성 |
 

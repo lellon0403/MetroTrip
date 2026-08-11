@@ -1,0 +1,85 @@
+# 원본: https://github.com/SunMoonUniv/ModuPick/blob/develop/.github/workflows/ci-frontend.yml
+#
+# 2026-08-11 재작성: develop가 프론트를 Vite SPA에서 Next.js(App Router)로 전환하면서
+# 빌드 체인이 통째로 바뀌었다 (frontend/package.json 참고).
+#   - lint: oxlint → eslint (`eslint.config.mjs`, eslint-config-next)
+#   - 타입체크: `tsc -b`가 build 스크립트에 섞여 있던 것을 → 별도 `npm run typecheck`
+#     스크립트(`tsc --noEmit`)로 분리해서 씀
+#   - 빌드: `vite build` → `next build`. 결과물이 `frontend/dist`(정적 파일)가 아니라
+#     `frontend/.next`(서버 실행용 빌드)라 Actions 아티팩트 업로드는 의미가 없어져 뺐다
+#     (미리보기하려면 `next start`로 직접 띄워야 함)
+#   - Node 버전: `frontend/Dockerfile`이 `node:24-alpine`을 쓰므로 CI도 24로 맞춤
+#
+# `NEXT_PUBLIC_KAKAO_JS_KEY` 등 .env 값은 없어도 빌드가 실패하지 않는다
+# (next.config.ts의 `?? ""` 폴백) — 로컬에서 실제로 미설정 상태로 lint/typecheck/build
+# 전부 통과 확인함. 그래서 이 워크플로우엔 시크릿을 주입하지 않는다.
+#
+# 2026-08-11 브랜치 전략 확정: develop은 CI만, main은 CI + 이미지 빌드/푸시(CD)로 역할을
+# 나눴다(docs/CICD.md). 그래서 push 트리거에서 main을 뺐다 — main 푸시는
+# `.github/workflows/cd-main.yml`이 자체적으로 test-backend/test-frontend를 인라인해서
+# 검증한다(이 파일을 workflow_call로 재사용하지 않는다 — main 파이프라인을 develop CI
+# 파일 변경에서 독립시키기 위한 의도적 선택, cd-main.yml 상단 주석 참고). 그래서 여기
+# 검증 스텝을 고치면 cd-main.yml의 test-frontend 잡도 같이 봐야 한다. 참고로 cd-main.yml의
+# test-frontend는 lint·typecheck까지만 하고 `next build`는 안 돈다 — 실제 빌드는 이후
+# publish 잡이 Docker 이미지를 만들면서 하므로 중복 빌드를 피한 것으로 보인다. PR 검증은
+# 여전히 main/develop 둘 다 대상이다 — PR은 CD와 무관한 별개 게이트라 워크플로 하나로 충분하다.
+name: Frontend CI
+
+on:
+  push:
+    branches: [ "develop" ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-frontend.yml'
+  pull_request:
+    branches: [ "main", "develop" ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-frontend.yml'
+  workflow_call:  # 필요하면 다른 워크플로우가 게이트로 재사용할 수 있게 남겨둠 (현재 호출하는 곳 없음)
+  workflow_dispatch:  # Actions 탭에서 수동 실행 가능
+
+# 같은 브랜치/PR에 새 커밋이 올라오면 이전 실행은 취소해 러너 낭비를 막습니다.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # 이 워크플로우 내의 모든 run 명령어의 기본 실행 위치를 frontend 폴더로 고정합니다.
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # frontend/Dockerfile(node:24-alpine)과 같은 버전을 쓴다.
+          node-version: '24'
+          cache: 'npm'
+          # setup-node 입력값은 defaults.working-directory 영향을 받지 않아 레포 루트 기준 경로로 지정합니다.
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        # package-lock.json 기준으로 정확히 동일한 버전을 설치 (lock 불일치 시 실패)
+        run: npm ci
+
+      - name: Lint with ESLint
+        # eslint.config.mjs (eslint-config-next core-web-vitals + typescript) 설정으로 검사
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
