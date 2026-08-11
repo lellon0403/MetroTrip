@@ -296,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         print("METROTRIP_ORACLE_SYNC_URL이 설정되지 않았습니다.", file=sys.stderr)
         return 1
 
-    mysql_engine = create_engine(settings.database_url)
+    mysql_engine = create_engine(settings.database_url, connect_args=settings.mysql_connect_args())
     oracle_engine = create_engine(settings.oracle_sync_url, connect_args=settings.oracle_connect_args())
 
     if args.verify:

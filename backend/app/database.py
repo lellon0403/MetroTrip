@@ -12,16 +12,9 @@ class Base(DeclarativeBase):
 
 settings = get_settings()
 
-connect_args = {}
-
-if settings.ssl_ca_path:
-    connect_args["ssl"] = {
-        "ca": settings.ssl_ca_path,
-    }
-
 engine = create_engine(
       settings.database_url,
-      connect_args=connect_args,
+      connect_args=settings.mysql_connect_args(),
       pool_size=3,
       max_overflow=2,
       pool_pre_ping=True,

@@ -282,8 +282,13 @@ def get_post(db: Session, post_id: int) -> PostDetailResponse:
         raise _error("POST_NOT_FOUND", "게시글을 찾을 수 없습니다.", 404)
 
     repository.increment_view_count(post)
-    db.commit()
-    db.refresh(post)
+    try:
+        db.commit()
+        db.refresh(post)
+    except RuntimeError:
+        # Oracle 폴백 중(읽기 전용 세션)에는 조회수 증가를 포기하고 조회만 응답한다.
+        # docs/DB-FAILOVER.md §4 "읽기 전용 강제 — 2단 방어".
+        db.rollback()
 
     nickname = repository.get_user_nicknames({post.user_id}).get(post.user_id, "")
     accepted_count = repository.count_accepted(post_id)

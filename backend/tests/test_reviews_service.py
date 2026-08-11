@@ -148,6 +148,22 @@ def test_get_review_increments_view_count(db: Session) -> None:
     assert second.view_count == 2
 
 
+def test_get_review_survives_read_only_session_commit_failure(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Oracle 폴백(읽기 전용 세션)에서는 조회수 증가 커밋이 RuntimeError로 막히지만,
+    조회 자체는 계속 성공해야 한다(docs/DB-FAILOVER.md §4)."""
+    created = review_service.create_review(db, 1, _create_request())
+
+    def _raise_runtime_error() -> None:
+        raise RuntimeError("Oracle 세션은 읽기 전용입니다.")
+
+    monkeypatch.setattr(db, "commit", _raise_runtime_error)
+
+    result = review_service.get_review(db, created.review_id)
+    assert result.review_id == created.review_id
+
+
 def test_get_review_missing_raises_404(db: Session) -> None:
     with pytest.raises(HTTPException) as exc_info:
         review_service.get_review(db, 999)

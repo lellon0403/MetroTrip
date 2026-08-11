@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.db_failover import shutdown_probe_executor
 from app.integrations.local_storage import media_root
 from app.routers import api_router
 from app.routers.health import router as health_router
@@ -73,6 +74,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     start_scheduler()
     yield
     stop_scheduler()
+    shutdown_probe_executor()
 
 
 def create_app() -> FastAPI:

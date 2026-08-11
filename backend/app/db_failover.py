@@ -12,6 +12,7 @@ docs/DB-FAILOVER.md §3, §6 참고.
 """
 
 import json
+import threading
 import time
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
@@ -32,6 +33,7 @@ SYNC_STATE_PATH = BACKEND_DIR / "var" / "sync_state.json"
 _PROBE_TIMEOUT_SECONDS = 2
 
 _state = {"healthy": True, "checked_at": 0.0, "fail": 0, "ok": 0}
+_state_lock = threading.Lock()
 _probe_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db-healthcheck")
 
 
@@ -41,23 +43,40 @@ def _probe() -> None:
 
 
 def primary_healthy() -> bool:
-    """MySQL 상태를 캐시(§6: 기본 5초) 범위 내에서 재사용하며 판정한다."""
-    now = time.monotonic()
-    if now - _state["checked_at"] < settings.failover_cache_seconds:
-        return _state["healthy"]
-    _state["checked_at"] = now
+    """MySQL 상태를 캐시(§6: 기본 5초) 범위 내에서 재사용하며 판정한다.
+
+    FastAPI는 동기 의존성을 스레드풀에서 실행하므로, 캐시 만료 직후 여러
+    요청이 동시에 primary_healthy()를 호출할 수 있다. 락 없이 _state를
+    읽고 쓰면 캐시 판단이 깨지거나(중복 프로브) fail/ok 카운트가 유실될
+    수 있어 락으로 감싼다.
+    """
+    with _state_lock:
+        now = time.monotonic()
+        if now - _state["checked_at"] < settings.failover_cache_seconds:
+            return _state["healthy"]
+        _state["checked_at"] = now
     try:
         _probe_executor.submit(_probe).result(timeout=_PROBE_TIMEOUT_SECONDS)
-        _state["ok"] += 1
-        _state["fail"] = 0
-        if _state["ok"] >= settings.failover_recover_threshold:
-            _state["healthy"] = True
+        ok = True
     except Exception:
-        _state["fail"] += 1
-        _state["ok"] = 0
-        if _state["fail"] >= settings.failover_fail_threshold:
-            _state["healthy"] = False
-    return _state["healthy"]
+        ok = False
+    with _state_lock:
+        if ok:
+            _state["ok"] += 1
+            _state["fail"] = 0
+            if _state["ok"] >= settings.failover_recover_threshold:
+                _state["healthy"] = True
+        else:
+            _state["fail"] += 1
+            _state["ok"] = 0
+            if _state["fail"] >= settings.failover_fail_threshold:
+                _state["healthy"] = False
+        return _state["healthy"]
+
+
+def shutdown_probe_executor() -> None:
+    """앱 종료 시 헬스체크 스레드풀을 정리한다(main.py lifespan에서 호출)."""
+    _probe_executor.shutdown(wait=False, cancel_futures=True)
 
 
 def get_db() -> Generator[Session, None, None]:

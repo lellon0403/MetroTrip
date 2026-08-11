@@ -242,8 +242,13 @@ def get_review(db: Session, review_id: int) -> ReviewResponse:
         raise _error("REVIEW_NOT_FOUND", "후기를 찾을 수 없습니다.", 404)
 
     repository.increment_view_count(review)
-    db.commit()
-    db.refresh(review)
+    try:
+        db.commit()
+        db.refresh(review)
+    except RuntimeError:
+        # Oracle 폴백 중(읽기 전용 세션)에는 조회수 증가를 포기하고 조회만 응답한다.
+        # docs/DB-FAILOVER.md §4 "읽기 전용 강제 — 2단 방어".
+        db.rollback()
     return _build_responses(repository, [review])[0]
 
 

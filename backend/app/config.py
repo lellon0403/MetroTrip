@@ -65,6 +65,12 @@ class Settings(BaseSettings):
             args["wallet_password"] = self.oracle_wallet_password
         return args
 
+    def mysql_connect_args(self) -> dict[str, dict[str, str]]:
+        """Aiven 등 TLS 필수 MySQL 접속 파라미터. CA 경로 미설정 시 빈 dict."""
+        if not self.ssl_ca_path:
+            return {}
+        return {"ssl": {"ca": self.ssl_ca_path}}
+
 
 @lru_cache
 def get_settings() -> Settings:
