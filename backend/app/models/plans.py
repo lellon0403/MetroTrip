@@ -1,9 +1,8 @@
-"""DB 명세서 V1.10과 공유 링크 확장 기반 여행 계획 모델."""
+"""여행 계획과 공유 링크 모델."""
 
 from datetime import datetime, time
 
 from sqlalchemy import (
-    CHAR,
     BigInteger,
     CheckConstraint,
     DateTime,
@@ -107,7 +106,7 @@ class TravelPlanShareLink(Base):
         ForeignKey("travel_plans.plan_id", ondelete="CASCADE"),
         nullable=False,
     )
-    token_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.current_timestamp(),
