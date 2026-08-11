@@ -1,4 +1,4 @@
-"""Environment-based application settings."""
+"""환경 변수 기반 애플리케이션 설정."""
 
 from functools import lru_cache
 from pathlib import Path
@@ -11,6 +11,8 @@ ENV_FILE = BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
+    """환경 변수에서 읽어 들이는 애플리케이션 설정."""
+
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",
@@ -74,4 +76,6 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """애플리케이션 설정을 생성하고 프로세스 안에서 재사용한다."""
+
     return Settings()

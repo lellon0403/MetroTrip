@@ -1,1 +1,1 @@
-"""External service integrations."""
+"""외부 서비스 연동 모듈."""

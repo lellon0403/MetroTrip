@@ -1,8 +1,4 @@
-"""모집 게시판 비즈니스 로직.
-
-V1.10 개정으로 board_posts는 인원 모집 전용이 되어(일반 게시판 제외),
-모든 게시글이 모집 정보를 가진다.
-"""
+"""모집 게시판 비즈니스 로직."""
 
 import math
 from datetime import date, datetime, timezone

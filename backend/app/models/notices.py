@@ -1,4 +1,4 @@
-"""DB 명세서 V1.10 기반 공지사항 모델."""
+"""공지사항 모델."""
 
 from datetime import datetime
 

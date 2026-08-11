@@ -1,1 +1,1 @@
-"""MetroTrip backend application."""
+"""MetroTrip 백엔드 애플리케이션 패키지."""

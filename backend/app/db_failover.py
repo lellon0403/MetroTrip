@@ -38,6 +38,8 @@ _probe_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db-healt
 
 
 def _probe() -> None:
+    """MySQL에 간단한 쿼리를 실행하여 연결 가능 여부를 확인한다."""
+
     with primary_engine.connect() as conn:
         conn.execute(text("SELECT 1"))
 
@@ -115,6 +117,8 @@ def get_read_db() -> Generator[Session, None, None]:
 
 
 def current_routing() -> str:
+    """현재 읽기 요청이 향하는 데이터베이스 이름을 반환한다."""
+
     return "mysql" if primary_healthy() else "oracle"
 
 

@@ -1,4 +1,4 @@
-"""DB 명세서 V1.10 기반 회원 부가 기능 모델."""
+"""회원 부가 기능 모델."""
 
 from datetime import datetime
 

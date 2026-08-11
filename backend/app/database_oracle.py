@@ -31,9 +31,13 @@ class ReadOnlySession(Session):
     """flush/commit 시도를 즉시 예외로 막는 세션."""
 
     def flush(self, *args, **kwargs):
+        """읽기 전용 세션의 flush 시도를 거부한다."""
+
         raise RuntimeError("Oracle 세션은 읽기 전용입니다. flush를 호출할 수 없습니다.")
 
     def commit(self):
+        """읽기 전용 세션의 commit 시도를 거부한다."""
+
         raise RuntimeError("Oracle 세션은 읽기 전용입니다. commit을 호출할 수 없습니다.")
 
 

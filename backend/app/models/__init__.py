@@ -1,4 +1,4 @@
-"""SQLAlchemy database models."""
+"""SQLAlchemy 데이터베이스 모델."""
 
 from app.models.auth import (
     AuthToken,

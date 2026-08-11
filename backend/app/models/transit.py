@@ -1,4 +1,4 @@
-"""DB 명세서 V1.10 기반 노선, 역, 시간표, 장소 모델."""
+"""노선, 역, 시간표, 장소 모델."""
 
 from datetime import datetime, time, timedelta
 from decimal import Decimal

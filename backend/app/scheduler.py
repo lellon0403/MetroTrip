@@ -22,6 +22,8 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def _run_sync_job() -> None:
+    """MySQL 데이터를 Oracle로 동기화하고 성공 상태를 기록한다."""
+
     from scripts.sync_to_oracle import (
         check_empty_strings,
         run_sync,
@@ -59,6 +61,8 @@ def _run_sync_job() -> None:
 
 
 def start_scheduler() -> BackgroundScheduler | None:
+    """Oracle 동기화 설정이 있으면 주기 실행 스케줄러를 시작한다."""
+
     global _scheduler
     if _scheduler is not None:
         logger.warning("동기화 스케줄러가 이미 실행 중입니다. 재시작을 건너뜁니다.")
@@ -85,6 +89,8 @@ def start_scheduler() -> BackgroundScheduler | None:
 
 
 def stop_scheduler() -> None:
+    """실행 중인 동기화 스케줄러를 종료하고 상태를 초기화한다."""
+
     global _scheduler
     if _scheduler is not None:
         _scheduler.shutdown(wait=False)

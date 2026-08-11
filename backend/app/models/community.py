@@ -1,9 +1,4 @@
-"""DB 명세서 V1.10 기반 모집 게시판 모델.
-
-V1.10 개정으로 일반 게시판 기능이 빠지고 board_posts는 인원 모집 전용이 되었다
-(post_type 컬럼 삭제, recruit_capacity/recruit_deadline NOT NULL,
-recruit_status NOT NULL DEFAULT 'RECRUITING').
-"""
+"""모집 게시판 모델."""
 
 from datetime import date, datetime
 
@@ -31,7 +26,7 @@ _PrimaryKeyId = BigInteger().with_variant(Integer, "sqlite")
 class BoardPost(Base):
     """인원 모집 게시글을 board_posts 테이블에 매핑한다.
 
-    plan_id는 DB V1.10의 삭제 정책에 따라 travel_plans를 선택적으로 참조한다.
+    plan_id는 DB 삭제 정책에 따라 travel_plans를 선택적으로 참조한다.
     """
 
     __tablename__ = "board_posts"

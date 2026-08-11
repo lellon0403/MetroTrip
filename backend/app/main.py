@@ -1,3 +1,5 @@
+"""FastAPI 애플리케이션 생성과 공통 요청 처리 구성."""
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -22,13 +24,15 @@ OPENAPI_TAGS = [
     {"name": "여행 계획 공유", "description": "로그인 없는 읽기 전용 공유"},
     {"name": "여행 후기", "description": "여행 후기와 첨부 미디어"},
     {"name": "공지사항", "description": "공지사항 조회"},
-    {"name": "게시판", "description": "일반 글, 모집 글과 참여 신청"},
+    {"name": "게시판", "description": "모집 글과 참여 신청"},
     {"name": "관리자", "description": "공지사항과 장소 관리"},
     {"name": "health", "description": "서버 상태 확인"},
 ]
 
 
 def http_exception_handler(_: Request, exception: HTTPException) -> JSONResponse:
+    """HTTP 예외를 공통 API 오류 응답 형식으로 변환한다."""
+
     return JSONResponse(
         status_code=exception.status_code,
         content={
@@ -48,6 +52,8 @@ def validation_exception_handler(
     _: Request,
     exception: RequestValidationError,
 ) -> JSONResponse:
+    """요청 검증 오류를 공통 API 오류 응답 형식으로 변환한다."""
+
     errors = []
     for item in exception.errors():
         error = dict(item)
@@ -78,14 +84,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    """미들웨어와 라우터가 구성된 FastAPI 애플리케이션을 생성한다."""
+
     settings = get_settings()
     application = FastAPI(
         title=settings.app_name,
         summary="MetroTrip 프론트엔드 협업용 REST API 계약",
         description=(
-            "API 계약과 데이터베이스 명세서 V1.10을 기준으로 작성했습니다. "
-            "공개 노선 및 역 조회 API는 구현되어 있으며 관리자 장소 변경과 "
-            "콘텐츠 삭제 API도 제공합니다."
+            "API 계약과 데이터베이스 명세서 V1.11을 기준으로 작성"
         ),
         debug=settings.debug,
         version="0.1.0",

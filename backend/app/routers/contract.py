@@ -15,11 +15,6 @@ from app.services import auth
 
 bearer_scheme = HTTPBearer(description="로그인 시 발급된 Access Token")
 
-"""
-공통 인프라
-get_current_user_id 의존성 추가
-"""
-
 
 def get_current_user_id(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
