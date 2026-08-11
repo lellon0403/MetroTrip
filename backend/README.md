@@ -1,7 +1,7 @@
 # MetroTrip Backend
 
 FastAPI 기반 MetroTrip REST API 서버입니다. 애플리케이션의 데이터 모델과 조회 로직은
-저장소의 데이터베이스 명세 V1.10을 기준으로 합니다.
+저장소의 데이터베이스 명세 V1.11을 기준으로 합니다.
 
 ## 기술 구성
 
@@ -13,7 +13,7 @@ FastAPI 기반 MetroTrip REST API 서버입니다. 애플리케이션의 데이�
 - Pytest
 - Ruff
 
-초기 구성에서는 Alembic을 사용하지 않습니다. 개발 데이터베이스는 저장소의 V1.10
+초기 구성에서는 Alembic을 사용하지 않습니다. 개발 데이터베이스는 저장소의 V1.11
 MySQL 스키마와 시드 SQL을 직접 적용하여 초기화합니다.
 
 ## 디렉터리
@@ -95,9 +95,9 @@ GET  /api/v1/stations/{station_id}/places
   인증 헤더가 없으면 `null`을 `line_view_logs`에 저장합니다. 잘못된 토큰은 `401`입니다.
 - 역 목록은 이름 검색, 노선 필터, 페이지네이션을 지원하고 좌표와 소속 노선을 함께
   반환합니다. 프론트에서 한 번에 보관하려면 `size=100`으로 조회할 수 있습니다.
-- 시간표는 V1.10의 `train_no`를 `trainNo`로 반환합니다. `arrivalTime`과
+- 시간표는 V1.11의 `train_no`를 `trainNo`로 반환합니다. `arrivalTime`과
   `departureTime`은 `24:00:00` 이후 값도 보존하기 위해 `HH:MM:SS` 문자열입니다.
-- 주변 장소는 V1.10의 `place_stations`에 연결된 반경 1km 이내 장소를 조회합니다.
+- 주변 장소는 V1.11의 `place_stations`에 연결된 반경 1km 이내 장소를 조회합니다.
 
 ### 구현된 관리자 API
 
@@ -142,8 +142,6 @@ GET    /api/v1/shared-plans/{share_token}
   반환하고 DB에는 SHA-256 64자 해시만 저장합니다.
 - 공유 URL의 기본 프론트 주소는 `http://localhost:5173`, 기본 만료 기간은 7일입니다.
   배포 시 `METROTRIP_PUBLIC_FRONTEND_URL`과 `METROTRIP_SHARE_LINK_EXPIRE_DAYS`를 설정합니다.
-- 공유 기능은 DB V1.10 원본에 없는 `travel_plan_share_links` 확장 테이블이 필요합니다.
-  운영 배포 전에 해당 테이블이 실제 DB에 적용됐는지 확인합니다.
 
 ### 구현된 회원 관리 흐름
 
@@ -179,11 +177,11 @@ ruff check .
 
 ## 데이터베이스
 
-프로젝트 루트에서 DB V1.10 MySQL 스키마를 적용합니다. 스키마가 `metrotrip`
+프로젝트 루트에서 DB V1.11 MySQL 스키마를 적용합니다. 스키마가 `metrotrip`
 데이터베이스를 생성하므로 데이터베이스명을 별도로 지정하지 않습니다.
 
 ```powershell
-Get-Content .\db\schema\mysql\schema_mysql_V1.10.sql -Raw |
+Get-Content .\db\schema\mysql\schema_mysql_V1.11.sql -Raw |
   mysql -u 사용자명 -p
 ```
 
