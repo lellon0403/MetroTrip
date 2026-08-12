@@ -1,1 +1,1 @@
-"""Database queries and persistence."""
+"""데이터베이스 조회와 영속성 처리."""

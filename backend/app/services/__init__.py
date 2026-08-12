@@ -1,1 +1,1 @@
-"""Business rules and use cases."""
+"""비즈니스 규칙과 유스케이스."""

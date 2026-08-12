@@ -22,6 +22,8 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def _run_sync_job() -> None:
+    """MySQL 데이터를 Oracle로 동기화하고 성공 상태를 기록한다."""
+
     from scripts.sync_to_oracle import (
         check_empty_strings,
         run_sync,
@@ -30,9 +32,15 @@ def _run_sync_job() -> None:
     )
 
     settings = get_settings()
-    mysql_engine = create_engine(settings.database_url)
-    oracle_engine = create_engine(settings.oracle_sync_url)
+    mysql_engine = None
+    oracle_engine = None
     try:
+        mysql_engine = create_engine(
+            settings.database_url, connect_args=settings.mysql_connect_args()
+        )
+        oracle_engine = create_engine(
+            settings.oracle_sync_url, connect_args=settings.oracle_connect_args()
+        )
         violations = check_empty_strings(mysql_engine)
         if violations:
             logger.error("빈 문자열 위반으로 Oracle 동기화를 건너뜁니다: %s", violations)
@@ -46,12 +54,19 @@ def _run_sync_job() -> None:
     except Exception:
         logger.exception("Oracle 동기화 실패")
     finally:
-        mysql_engine.dispose()
-        oracle_engine.dispose()
+        if mysql_engine is not None:
+            mysql_engine.dispose()
+        if oracle_engine is not None:
+            oracle_engine.dispose()
 
 
 def start_scheduler() -> BackgroundScheduler | None:
+    """Oracle 동기화 설정이 있으면 주기 실행 스케줄러를 시작한다."""
+
     global _scheduler
+    if _scheduler is not None:
+        logger.warning("동기화 스케줄러가 이미 실행 중입니다. 재시작을 건너뜁니다.")
+        return _scheduler
     settings = get_settings()
     if not settings.oracle_sync_url:
         logger.info(
@@ -74,6 +89,8 @@ def start_scheduler() -> BackgroundScheduler | None:
 
 
 def stop_scheduler() -> None:
+    """실행 중인 동기화 스케줄러를 종료하고 상태를 초기화한다."""
+
     global _scheduler
     if _scheduler is not None:
         _scheduler.shutdown(wait=False)

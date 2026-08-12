@@ -154,7 +154,7 @@ HTTP 계층을 담당한다.
 - 행 잠금이 필요한 동시성 쿼리
 
 비즈니스 판단은 하지 않고, 서비스가 요청한 데이터를 읽거나 저장한다.
-`repositories/transit.py`는 DB V1.10 테이블을 기준으로 노선, 역, 시간표, 주변 장소를
+`repositories/transit.py`는 DB V1.11 테이블을 기준으로 노선, 역, 시간표, 주변 장소를
 조회하고 노선 조회 기록을 저장한다. 장소와 `place_stations`·`place_images`를 변경하고,
 장소 삭제 전 `travel_plan_items` 정리와 영향받은 계획 조회도 담당한다.
 `repositories/plans.py`는 계획·일정 조회와 저장, 장소-역 매핑 검증, 공유 링크 조회를
@@ -162,14 +162,14 @@ HTTP 계층을 담당한다.
 
 ### `app/models/`
 
-DB 명세 V1.10에 대응하는 SQLAlchemy 모델을 둔다.
+DB 명세 V1.11에 대응하는 SQLAlchemy 모델을 둔다.
 
 - 테이블과 컬럼
 - PK, FK와 관계
 - DB 수준의 제약조건과 인덱스
 
 API 요청·응답 형식은 `schemas/`에서 별도로 관리한다. DB 모델을 그대로 API 응답으로
-노출하지 않는다. 테이블과 컬럼이 애플리케이션의 기존 설계와 다르면 DB V1.10을
+노출하지 않는다. 테이블과 컬럼이 애플리케이션의 기존 설계와 다르면 DB V1.11을
 우선한다.
 
 ### `app/integrations/`

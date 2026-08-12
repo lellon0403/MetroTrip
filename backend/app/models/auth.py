@@ -1,4 +1,4 @@
-"""DB 명세서 V1.8 기반 인증 모델."""
+"""인증 모델."""
 
 from datetime import datetime
 

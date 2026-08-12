@@ -1,4 +1,4 @@
-"""여행 후기 데이터 조회와 저장"""
+"""여행 후기 데이터 조회와 저장."""
 
 from sqlalchemy import column, delete, func, select, table
 from sqlalchemy.orm import Session

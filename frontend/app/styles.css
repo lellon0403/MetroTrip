@@ -51,11 +51,27 @@ h2 { margin: 0; max-width: 620px; font-size: clamp(34px, 4vw, 54px); letter-spac
 .authPanel input { width: 100%; height: 50px; padding: 0 14px; border: 1px solid #d0d5dd; border-radius: 11px; background: white; font: inherit; outline: none; }
 .authPanel input:focus { border-color: var(--mt-color-brand); box-shadow: 0 0 0 3px rgb(23 92 211 / 12%); }
 .fieldHint { margin: -10px 0 0; color: var(--mt-color-muted); font-size: 12px; }
-.formError { margin: 0; padding: 11px 13px; border-radius: 9px; color: var(--mt-color-danger); background: #fef3f2; font-size: 13px; }
+.formError { margin: 8px 0 0; padding: 11px 13px; border-radius: 9px; color: var(--mt-color-danger); background: #fef3f2; font-size: 13px; }
 .formNotice { margin: 14px 0 0; padding: 11px 13px; border-radius: 9px; color: #067647; background: #ecfdf3; font-size: 13px; }
+.clearableInput { position: relative; display: block; min-width: 0; }
+.clearableInput > input { width: 100%; }
+.clearableInput:has(.inputClearButton) > input { padding-right: 42px; }
+.clearableInput.isPassword > input { padding-right: 76px; }
+.clearableInput.isPassword:has(.inputClearButton) > input { padding-right: 108px; }
+.inputIconButton { position: absolute; top: 50%; z-index: 1; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #667085; background: transparent; cursor: pointer; transform: translateY(-50%); }
+.inputIconButton:hover { color: var(--mt-color-brand); background: #eff4ff; }
+.inputClearButton { right: 8px; }
+.inputPasswordButton { right: 8px; }
+.clearableInput.isPassword .inputClearButton { right: 40px; }
+.clearableInput input:disabled + .inputIconButton, .clearableInput input:read-only + .inputIconButton { display: none; }
+.reviewSearchField .clearableInput, .feedSearch .clearableInput, .placeSearch .clearableInput { flex: 1; }
 .textButton { min-height: 40px; border: 0; color: var(--mt-color-brand); background: transparent; font: inherit; font-weight: 750; cursor: pointer; }
 .formSubmit { width: 100%; border: 0; cursor: pointer; font: inherit; }
 .formSubmit:disabled { opacity: .55; cursor: wait; }
+.wizardActions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wizardActions .primaryButton { flex: 1; border: 0; cursor: pointer; font: inherit; text-align: center; }
+.authPanel .checkField { display: flex; align-items: center; gap: 9px; min-height: 28px; }
+.authPanel .checkField input { width: 18px; height: 18px; padding: 0; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .muted { color: var(--mt-color-muted); }
 .discoverPage { height: calc(100vh - 76px); min-height: 640px; overflow: hidden; background: #eef2f7; }
@@ -232,6 +248,239 @@ h2 { margin: 0; max-width: 620px; font-size: clamp(34px, 4vw, 54px); letter-spac
 .placeListFavorite { align-self: center; color: #f79009; }
 .plannerFab { position: absolute; z-index: 9; right: 22px; bottom: 22px; width: 52px; height: 52px; display: grid; place-items: center; border: 0; border-radius: 50%; color: white; background: var(--mt-color-brand); box-shadow: 0 12px 24px rgb(23 92 211 / 34%); cursor: pointer; }
 .plannerFab:hover { background: #124db3; }
+.viewModeSwitch { position: absolute; z-index: 11; top: 18px; left: 18px; width: 188px; height: 42px; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border: 1px solid rgb(208 213 221 / 88%); border-radius: 999px; background: rgb(255 255 255 / 92%); box-shadow: 0 8px 24px rgb(16 24 40 / 14%); backdrop-filter: blur(12px); }
+.viewModeThumb { position: absolute; z-index: 0; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 999px; background: var(--mt-color-brand); box-shadow: 0 4px 12px rgb(23 92 211 / 24%); transition: transform .2s ease; }
+.viewModeSwitch.subway .viewModeThumb { transform: translateX(100%); }
+.viewModeSwitch button { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 999px; color: #667085; background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; transition: color .2s ease; }
+.viewModeSwitch button[aria-pressed="true"] { color: white; }
+.mapStage.mapMode .mapStatus { top: 72px; }
+.subwayAddFab::after { content: "+"; position: absolute; top: -3px; right: -2px; width: 19px; height: 19px; display: grid; place-items: center; border: 2px solid white; border-radius: 50%; color: var(--mt-color-brand); background: white; font-size: 13px; font-weight: 900; }
+.subwayRouteBoard { position: absolute; inset: 0; min-width: 0; overflow: hidden; display: grid; grid-template-rows: auto auto minmax(220px, 1fr) auto; padding: 78px 28px 24px; color: #344054; background: linear-gradient(150deg, #f7faff 0%, #eef4fc 48%, #e8f0fa 100%); }
+.subwayRouteBoard::before { content: ""; position: absolute; right: -110px; bottom: -170px; width: 500px; height: 500px; border: 1px solid rgb(23 92 211 / 9%); border-radius: 50%; box-shadow: 0 0 0 55px rgb(23 92 211 / 4%), 0 0 0 120px rgb(23 92 211 / 3%); pointer-events: none; }
+.subwayBoardHeader { position: relative; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.subwayBoardHeader h2 { margin: 5px 0 7px; color: #102a5e; font-size: clamp(23px, 2.2vw, 34px); letter-spacing: -.045em; }
+.subwayBoardHeader > div > p:last-child { max-width: 650px; margin: 0; color: #667085; font-size: 12px; line-height: 1.65; }
+.subwayDepartureInput { flex: 0 0 auto; min-height: 43px; display: flex; align-items: center; gap: 7px; padding: 0 11px 0 13px; border: 1px solid #cbd9ec; border-radius: 12px; color: #475467; background: rgb(255 255 255 / 88%); box-shadow: 0 7px 20px rgb(16 42 94 / 7%); font-size: 11px; font-weight: 750; }
+.subwayDepartureInput svg { color: var(--mt-color-brand); }
+.subwayDepartureInput time { min-width: 40px; color: #102a5e; font: inherit; font-weight: 850; text-align: center; }
+.subwaySelectedRoute { position: relative; z-index: 1; min-width: 0; margin-top: 18px; padding: 16px 17px; border: 1px solid rgb(178 204 255 / 72%); border-radius: 16px; background: rgb(255 255 255 / 82%); box-shadow: 0 10px 28px rgb(16 42 94 / 7%); backdrop-filter: blur(12px); }
+.subwaySelectedTopline { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 12px; }
+.subwaySelectedTopline button { display: inline-flex; align-items: center; gap: 4px; border: 0; color: #667085; background: transparent; font: inherit; font-size: 10px; font-weight: 750; cursor: pointer; }
+.subwaySelectedRoute ol { min-width: 0; display: flex; gap: 8px; margin: 11px 0 0; padding: 0 0 2px; overflow-x: auto; list-style: none; }
+.subwaySelectedRoute li { flex: 0 0 auto; display: grid; grid-template-columns: auto auto auto 24px; align-items: center; gap: 7px; min-height: 36px; padding: 4px 5px 4px 9px; border: 1px solid #dce6f5; border-radius: 999px; background: #f8faff; }
+.subwaySelectedRoute li > span, .timelineStationRole { padding: 4px 7px; border-radius: 999px; color: white; background: #102a5e; font-size: 9px; font-weight: 850; }
+.subwaySelectedRoute li.경유 > span, .timelineStationRole.via { color: #175cd3; background: #dbeafe; }
+.subwaySelectedRoute li.도착 > span { background: var(--mt-color-brand); }
+.subwaySelectedRoute li strong { font-size: 11px; }
+.subwaySelectedRoute li time { color: var(--mt-color-brand); font-size: 10px; font-weight: 850; }
+.subwaySelectedRoute li button { width: 23px; height: 23px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #98a2b3; background: transparent; cursor: pointer; }
+.subwaySelectedRoute li button:hover { color: #b42318; background: #fef3f2; }
+.subwayRouteEmpty, .subwayScheduleState, .subwayScheduleError { margin: 10px 0 0; color: #667085; font-size: 11px; }
+.subwayScheduleError { color: #b42318; }
+.subwayScheduleSummary { display: grid; grid-template-columns: auto auto minmax(20px, 1fr) auto; align-items: center; gap: 8px; margin-top: 12px; padding-top: 11px; border-top: 1px solid #e6ecf4; color: #475467; font-size: 11px; }
+.subwayScheduleSummary svg, .subwayScheduleSummary strong { color: var(--mt-color-brand); }
+.subwayScheduleSummary i { height: 1px; background: #b2ccff; }
+.subwayScheduleSummary small { grid-column: 2 / -1; color: #667085; font-size: 10px; }
+.subwayRailViewport { position: relative; z-index: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; display: flex; align-items: center; margin-top: 12px; padding: 20px 10px 28px; scrollbar-color: #98b7df transparent; scrollbar-width: thin; }
+.subwayRailViewport.empty { justify-content: center; overflow: hidden; }
+.subwayStationEmpty { min-height: 150px; display: grid; place-items: center; align-content: center; gap: 7px; color: #667085; text-align: center; }
+.subwayStationEmpty svg { color: var(--mt-color-brand); }
+.subwayStationEmpty strong { color: #344054; font-size: 14px; }
+.subwayStationEmpty p { margin: 0; font-size: 11px; }
+.subwayStationEmpty button { margin-top: 3px; padding: 8px 13px; border: 1px solid #b9cbe4; border-radius: 10px; color: var(--mt-color-brand); background: #fff; font-size: 11px; font-weight: 800; cursor: pointer; }
+.subwayStationRail { min-width: max-content; display: flex; align-items: flex-start; padding-inline: 30px; }
+.subwayStationRail > button { position: relative; width: 86px; flex: 0 0 86px; display: grid; justify-items: center; gap: 8px; padding: 0; border: 0; color: #667085; background: transparent; cursor: pointer; }
+.subwayRailLine { position: absolute; top: 13px; right: 50%; left: -50%; height: 5px; background: #4f86c6; }
+.subwayStationRail > button:first-child .subwayRailLine { left: 50%; }
+.subwayStationDot { position: relative; z-index: 1; width: 31px; height: 31px; display: grid; place-items: center; border: 5px solid #4f86c6; border-radius: 50%; color: white; background: white; box-shadow: 0 0 0 3px rgb(255 255 255 / 80%); font-size: 9px; font-weight: 900; }
+.subwayStationRail > button strong { max-width: 82px; overflow: hidden; font-size: 11px; line-height: 1.25; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.subwayStationRail > button:hover .subwayStationDot, .subwayStationRail > button[aria-pressed="true"] .subwayStationDot { border-color: #102a5e; transform: scale(1.13); }
+.subwayStationRail > button[aria-pressed="true"] strong { color: #102a5e; font-weight: 900; }
+.subwayStationRail > button.onRoute .subwayStationDot { border-color: var(--mt-color-brand); background: var(--mt-color-brand); }
+.subwayStationRail > button.onRoute .subwayRailLine { background: var(--mt-color-brand); }
+.subwayStationRail > button.onRoute strong { color: var(--mt-color-brand); }
+.subwayBoardFooter { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 20px; color: #667085; font-size: 10px; }
+.subwayBoardFooter span { display: inline-flex; align-items: center; gap: 6px; }
+.subwayBoardFooter i { width: 9px; height: 9px; border-radius: 50%; background: #0052a4; }
+.timelineStationRole { display: inline-block; margin-left: 6px; vertical-align: 2px; }
+
+/* 후기 화면 레이아웃 보정 */
+.reviewGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.reviewCard { width: auto; display: block; margin: 0; }
+.reviewMasonryGrid { display: flex; width: auto; margin-left: -18px; }
+.reviewMasonryColumn { padding-left: 18px; background-clip: padding-box; }
+.reviewMasonryColumn > .reviewCard { margin-bottom: 18px; }
+.reviewCardBody > .reviewStats { margin-top: 12px; }
+.reviewCardBody h2 { position: relative; max-height: 2.5em; overflow: hidden; }
+.reviewCardBody h2.isTruncated::after { content: "..."; position: absolute; right: 0; bottom: 0; padding-left: 8px; color: #101828; background: linear-gradient(90deg, rgb(255 255 255 / 0%), white 35%); font-size: 14px; line-height: 1; letter-spacing: .04em; }
+.reviewDetail header { display: block; padding-bottom: 24px; }
+.reviewDetail header { border-bottom: 0; }
+.reviewDetail header > .eyebrow { display: flex; align-items: center; gap: 8px; }
+.reviewDetail header > .eyebrow time { color: var(--mt-color-muted); font-size: 11px; font-weight: 500; letter-spacing: normal; }
+.reviewDetail header h1 { margin: 20px 0 18px; font-size: clamp(30px, 4vw, 46px); line-height: 1.12; }
+.reviewMetaRow { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0; border-top: 1px solid var(--mt-color-line); border-bottom: 1px solid var(--mt-color-line); }
+.reviewMetaPrimary, .reviewMetaSecondary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; color: var(--mt-color-muted); font-size: 12px; }
+.reviewMetaPrimary strong { color: #344054; }
+.reviewMetaPrimary span { display: inline-flex; align-items: center; gap: 4px; }
+.reviewMetaPrimary span:first-of-type { color: #f79009; }
+.reviewMetaPrimary .reviewMetaRating { color: #f79009; }
+.reviewMetaPrimary span.reviewMetaRoute { color: var(--mt-color-brand); }
+.reviewMetaRoute { display: inline-flex; align-items: center; gap: 5px; color: var(--mt-color-brand); font-weight: 800; white-space: nowrap; }
+.reviewMetaSecondary .reviewActions { margin: 0; gap: 5px; }
+.reviewMetaSecondary .reviewActions > span, .reviewMetaSecondary .reviewActions button, .reviewMetaSecondary .reviewActions a { min-height: 30px; padding: 0 8px; }
+.reviewDetail .reviewLike { margin-top: 28px; text-align: center; }
+.reviewDetail .reviewLike button { min-height: 42px; padding: 0 16px; }
+@media (max-width: 780px) { .reviewMetaRow { align-items: flex-start; flex-direction: column; gap: 10px; } .reviewMetaSecondary { width: 100%; justify-content: space-between; } .reviewMetaSecondary .reviewActions { flex-wrap: wrap; } }
+.reviewDetail .reviewInfoRow { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 0; padding: 0 5px 14px; }
+.reviewDetail .reviewInfoRow .reviewActions { margin: 0; }
+.reviewDetail .reviewInfoRow .reviewActions > span, .reviewDetail .reviewInfoRow .reviewActions button:not(.dangerText), .reviewDetail .reviewInfoRow .reviewActions a { min-width: 30px; min-height: 30px; padding: 0; border: 0; color: #475467; background: transparent; }
+.reviewDetail .reviewInfoRow .reviewActions > span:hover, .reviewDetail .reviewInfoRow .reviewActions button:not(.dangerText):hover { color: var(--mt-color-brand); background: #eff4ff; }
+.reviewDetail .reviewMetaRow { justify-content: flex-end; margin-top: 0; padding: 14px 5px; border-top: 1px solid var(--mt-color-line); border-bottom: 0; }
+.reviewDetail .reviewMetaDetails { display: flex; align-items: center; justify-content: flex-end; gap: 14px; color: var(--mt-color-muted); font-size: 12px; }
+.reviewDetail .reviewMetaDetails > span { display: inline-flex; align-items: center; gap: 4px; }
+.reviewDetail .reviewMetaDetails .reviewMetaRating { color: #f79009; }
+.reviewDetail .reviewMetaDetails .reviewMetaRoute { color: var(--mt-color-brand); font-weight: 800; }
+.reviewComposer .composerRoute { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; }
+.reviewComposer .composerRoute > span { align-self: center; padding-bottom: 14px; }
+.editSubmitActions { display: flex; gap: 10px; }
+.editSubmitActions .primaryButton { flex: 1; }
+.dangerButton { min-height: 46px; padding: 0 18px; border: 1px solid #fda29b; border-radius: 10px; color: #b42318; background: #fff5f4; font: inherit; font-weight: 750; cursor: pointer; }
+.dangerButton:hover { background: #fee4e2; }
+.dangerButton:disabled { cursor: progress; opacity: .55; }
+.deleteDialog { width: min(460px, calc(100vw - 30px)); padding: 0; border: 0; border-radius: 18px; box-shadow: 0 24px 60px rgb(16 24 40 / 25%); }
+.deleteDialog::backdrop { background: rgb(16 24 40 / 48%); }
+.deleteDialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px; border-bottom: 1px solid var(--mt-color-line); }
+.deleteDialog h2 { margin: 4px 0 0; }
+.deleteDialog header button { border: 0; color: #667085; background: transparent; cursor: pointer; }
+.deleteDialogBody { display: grid; gap: 12px; padding: 20px; }
+.deleteDialogBody p { margin: 0; color: #667085; font-size: 12px; }
+.deleteDialogBody strong { overflow-wrap: anywhere; padding: 12px; border-radius: 10px; color: #344054; background: #f8faff; }
+.deleteDialogBody input { width: 100%; border: 1px solid #d0d5dd; border-radius: 10px; padding: 13px; font: inherit; }
+.deleteDialogBody .dangerButton { width: 100%; }
+.reviewDocument figure img { display: block; width: auto; max-width: 100%; height: auto; }
+.titleLimitWarning { color: #d92d20; font-size: 11px; font-weight: 650; }
+.reviewMasonryColumn .reviewCover { min-height: 0; aspect-ratio: auto; display: block; padding: 0; }
+.reviewCoverImage { position: static; z-index: 0; display: block; width: 100%; height: auto; object-fit: contain; }
+.reviewMasonryColumn .reviewCover:has(.reviewCoverFallback) { min-height: 170px; display: grid; place-items: center; padding: 16px; }
+.reviewRouteOverlay { z-index: 1; }
+.reviewDetail header { grid-template-columns: 1fr; gap: 14px; }
+.reviewDetail header > .eyebrow, .reviewDetail header > h1, .reviewDetail header > .detailByline, .reviewDetail .detailRoute, .reviewDetail .reviewActions { grid-column: 1; }
+.reviewDetail .detailRoute { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; margin: 0; padding: 14px 0; }
+.reviewDetail .reviewActions { justify-content: flex-start; margin: 0; }
+.reviewActions button, .reviewActions a { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 64px; white-space: nowrap; }
+.storyEditor { position: relative; }
+.editorImageControls { position: absolute; z-index: 5; pointer-events: none; }
+.editorImageRemove { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; color: white; background: rgb(16 24 40 / 78%); box-shadow: 0 3px 8px rgb(16 24 40 / 20%); cursor: pointer; pointer-events: auto; }
+.editorImageRemove:hover { background: #b42318; }
+.storyEditor .tiptap img[data-cover="true"] { border: 3px solid var(--mt-color-brand); }
+.storyEditor .tiptap img { width: auto; height: auto; max-width: 100%; object-fit: contain; }
+.editorImagePersistentBadge { position: absolute; z-index: 6; display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 999px; color: white; background: var(--mt-color-brand); box-shadow: 0 3px 8px rgb(16 24 40 / 22%); font-size: 11px; font-weight: 750; pointer-events: none; }
+.editorImageCoverButton, .editorImageCoverBadge { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); min-height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0 12px; border: 0; border-radius: 999px; color: white; background: var(--mt-color-brand); box-shadow: 0 3px 8px rgb(16 24 40 / 22%); font-size: 11px; font-weight: 750; white-space: nowrap; pointer-events: auto; }
+.editorImageCoverButton { cursor: pointer; }
+.editorImageCoverButton:hover { background: #124db3; }
+.tagEditor > div { padding-top: 8px; }
+.reviewComposer .starField { align-self: end; min-height: 70px; align-content: space-between; }
+.reviewComposer .starField div { min-height: 48px; align-items: center; }
+.reviewComposer .costInputButton { width: 100%; min-height: 48px; overflow: hidden; padding: 13px; border: 1px solid #d0d5dd; border-radius: 11px; color: #344054; background: white; font: inherit; text-align: left; cursor: pointer; }
+.reviewComposer .costInputButton:hover { border-color: #84adff; }
+.costDialog { width: min(430px, calc(100vw - 30px)); padding: 0; border: 0; border-radius: 18px; box-shadow: 0 24px 60px rgb(16 24 40 / 25%); }
+.costDialog::backdrop { background: rgb(16 24 40 / 48%); }
+.costDialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px; border-bottom: 1px solid var(--mt-color-line); }
+.costDialog h2 { margin: 4px 0 0; }
+.costDialog header button { border: 0; color: #667085; background: transparent; cursor: pointer; }
+.costDialogBody { display: grid; gap: 12px; padding: 20px; }
+.costDialogBody label input { border: 0; border-bottom: 1px solid #d0d5dd; border-radius: 0; padding-inline: 0; }
+.costDialogBody small { color: var(--mt-color-muted); font-size: 11px; }
+.costDialogQuick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.costDialogQuick button { min-height: 40px; border: 1px solid var(--mt-color-line); border-radius: 10px; color: #344054; background: white; cursor: pointer; }
+.costDialogQuick button:hover { border-color: #84adff; color: var(--mt-color-brand); background: #f5f8ff; }
+.costDialogBody .primaryButton { width: 100%; justify-content: center; margin-top: 4px; }
+.reviewComposer .composerMeta { display: flex; align-items: flex-start; gap: 14px; }
+.reviewComposer .composerMeta > * { flex: 1 1 0; min-width: 0; }
+.requiredMark { margin-left: 3px; color: #d92d20; font-style: normal; font-weight: 800; }
+.storyEditor .tiptap p:only-child:has(> br:only-child)::before { content: "여행에서 좋았던 순간과 동선을 기록해 보세요."; float: left; height: 0; color: #98a2b3; pointer-events: none; }
+@media (max-width: 780px) { .reviewComposer .composerMeta { flex-direction: column; } .reviewComposer .composerMeta > * { width: 100%; } }
+.reviewDocumentText { max-width: 740px; color: #344054; font-size: 17px; line-height: 1.85; white-space: pre-wrap; }
+.reviewDocumentText p { margin: 0 0 22px; }
+.reviewDocumentText p:last-child { margin-bottom: 0; }
+.reviewDocumentText strong { color: #101828; font-weight: 800; }
+.reviewDocumentText ul, .reviewDocumentText ol { margin: 0 0 22px; padding-left: 24px; }
+
+/* 마이페이지 카드가 같은 행의 긴 콘텐츠 높이를 강제로 공유하지 않도록 한다. */
+.myColumns { align-items: start; }
+.myColumns > section { min-width: 0; align-self: start; }
+.myRow { min-width: 0; align-items: center; }
+.myRow strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.myRow span { flex: 0 0 auto; white-space: nowrap; }
+.myColumns > section:empty::after { content: "아직 등록된 내용이 없습니다."; display: block; padding: 30px 0 12px; color: var(--mt-color-muted); font-size: 13px; text-align: center; }
+.accountSettings { grid-column: 1 / -1; }
+.accountSettings form.dangerZone { grid-template-columns: minmax(220px, 1fr) minmax(180px, 220px) minmax(150px, 190px) auto; }
+.dangerZone label { min-width: 0; }
+.dangerZone input { width: 100%; min-width: 0; }
+.dangerZone button { min-width: 72px; white-space: nowrap; }
+
+/* 마이페이지는 좌측 메뉴와 본문을 분리해 탐색 영역을 고정한다. */
+.myDashboardLayout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: start; }
+.mySidebar { position: sticky; top: 98px; padding: 18px 12px; border: 1px solid var(--mt-color-line); border-radius: 18px; background: rgb(255 255 255 / 82%); box-shadow: var(--mt-shadow-card); }
+.mySidebarEyebrow { margin: 0 10px 12px; color: var(--mt-color-muted); font-size: 10px; font-weight: 850; letter-spacing: .14em; }
+.mySidebar nav { display: grid; gap: 4px; }
+.mySidebar nav a, .mySidebar nav button { display: flex; align-items: center; width: 100%; min-height: 42px; padding: 0 12px; border: 0; border-radius: 10px; color: #667085; background: transparent; font: inherit; font-size: 13px; font-weight: 700; text-align: left; cursor: pointer; }
+.mySidebar nav a:hover, .mySidebar nav button:hover, .mySidebar nav a.isActive, .mySidebar nav button.isActive { color: var(--mt-color-brand); background: #eff4ff; }
+.myDashboardContent { min-width: 0; }
+.myDashboardContent > header { margin-bottom: 28px; }
+.myColumns > section:first-child { min-height: 220px; }
+.accountSettings { grid-column: auto; }
+.myDashboardContent:not([data-panel="dashboard"]) .myStats { display: none; }
+.myDashboardContent[data-panel="dashboard"] .myColumns { display: none; }
+.myDashboardContent[data-panel="recentPlans"] .myColumns > section:not(:nth-child(1)),
+.myDashboardContent[data-panel="favorites"] .myColumns > section:not(:nth-child(3)),
+.myDashboardContent[data-panel="reviews"] .myColumns > section:not(:nth-child(2)),
+.myDashboardContent[data-panel="recruitments"] .myColumns > section:not(:nth-child(4)),
+.myDashboardContent[data-panel="account"] .myColumns > section:not(:nth-child(5)) { display: none; }
+.myDashboardContent:not([data-panel="dashboard"]) .myColumns { grid-template-columns: minmax(0, 1fr); max-width: 900px; }
+.myDashboardContent[data-panel="account"] .myColumns { max-width: 820px; }
+.myDashboardContent[data-panel="account"] .accountSettings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.myDashboardContent[data-panel="account"] .accountSettings > .mySectionTitle { grid-column: 1 / -1; margin: 0; padding: 0 2px; }
+.myDashboardContent[data-panel="account"] .accountSettings > form:not(.dangerZone) { grid-column: 1; align-content: start; margin: 0; padding: 22px; border: 1px solid var(--mt-color-line); border-radius: 18px; background: white; box-shadow: var(--mt-shadow-card); }
+.myDashboardContent[data-panel="account"] .accountSettings > .formNotice,
+.myDashboardContent[data-panel="account"] .accountSettings > .formError { grid-column: 1; margin: -8px 0 0; }
+.myDashboardContent[data-panel="account"] .accountSettings > form.dangerZone { grid-column: 2; display: grid; grid-template-columns: 1fr; align-content: start; gap: 14px; margin: 0; padding: 22px; border: 1px solid #fda29b; border-radius: 18px; background: #fffafa; }
+.myDashboardContent[data-panel="account"] .dangerZone > div { align-self: auto; }
+.myDashboardContent[data-panel="account"] .dangerZone button { width: 100%; }
+.myColumns > section:not(.accountSettings):not(:has(.myRow))::after { content: "아직 등록된 내용이 없습니다."; display: grid; min-height: 150px; place-items: center; color: var(--mt-color-muted); font-size: 13px; }
+.myDashboardContent[data-panel="reviews"] .myRow { min-height: 56px; }
+.myDashboardContent[data-panel="reviews"] .myRow strong { font-size: 14px; }
+.myDashboardContent[data-panel="reviews"] .myRow span { display: inline-flex; align-items: center; gap: 4px; }
+
+@media (max-width: 900px) {
+  .myDashboardLayout { grid-template-columns: 1fr; }
+  .mySidebar { position: static; padding: 10px; }
+  .mySidebar nav { display: flex; gap: 4px; overflow-x: auto; }
+  .mySidebar nav a, .mySidebar nav button { width: auto; flex: 0 0 auto; }
+  .accountSettings form.dangerZone { grid-template-columns: 1fr 1fr auto; }
+  .dangerZone > div { grid-column: 1 / -1; }
+}
+
+@media (max-width: 620px) {
+  .myStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .accountSettings form.dangerZone { grid-template-columns: 1fr; }
+  .dangerZone > div { grid-column: auto; }
+  .myDashboardContent[data-panel="account"] .accountSettings { grid-template-columns: 1fr; }
+  .myDashboardContent[data-panel="account"] .accountSettings > .mySectionTitle,
+  .myDashboardContent[data-panel="account"] .accountSettings > form:not(.dangerZone),
+  .myDashboardContent[data-panel="account"] .accountSettings > .formNotice,
+  .myDashboardContent[data-panel="account"] .accountSettings > .formError,
+  .myDashboardContent[data-panel="account"] .accountSettings > form.dangerZone { grid-column: 1; }
+}
+
+@media (max-width: 780px) {
+  .reviewGrid { grid-template-columns: 1fr; }
+  .reviewMasonryGrid { margin-left: 0; }
+  .reviewMasonryColumn { width: 100%; padding-left: 0; }
+  .reviewDetail > article { padding: 26px 22px 32px; }
+  .reviewDetail .detailRoute { grid-template-columns: 1fr; gap: 9px; }
+  .reviewDetail .reviewActions { justify-content: flex-start !important; }
+}
 .iconButton.neutral { color: #475467; }
 .inspectorTop > div { display: flex; align-items: center; gap: 5px; }
 
@@ -287,4 +536,19 @@ h2 { margin: 0; max-width: 620px; font-size: clamp(34px, 4vw, 54px); letter-spac
   .siteHeader nav a:focus-visible,
   .siteHeader nav a:hover { color: white; background: var(--mt-color-brand); }
   .discoverLayout.hasRightPanel .rightDrawer { bottom: 76px; }
+}
+
+@media (max-width: 780px) {
+  .viewModeSwitch { top: 12px; left: 12px; width: 174px; }
+  .mapStage.mapMode .mapStatus { top: 66px; left: 12px; }
+  .subwayRouteBoard { grid-template-rows: auto auto minmax(150px, 1fr) auto; padding: 66px 14px 18px; }
+  .subwayBoardHeader { display: grid; gap: 12px; }
+  .subwayBoardHeader h2 { font-size: 23px; }
+  .subwayBoardHeader > div > p:last-child { display: none; }
+  .subwayDepartureInput { justify-self: start; }
+  .subwaySelectedRoute { margin-top: 12px; padding: 12px; }
+  .subwaySelectedRoute li { grid-template-columns: auto auto auto 22px; }
+  .subwayScheduleSummary { grid-template-columns: auto auto minmax(12px, 1fr) auto; }
+  .subwayRailViewport { padding-inline: 0; }
+  .subwayBoardFooter { align-items: flex-start; flex-direction: column; gap: 4px; }
 }

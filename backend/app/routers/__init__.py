@@ -1,4 +1,4 @@
-"""Versioned API router composition."""
+"""버전별 API 라우터 구성."""
 
 from fastapi import APIRouter
 

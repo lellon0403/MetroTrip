@@ -13,6 +13,7 @@ import {
   mapLegacyStation,
   mapLegacyStationDetail,
   mapLegacyUser,
+  normalizeMediaUrl,
   toLegacyCategory,
 } from "./legacyMappers";
 
@@ -71,11 +72,20 @@ async function forward(path: string, request: Request, init: RequestInit = {}): 
   try { data = await response.clone().json(); } catch { data = null; }
   return { response, data };
 }
-function passthrough(result: ForwardResult) {
+function oldPassthrough(result: ForwardResult) {
   if (result.response.ok) return json(result.data, result.response.status);
   const detail = result.data?.detail;
   const message = typeof detail === "string" ? detail : "백엔드 요청을 처리하지 못했습니다.";
   return json(errorEnvelope(message, result.response.headers.get("X-Error-Code") ?? "LEGACY_API_ERROR"), result.response.status);
+}
+function backendError(result: ForwardResult) {
+  const code = String(result.data?.code ?? result.data?.error?.code ?? result.response.headers.get("X-Error-Code") ?? `HTTP_${result.response.status}`);
+  const message = String(result.data?.message ?? result.data?.error?.message ?? result.data?.detail ?? `백엔드 요청이 실패했습니다. (${code})`);
+  return { code, message, details: result.data?.details ?? result.data?.error?.details ?? null };
+}
+function passthrough(result: ForwardResult) {
+  if (result.response.ok) return json(result.data, result.response.status);
+  return json({ error: backendError(result) }, result.response.status);
 }
 function page(items: any[], source?: Json) {
   return { items, nextCursor: null, total: Number(source?.totalElements ?? source?.total ?? items.length) };
@@ -184,7 +194,7 @@ async function handleStations(path: string, url: URL, request: Request): Promise
     const lineId = station?.lines?.[0]?.lineId;
     if (!lineId) return json({ stationId: departures[1], items: [], lastImportedAt: null, realtime: false });
     const day = new Date().getDay();
-    const dayType = day === 0 ? "HOLIDAY" : day === 6 ? "SATURDAY" : "WEEKDAY";
+    const dayType = day === 0 || day === 6 ? "WEEKEND" : "WEEKDAY";
     const results = await Promise.all(["UP", "DOWN"].map((direction) => forward(`/api/v1/stations/${departures[1]}/timetables${encodeQuery({ line_id: lineId, day_type: dayType, direction })}`, request)));
     const serviceDate = new Date().toISOString().slice(0, 10);
     const items = results.flatMap((result, directionIndex) => (result.data?.items ?? []).slice(0, 8).map((item: Json, index: number) => ({
@@ -338,9 +348,30 @@ async function handleMe(path: string, request: Request, body: Json): Promise<Res
   return null;
 }
 
-type PlanMetadata = Record<string, { description?: string | null; startDate?: string; endDate?: string; status?: string }>;
+type PlanMetadata = Record<string, { description?: string | null; startDate?: string; endDate?: string; status?: string; items?: Json[] }>;
 function planMetadata() { return storageJson<PlanMetadata>(PLAN_METADATA_KEY, {}); }
 function savePlanMetadata(value: PlanMetadata) { storageSet(PLAN_METADATA_KEY, JSON.stringify(value)); }
+function planMetadataEntry(body: Json) {
+  const items = Array.isArray(body.days)
+    ? body.days.flatMap((day: Json) => Array.isArray(day.items) ? day.items : [])
+      .map((item: Json) => ({
+        itemType: item.itemType,
+        stationId: item.stationId ?? null,
+        placeId: item.placeId ?? null,
+        routeSnapshot: item.routeSnapshot ?? null,
+        note: item.note ?? null,
+        scheduledTime: item.scheduledTime ?? null,
+        durationMinutes: item.durationMinutes ?? null,
+      }))
+    : [];
+  return {
+    description: body.description ?? null,
+    startDate: body.startDate,
+    endDate: body.endDate,
+    status: body.status,
+    items,
+  };
+}
 function legacyPlanWrite(body: Json) {
   const allItems = Array.isArray(body.days) ? body.days.flatMap((day: Json) => day.items ?? []) : [];
   const stationItems = allItems.filter((item: Json) => item.itemType === "STATION" && item.stationId);
@@ -370,7 +401,7 @@ async function handlePlans(path: string, url: URL, request: Request, body: Json)
   if (path === "/api/v1/plans" && request.method === "POST") {
     const result = await forward("/api/v1/plans", request, { method: "POST", body: JSON.stringify(legacyPlanWrite(body)) });
     if (!result.response.ok) return passthrough(result);
-    metadata[String(result.data.planId)] = { description: body.description ?? null, startDate: body.startDate, endDate: body.endDate, status: body.status };
+    metadata[String(result.data.planId)] = planMetadataEntry(body);
     savePlanMetadata(metadata);
     return json(mapLegacyPlan(result.data, metadata[String(result.data.planId)]), 201);
   }
@@ -385,7 +416,7 @@ async function handlePlans(path: string, url: URL, request: Request, body: Json)
   if (detail && request.method === "PUT") {
     const result = await forward(`/api/v1/plans/${detail[1]}`, request, { method: "PATCH", body: JSON.stringify(legacyPlanWrite(body)) });
     if (!result.response.ok) return passthrough(result);
-    metadata[detail[1]] = { description: body.description ?? null, startDate: body.startDate, endDate: body.endDate, status: body.status };
+    metadata[detail[1]] = planMetadataEntry(body);
     savePlanMetadata(metadata);
     return json(mapLegacyPlan(result.data, metadata[detail[1]]));
   }
@@ -461,12 +492,25 @@ async function handleRecruitments(path: string, url: URL, request: Request, body
 }
 
 function reviewContent(body: Json) {
-  return (body.blocks ?? []).filter((block: Json) => block.kind === "PARAGRAPH").map((block: Json) => String(block.text ?? "")).join("\n\n").trim();
+  return (body.blocks ?? []).map((block: Json) => {
+    if (block.kind === "PARAGRAPH") return String(block.text ?? "");
+    if (block.kind === "IMAGE" && block.mediaId) {
+      const media = mediaClaims.get(String(block.mediaId));
+      return media ? `[[METROTRIP_IMAGE:${media.mediaUrl}]]` : "";
+    }
+    return "";
+  }).filter(Boolean).join("\n\n").trim();
 }
 function reviewMedia(body: Json) {
   const ids = new Set<string>((body.blocks ?? []).filter((block: Json) => block.kind === "IMAGE" && block.mediaId).map((block: Json) => String(block.mediaId)));
   if (body.coverMediaId) ids.add(String(body.coverMediaId));
   return [...ids].map((id) => mediaClaims.get(id)).filter(Boolean).map((item) => ({ mediaUrl: item!.mediaUrl, mediaType: item!.mimeType.startsWith("video/") ? "VIDEO" : "IMAGE" }));
+}
+function cacheReviewMedia(review: Json) {
+  for (const item of Array.isArray(review.media) ? review.media : []) {
+    if (!item.mediaId || !item.mediaUrl) continue;
+    mediaClaims.set(String(item.mediaId), { uploadUrl: "", mediaUrl: normalizeMediaUrl(item.mediaUrl), mimeType: String(item.mediaType) === "VIDEO" ? "video/mp4" : "image/jpeg" });
+  }
 }
 function legacyReviewWrite(body: Json) {
   const origin = numeric(body.originStationId);
@@ -495,7 +539,9 @@ async function handleReviews(path: string, url: URL, request: Request, body: Jso
   const detail = path.match(/^\/api\/v1\/reviews\/([^/]+)$/);
   if (detail && request.method === "GET") {
     const result = await forward(`/api/v1/reviews/${detail[1]}`, request);
-    return result.response.ok ? json(mapLegacyReview(result.data, true)) : passthrough(result);
+    if (!result.response.ok) return passthrough(result);
+    cacheReviewMedia(result.data);
+    return json(mapLegacyReview(result.data, true));
   }
   if (detail && request.method === "PUT") {
     const result = await forward(`/api/v1/reviews/${detail[1]}`, request, { method: "PATCH", body: JSON.stringify(legacyReviewWrite(body)) });
@@ -512,8 +558,10 @@ async function handleReviews(path: string, url: URL, request: Request, body: Jso
     const result = await forward("/api/v1/review-media", request, { method: "POST", body: JSON.stringify({ fileName: body.filename, contentType: body.mimeType }) });
     if (!result.response.ok) return passthrough(result);
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    mediaClaims.set(id, { uploadUrl: String(result.data.uploadUrl), mediaUrl: String(result.data.mediaUrl), mimeType: String(body.mimeType) });
-    return json({ id, uploadUrl: result.data.uploadUrl, uploadHeaders: { "Content-Type": body.mimeType }, expiresAt: new Date(Date.now() + numeric(result.data.expiresIn, 900) * 1000).toISOString() }, 201);
+    const uploadUrl = normalizeMediaUrl(result.data.uploadUrl);
+    const mediaUrl = normalizeMediaUrl(result.data.mediaUrl);
+    mediaClaims.set(id, { uploadUrl, mediaUrl, mimeType: String(body.mimeType) });
+    return json({ id, uploadUrl, uploadHeaders: { "Content-Type": body.mimeType }, expiresAt: new Date(Date.now() + numeric(result.data.expiresIn, 900) * 1000).toISOString() }, 201);
   }
   const complete = path.match(/^\/api\/v1\/media\/claims\/([^/]+)\/complete$/);
   if (complete && request.method === "POST") {

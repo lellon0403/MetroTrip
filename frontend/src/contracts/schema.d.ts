@@ -1506,6 +1506,8 @@ export interface components {
              * Format: password
              */
             newPassword: string;
+            /** Newpasswordconfirm */
+            newPasswordConfirm: string;
         };
         /** PasswordResetRequest */
         PasswordResetRequest: {

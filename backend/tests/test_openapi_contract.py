@@ -4,12 +4,13 @@ from app.main import app
 
 
 def test_openapi_description_matches_current_implementation() -> None:
-    """Swagger 설명이 DB V1.10과 현재 구현 범위를 안내하는지 확인한다."""
+    """Swagger 설명이 DB V1.11과 현재 구현 범위를 안내하는지 확인한다."""
     description = app.openapi()["info"]["description"]
 
-    assert "V1.10" in description
+    assert "V1.11" in description
     assert "V1.8" not in description
-    assert "공개 노선 및 역 조회 API는 구현" in description
+    assert "API 계약" in description
+    assert "데이터베이스 명세서" in description
 
 
 def test_openapi_contains_agreed_api_contract() -> None:

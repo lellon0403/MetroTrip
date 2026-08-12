@@ -529,3 +529,26 @@ Oracle 인스턴스는 우선 **MySQL과 같은 머신**에 둡니다. 이에 �
 ## 13. 로드맵
 
 1단계 구현·검증이 끝나면, 2단계(승격+재생)를 별도 문서로 설계합니다. 2단계는 **MySQL 장애 중에도 쓰기를 계속 받아야 한다는 요구가 실제로 확인될 때** 진행하며, 그때 §8.5의 IDENTITY 순번 재설정이 필수 선행 작업이 됩니다.
+
+---
+
+## 14. 코드 리뷰(2026-08-11) 발견 사항과 수정
+
+실제 Aiven MySQL + OCI Oracle 19c 연동을 마친 뒤, 8개 관점(라인별 스캔, 삭제된 동작 감사, 크로스파일 추적, 재사용, 단순화, 효율, 컨벤션, 테스트 커버리지)으로 전체 diff를 리뷰했습니다. 실제로 고친 항목만 기록합니다(스타일 수준 중복·경미한 효율 항목은 기록만 하고 손대지 않았습니다).
+
+| # | 문제 | 파일 | 수정 |
+|---|---|---|---|
+| 1 | **(최우선)** `get_post`/`get_review`가 `get_read_db()`(조회 전용)로 바뀐 뒤에도 조회수 증가 `db.commit()`을 그대로 호출 — Oracle 폴백 중 `ReadOnlySession.commit()`이 `RuntimeError`를 던지는데 잡는 코드가 없어 **처리되지 않은 500**이 남. §3.3이 약속한 "조회는 200으로 계속됨"이 깨짐 | `app/services/community.py`, `app/services/reviews.py` | `db.commit()`을 `try/except RuntimeError`로 감싸고, 실패 시 `db.rollback()` 후 조회 결과만 반환(조회수 증가는 포기) |
+| 2 | `scheduler.py`의 10분 주기 자동 동기화 잡이 MySQL/Oracle 엔진을 자체 생성하면서 wallet(`config_dir`/`wallet_location`/`wallet_password`)·SSL(`ssl_ca_path`) 파라미터를 빠뜨림 — 수동 CLI 동기화는 되는데 **자동 동기화는 항상 실패** | `app/scheduler.py` | `Settings.mysql_connect_args()` 신설(기존 `oracle_connect_args()`와 동일 패턴), `database.py`/`scheduler.py`/`sync_to_oracle.py` 세 곳이 공유하도록 통일 |
+| 3 | `scheduler.py`가 두 번째 `create_engine()` 실패 시 첫 번째 엔진을 `dispose()`하지 않고 누수, `start_scheduler()`가 재호출되면 이전 스케줄러를 정리하지 않고 덮어써 동기화가 중복 실행될 수 있음 | `app/scheduler.py` | 엔진 생성을 `try/finally`로 감싸 항상 정리, `start_scheduler()`에 이미 실행 중이면 재시작을 건너뛰는 가드 추가 |
+| 4 | `db_failover._state`(헬스체크 캐시/카운터)가 락 없이 여러 요청에서 동시에 읽고 쓰임 — FastAPI가 동기 의존성을 스레드풀에서 돌리므로 캐시 만료 직후 여러 스레드가 동시에 프로브를 쏘거나 fail/ok 카운트가 유실될 수 있음 | `app/db_failover.py` | `threading.Lock()`으로 상태 읽기/쓰기 구간을 감쌈 |
+| 5 | 헬스체크용 `_probe_executor`(스레드풀)가 앱 종료 시 정리되지 않아, MySQL이 완전히 다운이 아니라 응답 없이 걸려 있는 상황에서는 종료가 느려질 수 있음 | `app/db_failover.py`, `app/main.py` | `shutdown_probe_executor()` 추가, `main.py`의 `lifespan` 종료 시 호출 |
+
+**검증**: 단위 테스트 5건 추가(총 139개 통과) — 조회수 증가 커밋 실패 시나리오(community/reviews 각 1건), 동시 호출 시 프로브가 한 번만 실행되는지(db_failover 1건), 스케줄러가 wallet/SSL 파라미터를 실제로 넘기는지·중복 시작을 막는지(scheduler 2건). 실제 앱을 기동해 스케줄러의 즉시 실행 잡이 실 Aiven MySQL + OCI Oracle로 성공하는 것도 `var/sync_state.json` 타임스탬프로 확인했습니다(항목 2).
+
+**기록만 하고 고치지 않은 항목** (스타일/경미, 필요 시 별도 진행):
+- `UPSERT_ONLY_TABLES`가 `sync_exclude_tables`와 별개로 하드코딩돼 있어, 나중에 `line_view_logs`(§3.4에서 이미 제외 후보로 언급 — `subway_lines`를 RESTRICT로 참조) 등을 `sync_exclude_tables`에 추가하면 §8.1과 같은 `ORA-02292`가 조용히 재발할 수 있음. 근본적으로는 제외 대상 테이블이 참조하는 RESTRICT 부모를 FK 메타데이터에서 자동으로 골라 upsert 대상에 넣는 방식이 필요
+- `_upsert_table()`이 값이 바뀌지 않은 행도 매번 UPDATE함(테이블이 작아 실효는 미미)
+- `sync_to_oracle.py`의 행 조회·배치 삽입 로직이 `_upsert_table()`/`run_sync()`에 중복
+- `get_db()`/`get_read_db()`의 MySQL 세션 yield 블록이 동일하게 중복
+- `db_failover._state`가 타입 없는 dict — dataclass가 더 명확할 수 있음

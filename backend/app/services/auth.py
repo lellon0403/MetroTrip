@@ -137,6 +137,8 @@ def confirm_verification(
     settings: Settings,
 ) -> str:
     """인증 코드를 확인하고 이메일 인증 토큰을 발급한다."""
+    request.email = request.email.strip().lower()
+    request.code = request.code.strip()
     verification = _find_verification(
         db, request.email, request.purpose, request.code, settings
     )

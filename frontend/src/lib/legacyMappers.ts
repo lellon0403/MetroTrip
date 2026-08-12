@@ -17,6 +17,23 @@ export function toNumber(value: unknown, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+export function normalizeMediaUrl(value: unknown) {
+  const raw = String(value ?? "");
+  if (!raw) return raw;
+  try {
+    const url = new URL(raw);
+    if (!/^localhost$|^127(?:\.\d{1,3}){3}$/.test(url.hostname)) return raw;
+    const configured = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+    const configuredUrl = new URL(configured.replace(/\/api\/v1\/?$/, ""));
+    const host = typeof window !== "undefined" ? window.location.hostname : configuredUrl.hostname;
+    url.hostname = host;
+    url.port = configuredUrl.port || url.port || "8000";
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export function mapLegacyLine(line: LegacyJson | undefined) {
   const id = toId(line?.lineId ?? 0);
   return {
@@ -147,7 +164,7 @@ export function mapLegacyRecruitment(post: LegacyJson) {
     capacity: toNumber(recruitment.capacity, 1),
     acceptedCount: toNumber(recruitment.acceptedCount),
     deadline: dateTime(recruitment.deadline, true),
-    meetingAt: dateTime(recruitment.meetingDate ?? recruitment.deadline),
+    meetingAt: recruitment.meetingDate ? dateTime(recruitment.meetingDate) : "",
     status: String(recruitment.status) === "RECRUITING" ? "OPEN" : "CLOSED",
     version: Math.max(1, Date.parse(String(post.updatedAt ?? post.createdAt ?? nowIso())) || 1),
     createdAt: String(post.createdAt ?? nowIso()),
@@ -179,7 +196,7 @@ export function mapLegacyReview(review: LegacyJson, detail = false) {
   const media = Array.isArray(review.media)
     ? review.media.map((item: LegacyJson, index: number) => ({
         id: toId(item.mediaId),
-        url: String(item.mediaUrl ?? ""),
+        url: normalizeMediaUrl(item.mediaUrl),
         mimeType: String(item.mediaType) === "VIDEO" ? "video/mp4" : "image/jpeg",
         width: null,
         height: null,
@@ -188,6 +205,22 @@ export function mapLegacyReview(review: LegacyJson, detail = false) {
       }))
     : [];
   const content = String(review.content ?? "");
+  const imageBlocks: Array<{ kind: "PARAGRAPH" | "IMAGE"; text?: string; mediaId: string | null; altText: string | null }> = [];
+  const imageToken = /\[\[METROTRIP_IMAGE:([^\]]+)\]\]/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = imageToken.exec(content))) {
+    const paragraph = content.slice(cursor, match.index).trim();
+    if (paragraph) imageBlocks.push({ kind: "PARAGRAPH", text: paragraph, mediaId: null, altText: null });
+    const matchedMedia = media.find((item: { url: string }) => item.url === match?.[1]);
+    if (matchedMedia) imageBlocks.push({ kind: "IMAGE", mediaId: matchedMedia.id, altText: matchedMedia.altText });
+    cursor = imageToken.lastIndex;
+  }
+  const trailingParagraph = content.slice(cursor).trim();
+  if (trailingParagraph) imageBlocks.push({ kind: "PARAGRAPH", text: trailingParagraph, mediaId: null, altText: null });
+  if (!imageBlocks.some((block) => block.kind === "IMAGE") && media.length) {
+    for (const item of media) imageBlocks.push({ kind: "IMAGE", mediaId: item.id, altText: item.altText });
+  }
   const common = {
     id: toId(review.reviewId),
     authorId: toId(review.userId),
@@ -215,7 +248,7 @@ export function mapLegacyReview(review: LegacyJson, detail = false) {
   if (!detail) return common;
   return {
     ...common,
-    blocks: content ? [{ kind: "PARAGRAPH", text: content, mediaId: null, altText: null }] : [],
+    blocks: imageBlocks,
     media,
     updatedAt: String(review.updatedAt ?? review.createdAt ?? nowIso()),
     likedByMe: false,
@@ -228,6 +261,7 @@ type PlanMetadata = {
   startDate?: string;
   endDate?: string;
   status?: string;
+  items?: LegacyJson[];
 };
 
 export function mapLegacyPlan(plan: LegacyJson, metadata: PlanMetadata = {}) {
@@ -236,8 +270,9 @@ export function mapLegacyPlan(plan: LegacyJson, metadata: PlanMetadata = {}) {
   const dayDate = metadata.startDate ?? dateOnly(createdAt);
   const startId = toId(plan.startStationId);
   const endId = toId(plan.endStationId);
-  const placeItems = Array.isArray(plan.items)
-    ? plan.items.map((item: LegacyJson, index: number) => ({
+  const responsePlaceItems = Array.isArray(plan.items) ? plan.items : [];
+  const placeItems = responsePlaceItems
+    .map((item: LegacyJson, index: number) => ({
         id: toId(item.planItemId),
         itemType: "PLACE",
         stationId: item.stationId == null ? null : toId(item.stationId),
@@ -247,31 +282,59 @@ export function mapLegacyPlan(plan: LegacyJson, metadata: PlanMetadata = {}) {
         scheduledTime: item.visitTime == null ? null : String(item.visitTime),
         durationMinutes: null,
         position: index + 2,
-      }))
-    : [];
-  const items: LegacyJson[] = [{
-    id: "start-" + toId(plan.planId),
-    itemType: "STATION",
-    stationId: startId,
-    placeId: null,
-    routeSnapshot: null,
-    note: null,
-    scheduledTime: null,
-    durationMinutes: null,
-    position: 1,
-  }, ...placeItems];
-  if (endId && endId !== startId) {
-    items.push({
-      id: "end-" + toId(plan.planId),
+      }));
+  let items: LegacyJson[];
+  if (metadata.items?.length) {
+    const placeQueues = new Map<string, LegacyJson[]>();
+    for (const item of responsePlaceItems) {
+      const placeId = toId(item.placeId);
+      placeQueues.set(placeId, [...(placeQueues.get(placeId) ?? []), item]);
+    }
+    items = metadata.items.map((savedItem, index) => {
+      const itemType = String(savedItem.itemType ?? "NOTE");
+      const placeId = savedItem.placeId == null ? null : toId(savedItem.placeId);
+      const serverPlace = placeId ? placeQueues.get(placeId)?.shift() : undefined;
+      return {
+        id: serverPlace?.planItemId == null
+          ? `${itemType.toLowerCase()}-${toId(plan.planId)}-${index}`
+          : toId(serverPlace.planItemId),
+        itemType,
+        stationId: savedItem.stationId == null
+          ? serverPlace?.stationId == null ? null : toId(serverPlace.stationId)
+          : toId(savedItem.stationId),
+        placeId,
+        routeSnapshot: savedItem.routeSnapshot ?? null,
+        note: savedItem.note ?? (serverPlace?.memo == null ? null : String(serverPlace.memo)),
+        scheduledTime: savedItem.scheduledTime ?? (serverPlace?.visitTime == null ? null : String(serverPlace.visitTime)),
+        durationMinutes: savedItem.durationMinutes ?? null,
+        position: index + 1,
+      };
+    });
+  } else {
+    items = [{
+      id: "start-" + toId(plan.planId),
       itemType: "STATION",
-      stationId: endId,
+      stationId: startId,
       placeId: null,
       routeSnapshot: null,
       note: null,
       scheduledTime: null,
       durationMinutes: null,
-      position: items.length + 1,
-    });
+      position: 1,
+    }, ...placeItems];
+    if (endId && endId !== startId) {
+      items.push({
+        id: "end-" + toId(plan.planId),
+        itemType: "STATION",
+        stationId: endId,
+        placeId: null,
+        routeSnapshot: null,
+        note: null,
+        scheduledTime: null,
+        durationMinutes: null,
+        position: items.length + 1,
+      });
+    }
   }
   return {
     id: toId(plan.planId),

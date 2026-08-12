@@ -4,11 +4,12 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
+import { ClearableInput } from "@/components/ClearableInput";
 import { api, legacyPublicPost } from "@/lib/api";
 import { SessionRequestError, useSession, type RegisterInput } from "@/lib/session";
 
 type Mode = "login" | "register" | "reset";
-type RegisterDraft = Omit<RegisterInput, "emailVerificationToken">;
+type RegisterWizardDraft = Partial<Omit<RegisterInput, "emailVerificationToken">>;
 
 function apiMessage(error: unknown) {
   if (error && typeof error === "object" && "error" in error) {
@@ -24,13 +25,17 @@ export default function LoginPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [registerDraft, setRegisterDraft] = useState<RegisterDraft | null>(null);
+  const [registerWizardDraft, setRegisterWizardDraft] = useState<RegisterWizardDraft>({});
+  const [registerStep, setRegisterStep] = useState(0);
+  const [registerCode, setRegisterCode] = useState("");
   const [resetEmail, setResetEmail] = useState("");
   const [resetCode, setResetCode] = useState("");
 
   function changeMode(next: Mode) {
     setMode(next);
-    setRegisterDraft(null);
+    setRegisterWizardDraft({});
+    setRegisterStep(0);
+    setRegisterCode("");
     setError(null);
     setNotice(null);
   }
@@ -44,26 +49,6 @@ export default function LoginPage() {
       if (mode === "login") {
         await login({ email: String(form.get("email")), password: String(form.get("password")) });
         router.push("/discover");
-      } else {
-        const password = String(form.get("password"));
-        const passwordConfirm = String(form.get("passwordConfirm"));
-        if (password !== passwordConfirm) throw new Error("비밀번호 확인이 일치하지 않습니다.");
-        const termsAgreed = form.get("termsAgreed") === "on";
-        const privacyAgreed = form.get("privacyAgreed") === "on";
-        if (!termsAgreed || !privacyAgreed) throw new Error("필수 약관에 동의해 주세요.");
-        const draft: RegisterDraft = {
-          email: String(form.get("email")),
-          password,
-          passwordConfirm,
-          displayName: String(form.get("nickname")),
-          name: String(form.get("name")),
-          nickname: String(form.get("nickname")),
-          termsAgreed,
-          privacyAgreed,
-        };
-        await legacyPublicPost("/api/v1/auth/email-verifications", { email: draft.email, purpose: "SIGNUP" });
-        setRegisterDraft(draft);
-        setNotice("이메일로 전송된 6자리 인증 코드를 입력해 주세요.");
       }
     } catch (caught) {
       setError(caught instanceof SessionRequestError || caught instanceof Error ? caught.message : "인증 서버에 연결할 수 없습니다.");
@@ -72,22 +57,73 @@ export default function LoginPage() {
     }
   }
 
-  async function confirmRegister(event: FormEvent<HTMLFormElement>) {
+  async function submitRegisterStep(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!registerDraft) return;
     setPending(true);
     setError(null);
+    const form = new FormData(event.currentTarget);
     try {
-      const form = new FormData(event.currentTarget);
+      if (registerStep === 0) {
+        const termsAgreed = form.get("termsAgreed") === "on";
+        const privacyAgreed = form.get("privacyAgreed") === "on";
+        if (!termsAgreed || !privacyAgreed) throw new Error("필수 약관에 동의해 주세요.");
+        setRegisterWizardDraft((current) => ({ ...current, termsAgreed, privacyAgreed }));
+      } else if (registerStep === 1) {
+        setRegisterWizardDraft((current) => ({ ...current, name: String(form.get("name") ?? "").trim(), nickname: String(form.get("nickname") ?? "").trim() }));
+      } else if (registerStep === 2) {
+        const password = String(form.get("password") ?? "");
+        const passwordConfirm = String(form.get("passwordConfirm") ?? "");
+        if (password !== passwordConfirm) throw new Error("비밀번호와 비밀번호 확인이 일치하지 않습니다.");
+        if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+          throw new Error("비밀번호는 영문, 숫자, 특수문자를 모두 포함해야 합니다.");
+        }
+        setRegisterWizardDraft((current) => ({ ...current, password, passwordConfirm }));
+      } else if (registerStep === 3) {
+        const email = String(form.get("email") ?? "").trim().toLowerCase();
+        await legacyPublicPost("/api/v1/auth/email-verifications", { email, purpose: "SIGNUP" });
+        setRegisterWizardDraft((current) => ({ ...current, email }));
+        setRegisterCode("");
+        setNotice("입력한 이메일로 인증번호를 보냈습니다.");
+      }
+      if (registerStep < 3) setRegisterStep((step) => step + 1);
+      else setRegisterStep(4);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "회원가입 단계를 처리하지 못했습니다.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function confirmRegisterWizard(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const email = String(registerWizardDraft.email ?? "").trim().toLowerCase();
+      const code = registerCode.replace(/\D/g, "").slice(0, 6);
+      if (!/^\d{6}$/.test(code)) throw new Error("인증번호 6자리를 모두 입력해 주세요.");
       const verified = await legacyPublicPost("/api/v1/auth/email-verifications/confirm", {
-        email: registerDraft.email,
-        code: String(form.get("code")),
+        email,
+        code,
         purpose: "SIGNUP",
       });
-      await register({ ...registerDraft, emailVerificationToken: String(verified.verificationToken) });
+      const verificationToken = String(verified.verificationToken ?? verified.verification_token ?? "");
+      if (!verificationToken) throw new Error("이메일 인증 토큰을 받지 못했습니다. 인증번호를 다시 요청해 주세요.");
+      await register({
+        email,
+        password: String(registerWizardDraft.password ?? ""),
+        passwordConfirm: String(registerWizardDraft.passwordConfirm ?? ""),
+        displayName: String(registerWizardDraft.nickname ?? ""),
+        name: String(registerWizardDraft.name ?? ""),
+        nickname: String(registerWizardDraft.nickname ?? ""),
+        termsAgreed: Boolean(registerWizardDraft.termsAgreed),
+        privacyAgreed: Boolean(registerWizardDraft.privacyAgreed),
+        emailVerificationToken: verificationToken,
+      });
       router.push("/discover");
     } catch (caught) {
-      setError(caught instanceof SessionRequestError || caught instanceof Error ? caught.message : "이메일 인증을 완료하지 못했습니다.");
+      setError(caught instanceof Error ? caught.message : "인증번호를 확인하지 못했습니다.");
     } finally {
       setPending(false);
     }
@@ -109,7 +145,7 @@ export default function LoginPage() {
     const password = String(form.get("newPassword"));
     const confirmation = String(form.get("newPasswordConfirm"));
     if (password !== confirmation) { setError("새 비밀번호 확인이 일치하지 않습니다."); setPending(false); return; }
-    const { data, error: apiError } = await api.POST("/api/v1/auth/password-reset/confirm", { body: { email: resetEmail, code: String(form.get("code")), newPassword: password } });
+    const { data, error: apiError } = await api.POST("/api/v1/auth/password-reset/confirm", { body: { email: resetEmail, code: String(form.get("code")), newPassword: password, newPasswordConfirm: confirmation } });
     if (data) { setNotice("비밀번호를 변경했습니다. 새 비밀번호로 로그인해 주세요."); setMode("login"); setResetEmail(""); setResetCode(""); }
     else setError(apiMessage(apiError) ?? "인증 코드와 새 비밀번호를 확인해 주세요.");
     setPending(false);
@@ -132,38 +168,61 @@ export default function LoginPage() {
         <h2 id="auth-title">{mode === "login" ? "다시 오셨네요" : mode === "register" ? "여행을 시작해 볼까요?" : "비밀번호 재설정"}</h2>
         {mode === "reset" ? (
           resetEmail ? (
-            <form onSubmit={confirmReset}>
+            <form key="reset-confirm" onSubmit={confirmReset}>
               <p className="fieldHint"><strong>{resetEmail}</strong>로 받은 6자리 코드를 입력하세요.</p>
-              <label>인증 코드<input name="code" required inputMode="numeric" pattern="[0-9]{6}" value={resetCode} onChange={(event) => setResetCode(event.target.value)} /></label>
-              <label>새 비밀번호<input name="newPassword" required type="password" minLength={8} autoComplete="new-password" /></label>
-              <label>새 비밀번호 확인<input name="newPasswordConfirm" required type="password" minLength={8} autoComplete="new-password" /></label>
+              <label>인증 코드<ClearableInput name="code" required inputMode="numeric" pattern="[0-9]{6}" value={resetCode} onChange={(event) => setResetCode(event.target.value)} /></label>
+              <label>새 비밀번호<ClearableInput name="newPassword" required type="password" minLength={8} autoComplete="new-password" /></label>
+              <label>새 비밀번호 확인<ClearableInput name="newPasswordConfirm" required type="password" minLength={8} autoComplete="new-password" /></label>
               <p className="fieldHint">8자 이상, 영문·숫자·특수문자를 모두 포함해 주세요.</p>
               <button className="primaryButton formSubmit" disabled={pending} type="submit">{pending ? "변경 중…" : "비밀번호 변경"}</button>
               <button className="textButton" type="button" onClick={() => setResetEmail("")}>이메일 다시 입력</button>
             </form>
           ) : (
-            <form onSubmit={requestReset}>
+            <form key="reset-request" onSubmit={requestReset}>
               <p className="fieldHint">가입한 이메일로 10분간 유효한 인증 코드를 보냅니다.</p>
-              <label>이메일<input name="email" required type="email" autoComplete="email" /></label>
+              <label>이메일<ClearableInput name="email" required type="email" autoComplete="email" /></label>
               <button className="primaryButton formSubmit" disabled={pending} type="submit">{pending ? "요청 중…" : "인증 코드 요청"}</button>
             </form>
           )
-        ) : mode === "register" && registerDraft ? (
-          <form onSubmit={confirmRegister}>
-            <p className="fieldHint"><strong>{registerDraft.email}</strong>로 받은 6자리 인증 코드를 입력하세요.</p>
-            <label>인증 코드<input name="code" required inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" /></label>
-            <button className="primaryButton formSubmit" disabled={pending} type="submit">{pending ? "가입 중…" : "인증하고 가입"}</button>
-            <button className="textButton" type="button" onClick={() => setRegisterDraft(null)}>가입 정보 다시 입력</button>
-          </form>
+        ) : mode === "register" ? (
+          registerStep === 0 ? (
+            <form key="register-consent" onSubmit={submitRegisterStep}>
+              <p className="fieldHint">서비스 이용을 위해 필수 약관에 동의해 주세요.</p>
+              <label className="checkField"><input name="termsAgreed" type="checkbox" required /> 이용약관 동의 (필수)</label>
+              <label className="checkField"><input name="privacyAgreed" type="checkbox" required /> 개인정보 처리방침 동의 (필수)</label>
+              <button className="primaryButton formSubmit" disabled={pending} type="submit">다음</button>
+            </form>
+          ) : registerStep === 1 ? (
+            <form key="register-profile" onSubmit={submitRegisterStep}>
+              <label>이름<ClearableInput name="name" required minLength={1} maxLength={50} defaultValue={registerWizardDraft.name ?? ""} autoComplete="name" /></label>
+              <label>닉네임<ClearableInput name="nickname" required minLength={2} maxLength={20} defaultValue={registerWizardDraft.nickname ?? ""} autoComplete="nickname" /></label>
+              <div className="wizardActions"><button className="textButton" type="button" onClick={() => setRegisterStep(0)}>이전</button><button className="primaryButton" disabled={pending} type="submit">다음</button></div>
+            </form>
+          ) : registerStep === 2 ? (
+            <form key="register-password" onSubmit={submitRegisterStep}>
+              <label>비밀번호<ClearableInput name="password" required type="password" minLength={8} defaultValue={registerWizardDraft.password ?? ""} autoComplete="new-password" /></label>
+              <label>비밀번호 확인<ClearableInput name="passwordConfirm" required type="password" minLength={8} defaultValue={registerWizardDraft.passwordConfirm ?? ""} autoComplete="new-password" /></label>
+              <p className="fieldHint">8자 이상, 영문·숫자·특수문자를 모두 포함해 주세요.</p>
+              <div className="wizardActions"><button className="textButton" type="button" onClick={() => setRegisterStep(1)}>이전</button><button className="primaryButton" disabled={pending} type="submit">다음</button></div>
+            </form>
+          ) : registerStep === 3 ? (
+            <form key="register-email" onSubmit={submitRegisterStep}>
+              <label>이메일<ClearableInput name="email" required type="email" defaultValue={registerWizardDraft.email ?? ""} autoComplete="email" /></label>
+              <p className="fieldHint">입력한 이메일로 6자리 인증번호를 보냅니다.</p>
+              <div className="wizardActions"><button className="textButton" type="button" onClick={() => setRegisterStep(2)}>이전</button><button className="primaryButton" disabled={pending} type="submit">인증번호 받기</button></div>
+            </form>
+          ) : (
+            <form key="register-verify" onSubmit={confirmRegisterWizard}>
+              <p className="fieldHint"><strong>{registerWizardDraft.email}</strong>로 받은 인증번호를 입력하세요.</p>
+              <label>인증번호<ClearableInput name="code" required inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" value={registerCode} onChange={(event) => setRegisterCode(event.target.value.replace(/\D/g, "").slice(0, 6))} /></label>
+              <div className="wizardActions"><button className="textButton" type="button" onClick={() => setRegisterStep(3)}>이전</button><button className="primaryButton" disabled={pending} type="submit">최종 등록</button></div>
+            </form>
+          )
         ) : (
-          <form onSubmit={submitAuth}>
-            {mode === "register" && <label>이름<input name="name" required minLength={1} maxLength={50} autoComplete="name" /></label>}
-            {mode === "register" && <label>표시 이름<input name="nickname" required minLength={2} maxLength={20} autoComplete="nickname" /></label>}
-            <label>이메일<input name="email" required type="email" autoComplete="email" /></label>
-            <label>비밀번호<input name="password" required type="password" minLength={mode === "login" ? 1 : 8} autoComplete={mode === "login" ? "current-password" : "new-password"} /></label>
-            {mode === "register" && <label>비밀번호 확인<input name="passwordConfirm" required type="password" minLength={8} autoComplete="new-password" /></label>}
-            {mode === "register" && <><p className="fieldHint">8자 이상, 영문·숫자·특수문자를 모두 포함해 주세요.</p><label><input name="termsAgreed" type="checkbox" required /> 이용약관 동의 (필수)</label><label><input name="privacyAgreed" type="checkbox" required /> 개인정보 처리방침 동의 (필수)</label></>}
-            <button className="primaryButton formSubmit" disabled={pending} type="submit">{pending ? "처리 중…" : mode === "login" ? "로그인" : "인증 코드 받기"}</button>
+          <form key={`auth-${mode}`} onSubmit={submitAuth}>
+            <label>이메일<ClearableInput name="email" required type="email" autoComplete="email" /></label>
+            <label>비밀번호<ClearableInput name="password" required type="password" minLength={1} autoComplete="current-password" /></label>
+            <button className="primaryButton formSubmit" disabled={pending} type="submit">{pending ? "처리 중…" : "로그인"}</button>
           </form>
         )}
         {notice && <p className="formNotice" role="status">{notice}</p>}

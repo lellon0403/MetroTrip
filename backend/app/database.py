@@ -1,3 +1,5 @@
+"""기본 데이터베이스 엔진과 요청 단위 세션 관리."""
+
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
@@ -7,21 +9,16 @@ from app.config import get_settings
 
 
 class Base(DeclarativeBase):
+    """모든 SQLAlchemy ORM 모델이 상속하는 선언형 기본 클래스."""
+
     pass
 
 
 settings = get_settings()
 
-connect_args = {}
-
-if settings.ssl_ca_path:
-    connect_args["ssl"] = {
-        "ca": settings.ssl_ca_path,
-    }
-
 engine = create_engine(
       settings.database_url,
-      connect_args=connect_args,
+      connect_args=settings.mysql_connect_args(),
       pool_size=3,
       max_overflow=2,
       pool_pre_ping=True,
@@ -34,6 +31,8 @@ SessionLocal = sessionmaker(
 
 
 def get_db() -> Generator[Session, None, None]:
+    """요청에 데이터베이스 세션을 제공하고 사용 후 닫는다."""
+
     database = SessionLocal()
     try:
         yield database

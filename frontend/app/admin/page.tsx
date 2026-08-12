@@ -3,6 +3,7 @@
 import type { components } from "@metrotrip/contracts";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ClearableInput } from "@/components/ClearableInput";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -55,7 +56,8 @@ export default function AdminPage() {
 
   async function createNotice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const { data, error: apiError } = await api.POST("/api/v1/admin/notices", { body: {
       title: String(form.get("title")), body: String(form.get("body")),
       status: String(form.get("status")) as "DRAFT" | "PUBLISHED",
@@ -65,7 +67,7 @@ export default function AdminPage() {
       endsAt: form.get("endsAt") ? new Date(String(form.get("endsAt"))).toISOString() : null,
     } });
     if (!data) return setError(message(apiError));
-    event.currentTarget.reset();
+    formElement.reset();
     setNotice("공지를 저장했습니다.");
     await load();
   }
@@ -109,7 +111,7 @@ export default function AdminPage() {
       <div className="adminRows">{reports.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.resourceType} · {item.reason}</strong><p>{item.detail ?? "상세 사유 없음"}</p><small>{new Date(item.createdAt).toLocaleString("ko-KR")} · {item.status}</small></div>{item.status === "OPEN" ? <div className="rowActions"><button type="button" onClick={() => void resolveReport(item, "RESOLVED")}>처리</button><button type="button" onClick={() => void resolveReport(item, "RESOLVED", true)}>숨김 처리</button><button type="button" onClick={() => void resolveReport(item, "DISMISSED")}>기각</button></div> : null}</article>)}</div>
     </section>
 
-    <section className="adminGrid"><div className="adminPanel"><h2>공지 · 이벤트 관리</h2><form className="adminForm" onSubmit={createNotice}><label>종류<select name="kind" defaultValue="NOTICE"><option value="NOTICE">공지</option><option value="EVENT">이벤트</option></select></label><label>제목<input name="title" minLength={2} required /></label><label>본문<textarea name="body" rows={5} minLength={2} required /></label><label>배너 URL (선택)<input name="bannerUrl" type="url" /></label><div className="adminDateFields"><label>시작일<input name="startsAt" type="datetime-local" /></label><label>종료일<input name="endsAt" type="datetime-local" /></label></div><label>상태<select name="status" defaultValue="DRAFT"><option value="DRAFT">초안</option><option value="PUBLISHED">즉시 게시</option></select></label><button className="primaryButton" type="submit">저장</button></form><div className="adminRows compact">{notices.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.title}</strong><small>{item.kind === "EVENT" ? "이벤트" : "공지"} · {item.status}</small></div>{item.status === "DRAFT" ? <button type="button" onClick={() => void publishNotice(item)}>게시</button> : null}</article>)}</div></div>
+    <section className="adminGrid"><div className="adminPanel"><h2>공지 · 이벤트 관리</h2><form className="adminForm" onSubmit={createNotice}><label>종류<select name="kind" defaultValue="NOTICE"><option value="NOTICE">공지</option><option value="EVENT">이벤트</option></select></label><label>제목<ClearableInput name="title" minLength={2} required /></label><label>본문<textarea name="body" rows={5} minLength={2} required /></label><label>배너 URL (선택)<ClearableInput name="bannerUrl" type="url" /></label><div className="adminDateFields"><label>시작일<input name="startsAt" type="datetime-local" /></label><label>종료일<input name="endsAt" type="datetime-local" /></label></div><label>상태<select name="status" defaultValue="DRAFT"><option value="DRAFT">초안</option><option value="PUBLISHED">즉시 게시</option></select></label><button className="primaryButton" type="submit">저장</button></form><div className="adminRows compact">{notices.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.title}</strong><small>{item.kind === "EVENT" ? "이벤트" : "공지"} · {item.status}</small></div>{item.status === "DRAFT" ? <button type="button" onClick={() => void publishNotice(item)}>게시</button> : null}</article>)}</div></div>
       <div className="adminPanel"><h2>장소 품질</h2><div className="adminRows compact">{places.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.name}</strong><small>{item.dataStatus}</small></div>{item.dataStatus !== "VERIFIED" ? <button type="button" onClick={() => void verifyPlace(item.id)}>검증 완료</button> : null}</article>)}</div></div>
     </section>
 

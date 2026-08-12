@@ -1,4 +1,4 @@
-"""General board and recruitment API contracts."""
+"""모집 게시판 API 라우터."""
 
 from typing import Annotated
 

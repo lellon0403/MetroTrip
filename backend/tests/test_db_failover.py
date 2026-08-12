@@ -62,6 +62,38 @@ def test_primary_healthy_uses_cache_within_window(monkeypatch):
     assert len(calls) == 1
 
 
+def test_primary_healthy_probes_once_under_concurrent_calls(monkeypatch):
+    """캐시 만료 직후 여러 요청이 동시에 들어와도 프로브는 한 번만 실행돼야 한다.
+
+    FastAPI가 동기 의존성을 스레드풀에서 돌리므로 _state에 락이 없으면
+    여러 스레드가 동시에 캐시 만료를 관찰하고 각자 프로브를 쏠 수 있다.
+    """
+    import threading
+
+    db_failover.settings.failover_cache_seconds = 999
+    call_count = 0
+    probe_started = threading.Event()
+    release_probe = threading.Event()
+
+    def slow_probe():
+        nonlocal call_count
+        call_count += 1
+        probe_started.set()
+        release_probe.wait(timeout=2)
+
+    monkeypatch.setattr(db_failover, "_probe", slow_probe)
+
+    threads = [threading.Thread(target=db_failover.primary_healthy) for _ in range(5)]
+    for t in threads:
+        t.start()
+    assert probe_started.wait(timeout=2)
+    release_probe.set()
+    for t in threads:
+        t.join(timeout=2)
+
+    assert call_count == 1
+
+
 def test_get_db_raises_503_when_unhealthy(monkeypatch):
     monkeypatch.setattr(db_failover, "primary_healthy", lambda: False)
     with pytest.raises(HTTPException) as exc_info:

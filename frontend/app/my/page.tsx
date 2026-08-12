@@ -5,6 +5,7 @@ import { Star, ThumbsUp } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
+import { ClearableInput } from "@/components/ClearableInput";
 import { api } from "@/lib/api";
 import { SessionRequestError, useSession } from "@/lib/session";
 
@@ -16,6 +17,8 @@ type Dashboard = {
   favorites: components["schemas"]["FavoriteCollection"] | null;
 };
 
+type MyPanel = "dashboard" | "recentPlans" | "favorites" | "reviews" | "recruitments" | "account";
+
 const empty: Dashboard = { plans: [], reviews: [], recruitments: [], applications: [], favorites: null };
 
 export default function MyPage() {
@@ -24,12 +27,13 @@ export default function MyPage() {
   const [failed, setFailed] = useState<string[]>([]);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<MyPanel>("dashboard");
 
   useEffect(() => {
     if (status !== "authenticated") return;
     const task = setTimeout(() => void (async () => {
       const results = await Promise.allSettled([
-        api.GET("/api/v1/plans", { params: { query: { limit: 20 } } }),
+        api.GET("/api/v1/plans", { params: { query: { limit: 100 } } }),
         api.GET("/api/v1/me/reviews"),
         api.GET("/api/v1/me/recruitments"),
         api.GET("/api/v1/me/recruitment-applications"),
@@ -83,30 +87,45 @@ export default function MyPage() {
 
   return (
     <main className="myPage contentShell">
+      <div className="myDashboardLayout">
+        <aside className="mySidebar" aria-label="마이페이지 메뉴">
+          <p className="mySidebarEyebrow">MY PAGE</p>
+          <nav>
+            <button className={activePanel === "dashboard" ? "isActive" : ""} type="button" onClick={() => setActivePanel("dashboard")}>대시보드</button>
+            <button className={activePanel === "recentPlans" ? "isActive" : ""} type="button" onClick={() => setActivePanel("recentPlans")}>최근 일정</button>
+            <button className={activePanel === "favorites" ? "isActive" : ""} type="button" onClick={() => setActivePanel("favorites")}>저장한 곳</button>
+            <button className={activePanel === "reviews" ? "isActive" : ""} type="button" onClick={() => setActivePanel("reviews")}>후기 관리</button>
+            <button className={activePanel === "recruitments" ? "isActive" : ""} type="button" onClick={() => setActivePanel("recruitments")}>모집 활동</button>
+            <button className={activePanel === "account" ? "isActive" : ""} type="button" onClick={() => setActivePanel("account")}>계정 설정</button>
+          </nav>
+        </aside>
+        <div className="myDashboardContent" data-panel={activePanel}>
       <header><p className="eyebrow">MY METROTRIP</p><h1>{user?.displayName}님의 여행</h1><p>계획, 기록, 모집 활동과 저장한 장소를 한곳에서 확인합니다.</p></header>
       {failed.length ? <div className="inlineError reviewError" role="alert"><p>{failed.join(", ")} 정보를 불러오지 못했습니다. 다른 영역은 계속 사용할 수 있습니다.</p></div> : null}
       <section className="myStats"><article><strong>{data.plans.length}</strong><span>일정</span></article><article><strong>{data.reviews.length}</strong><span>후기</span></article><article><strong>{data.recruitments.length}</strong><span>내 모집</span></article><article><strong>{data.applications.length}</strong><span>참여 신청</span></article></section>
       <div className="myColumns">
-        <section><div className="mySectionTitle"><h2>최근 일정</h2><Link href="/plans">전체 보기</Link></div>{data.plans.slice(0, 4).map((plan) => <Link className="myRow" key={plan.id} href="/plans"><strong>{plan.title}</strong><span>{plan.startDate} · {plan.status}</span></Link>)}</section>
-        <section><div className="mySectionTitle"><h2>내 후기</h2><Link href="/reviews/new">작성</Link></div>{data.reviews.slice(0, 4).map((review) => <Link className="myRow" key={review.id} href={`/reviews/${review.id}`} prefetch={false}><strong>{review.title}</strong><span><Star size={13} fill="currentColor" aria-hidden /> {review.rating} · <ThumbsUp size={12} aria-hidden /> {review.likeCount}</span></Link>)}</section>
-        <section><div className="mySectionTitle"><h2>저장한 곳</h2><Link href="/discover">탐색</Link></div>{data.favorites?.stations.slice(0, 3).map((station) => <div className="myRow" key={station.id}><strong>{station.name}역</strong><span>즐겨찾는 역</span></div>)}{data.favorites?.places.slice(0, 3).map((place) => <div className="myRow" key={place.id}><strong>{place.name}</strong><span>{place.category}</span></div>)}</section>
-        <section><div className="mySectionTitle"><h2>모집 활동</h2><Link href="/recruitments">전체 보기</Link></div>{data.recruitments.slice(0, 2).map((item) => <Link className="myRow" href={`/recruitments/${item.id}`} key={item.id} prefetch={false}><strong>{item.title}</strong><span>{item.acceptedCount}/{item.capacity}명</span></Link>)}{data.applications.slice(0, 2).map((item) => <Link className="myRow" href={`/recruitments/${item.recruitmentId}`} key={item.id} prefetch={false}><strong>참여 신청</strong><span>{item.status}</span></Link>)}</section>
+        <section><div className="mySectionTitle"><h2>최근 일정</h2><Link href="/plans">전체 보기</Link></div>{data.plans.map((plan) => <Link className="myRow" key={plan.id} href="/plans"><strong>{plan.title}</strong><span>{plan.startDate} · {plan.status}</span></Link>)}</section>
+        <section><div className="mySectionTitle"><h2>내 후기</h2><Link href="/reviews/new">작성</Link></div>{data.reviews.map((review) => <Link className="myRow" key={review.id} href={`/reviews/${review.id}`} prefetch={false}><strong>{review.title}</strong><span><Star size={13} fill="currentColor" aria-hidden /> {review.rating} · <ThumbsUp size={12} aria-hidden /> {review.likeCount}</span></Link>)}</section>
+        <section><div className="mySectionTitle"><h2>저장한 곳</h2><Link href="/discover">탐색</Link></div>{data.favorites?.stations.map((station) => <div className="myRow" key={station.id}><strong>{station.name}역</strong><span>즐겨찾는 역</span></div>)}{data.favorites?.places.map((place) => <div className="myRow" key={place.id}><strong>{place.name}</strong><span>{place.category}</span></div>)}</section>
+        <section><div className="mySectionTitle"><h2>모집 활동</h2><Link href="/recruitments">전체 보기</Link></div>{data.recruitments.map((item) => <Link className="myRow" href={`/recruitments/${item.id}`} key={item.id} prefetch={false}><strong>{item.title}</strong><span>{item.acceptedCount}/{item.capacity}명</span></Link>)}{data.applications.map((item) => <Link className="myRow" href={`/recruitments/${item.recruitmentId}`} key={item.id} prefetch={false}><strong>참여 신청</strong><span>{item.status}</span></Link>)}</section>
         <section id="account" className="accountSettings">
           <div className="mySectionTitle"><h2>계정 설정</h2><span>PII 익명화 정책</span></div>
           <form onSubmit={saveProfile}>
-            <label>이메일<input value={user?.email ?? ""} disabled /></label>
-            <label>표시 이름<input name="displayName" defaultValue={user?.displayName ?? ""} minLength={2} maxLength={40} required /></label>
+            <label>이메일<ClearableInput value={user?.email ?? ""} disabled /></label>
+            <label>표시 이름<ClearableInput name="displayName" defaultValue={user?.displayName ?? ""} minLength={2} maxLength={40} required /></label>
             <button className="primaryButton" type="submit">프로필 저장</button>
           </form>
           {accountMessage && <p className="formNotice" role="status">{accountMessage}</p>}
           {accountError && <p className="formError" role="alert">{accountError}</p>}
           <form className="dangerZone" onSubmit={removeAccount}>
             <div><strong>회원 탈퇴</strong><p>현재 비밀번호와 DELETE를 입력하면 개인정보를 익명화하고 모든 세션을 폐기합니다.</p></div>
-            <label>현재 비밀번호<input name="deletePassword" type="password" autoComplete="current-password" required /></label>
-            <label>확인 문구<input name="deleteConfirmation" placeholder="DELETE" autoComplete="off" required /></label>
+            <label>현재 비밀번호<ClearableInput name="deletePassword" type="password" autoComplete="current-password" required /></label>
+            <label>확인 문구<ClearableInput name="deleteConfirmation" placeholder="DELETE" autoComplete="off" required /></label>
             <button type="submit">탈퇴</button>
           </form>
         </section>
+      </div>
+      </div>
       </div>
     </main>
   );

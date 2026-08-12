@@ -9,6 +9,8 @@ from app.schemas.common import ApiSchema
 
 
 class UserProfileResponse(ApiSchema):
+    """현재 사용자의 계정 및 프로필 정보 응답."""
+
     user_id: int
     email: str
     name: str
@@ -56,6 +58,8 @@ class PasswordChangeRequest(ApiSchema):
 
 
 class FavoriteResponse(ApiSchema):
+    """사용자가 즐겨찾기한 역 정보 응답."""
+
     favorite_id: int
     station_id: int
     station_name: str
@@ -63,4 +67,6 @@ class FavoriteResponse(ApiSchema):
 
 
 class FavoriteListResponse(ApiSchema):
+    """현재 사용자의 역 즐겨찾기 목록 응답."""
+
     items: list[FavoriteResponse]

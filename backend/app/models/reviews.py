@@ -1,4 +1,4 @@
-"""DB 명세서 V1.10 기반 여행 후기 모델."""
+"""여행 후기 모델."""
 
 from datetime import datetime
 
@@ -25,7 +25,7 @@ _PrimaryKeyId = BigInteger().with_variant(Integer, "sqlite")
 class Review(Base):
     """여행 후기를 reviews 테이블에 매핑한다.
 
-    start_station_id/end_station_id/plan_id는 DB V1.10의 삭제 정책까지 포함해
+    start_station_id/end_station_id/plan_id는 DB 삭제 정책까지 포함해
     stations와 travel_plans를 참조한다.
     """
 

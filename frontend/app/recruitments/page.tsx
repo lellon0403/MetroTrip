@@ -1,52 +1,63 @@
 "use client";
 
 import type { components } from "@metrotrip/contracts";
-import { CalendarDays, ChevronRight, Eye, MessageCircle, Search, UserPlus, Users } from "lucide-react";
+import { CalendarDays, ChevronRight, Eye, Search, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ClearableInput } from "@/components/ClearableInput";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 type Recruitment = components["schemas"]["RecruitmentSummary"];
-type Plan = components["schemas"]["PlanSummary"];
 type RecruitmentStatus = "" | "OPEN" | "CLOSED" | "CANCELED";
 type RecruitmentSort = "latest" | "popular" | "closing";
 
 function timeLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "일정 미정";
   return new Intl.DateTimeFormat("ko-KR", {
     month: "short",
     day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  }).format(date);
+}
+
+function apiMessage(error: unknown) {
+  if (error && typeof error === "object" && "error" in error) {
+    return (error as { error?: { message?: string } }).error?.message ?? "요청을 처리하지 못했습니다.";
+  }
+  return "요청을 처리하지 못했습니다.";
 }
 
 export default function RecruitmentsPage() {
   const { status } = useSession();
   const [items, setItems] = useState<Recruitment[]>([]);
-  const [plans, setPlans] = useState<Plan[]>([]);
   const [query, setQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<RecruitmentStatus>("");
   const [sort, setSort] = useState<RecruitmentSort>("latest");
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error: apiError } = await api.GET("/api/v1/recruitments", {
-      params: {
-        query: {
-          query: query.trim() || null,
-          status: filterStatus || null,
-          sort,
-          limit: 30,
+    try {
+      const { data, error: apiError } = await api.GET("/api/v1/recruitments", {
+        params: {
+          query: {
+            query: query.trim() || null,
+            status: filterStatus || null,
+            sort,
+            limit: 30,
+          },
         },
-      },
-    });
-    if (data) {
-      setItems(data.items);
-      setError(null);
-    } else {
-      setError(JSON.stringify(apiError));
+      });
+      if (data) {
+        setItems(data.items);
+        setError(null);
+      } else {
+        setError(apiMessage(apiError));
+      }
+    } catch {
+      setError("모집글을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.");
     }
   }, [filterStatus, query, sort]);
 
@@ -55,31 +66,40 @@ export default function RecruitmentsPage() {
     return () => window.clearTimeout(task);
   }, [load]);
 
-  useEffect(() => {
-    if (status !== "authenticated") return;
-    void api.GET("/api/v1/plans", { params: { query: { limit: 50 } } })
-      .then(({ data }) => setPlans(data?.items ?? []));
-  }, [status]);
-
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const { data, error: apiError } = await api.POST("/api/v1/recruitments", {
-      body: {
-        planId: String(form.get("plan")),
-        title: String(form.get("title")),
-        body: String(form.get("body")),
-        capacity: Number(form.get("capacity")),
-        deadline: new Date(String(form.get("deadline"))).toISOString(),
-        meetingAt: new Date(String(form.get("meetingAt"))).toISOString(),
-      },
-    });
-    if (data) {
-      setShowForm(false);
-      event.currentTarget.reset();
-      await load();
-    } else {
-      setError(JSON.stringify(apiError));
+    const deadline = new Date(String(form.get("deadline")));
+    const meetingValue = String(form.get("meetingAt") ?? "");
+    const meetingAt = meetingValue ? new Date(meetingValue) : null;
+    if (Number.isNaN(deadline.getTime()) || (meetingAt && Number.isNaN(meetingAt.getTime()))) {
+      setError("신청 마감일과 만남일을 확인해 주세요.");
+      return;
+    }
+
+    setCreating(true);
+    setError(null);
+    try {
+      const { data, error: apiError } = await api.POST("/api/v1/recruitments", {
+        body: {
+          planId: "",
+          title: String(form.get("title")),
+          body: String(form.get("body")),
+          capacity: Number(form.get("capacity")),
+          deadline: deadline.toISOString(),
+          meetingAt: meetingAt?.toISOString() ?? "",
+        },
+      });
+      if (data) {
+        setShowForm(false);
+        await load();
+      } else {
+        setError(apiMessage(apiError));
+      }
+    } catch {
+      setError("모집글을 등록하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.");
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -97,7 +117,7 @@ export default function RecruitmentsPage() {
         <div>
           <p className="eyebrow">TRAVEL COMMUNITY</p>
           <h1>여행 모집</h1>
-          <p>일정을 공유하고 같은 방향의 여행자를 만나보세요.</p>
+          <p>함께 떠날 여행자를 모집하고 신청을 관리해 보세요.</p>
         </div>
         <button className="primaryButton" type="button" onClick={openComposer}>
           모집글 작성
@@ -108,7 +128,7 @@ export default function RecruitmentsPage() {
         <label className="feedSearch">
           <Search size={17} aria-hidden />
           <span className="srOnly">모집 검색</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="여행지, 제목, 내용 검색" />
+          <ClearableInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder="여행지, 제목, 내용 검색" />
         </label>
         <div className="feedTabs" aria-label="모집 상태">
           {[["", "전체"], ["OPEN", "모집 중"], ["CLOSED", "마감"]].map(([value, label]) => (
@@ -125,15 +145,15 @@ export default function RecruitmentsPage() {
       {showForm ? (
         <form className="recruitmentComposer feedComposer" onSubmit={create}>
           <h2>새 모집글</h2>
-          <label>연결 일정<select name="plan" required defaultValue=""><option value="" disabled>일정 선택</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select></label>
-          <label>제목<input name="title" minLength={2} required /></label>
-          <label>소개<textarea name="body" minLength={10} rows={5} required /></label>
+          <label>모집 방식<select disabled defaultValue="free"><option value="free">자유 모집</option></select></label>
+          <label>제목<ClearableInput name="title" minLength={1} required /></label>
+          <label>소개<textarea name="body" minLength={1} rows={5} required /></label>
           <div>
-            <label>정원<input name="capacity" type="number" min="1" max="50" defaultValue="2" required /></label>
-            <label>신청 마감<input name="deadline" type="datetime-local" required /></label>
-            <label>만남 시각<input name="meetingAt" type="datetime-local" required /></label>
+            <label>정원<ClearableInput name="capacity" type="number" min="1" defaultValue="2" required /></label>
+            <label>신청 마감일<input name="deadline" type="date" required /></label>
+            <label>만남일 (선택)<input name="meetingAt" type="date" /></label>
           </div>
-          <div className="composerSubmit"><button className="primaryButton" type="submit">게시하기</button></div>
+          <div className="composerSubmit"><button className="primaryButton" type="submit" disabled={creating}>{creating ? "게시 중…" : "게시하기"}</button></div>
         </form>
       ) : null}
 
@@ -145,14 +165,14 @@ export default function RecruitmentsPage() {
             <span className="feedAvatar" aria-hidden>{item.ownerName.slice(0, 1)}</span>
             <div className="recruitmentPostBody">
               <header>
-                <strong>r/{item.ownerName}</strong><span className="routeSlash">/</span><b>{item.routeLabel}</b><span>·</span>
+                <strong>r/{item.ownerName}</strong><span className="routeSlash">/</span><b>자유 모집</b><span>·</span>
                 <time>{timeLabel(item.createdAt)}</time>
                 <span className={`statusPill ${item.status.toLowerCase()}`}>{item.status === "OPEN" ? "모집 중" : item.status === "CLOSED" ? "마감" : "취소"}</span>
               </header>
               <Link href={`/recruitments/${item.id}`} prefetch={false}><h2>{item.title}</h2></Link>
               <p>{item.body}</p>
               <div className="postSchedule"><span><CalendarDays size={14} aria-hidden /> {timeLabel(item.meetingAt)}</span><span>신청 마감 {timeLabel(item.deadline)}</span></div>
-              <footer><span><Eye size={13} aria-hidden /> 조회 {item.viewCount}</span><span><MessageCircle size={13} aria-hidden /> 질문</span><span><Users size={13} aria-hidden /> {item.acceptedCount}/{item.capacity}명</span><Link href={`/discover?recruitmentPlan=${item.id}`}><CalendarDays size={13} aria-hidden /> 일정</Link><Link className="recruitmentApplyLink" href={`/recruitments/${item.id}?mode=apply`}><UserPlus size={14} aria-hidden /> 신청하기 <ChevronRight size={13} aria-hidden /></Link></footer>
+              <footer><span><Eye size={13} aria-hidden /> 조회 {item.viewCount}</span><span><Users size={13} aria-hidden /> {item.acceptedCount}/{item.capacity}명</span><span><CalendarDays size={13} aria-hidden /> 만남일</span><Link className="recruitmentApplyLink" href={`/recruitments/${item.id}`}><UserPlus size={14} aria-hidden /> 신청하기 <ChevronRight size={13} aria-hidden /></Link></footer>
             </div>
           </article>
         ))}

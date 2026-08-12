@@ -18,5 +18,5 @@ export function ReviewLike({ reviewId, initialLiked, initialCount }: { reviewId:
     if (data) { setLiked(data.liked); setCount(data.likeCount); setMessage(null); }
   }
 
-  return <div className="reviewLike"><button type="button" aria-pressed={liked} onClick={() => void toggle()}><ThumbsUp size={15} fill={liked ? "currentColor" : "none"} aria-hidden /> 도움돼요 {count}</button>{message ? <p>{message}</p> : null}</div>;
+  return <div className="reviewLike"><button type="button" aria-label={`도움돼요 ${count}개`} aria-pressed={liked} onClick={() => void toggle()}><ThumbsUp size={18} fill={liked ? "currentColor" : "none"} aria-hidden /> <span>{count}</span></button>{message ? <p>{message}</p> : null}</div>;
 }

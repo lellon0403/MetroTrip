@@ -1,4 +1,4 @@
-"""Notice API contracts."""
+"""공지사항 API 라우터."""
 
 from typing import Annotated
 

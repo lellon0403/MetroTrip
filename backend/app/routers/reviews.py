@@ -1,4 +1,4 @@
-"""Travel review API contracts."""
+"""여행 후기 API 라우터."""
 
 from typing import Annotated
 

@@ -4,13 +4,16 @@ import type { components } from "@metrotrip/contracts";
 import { DndContext, type DragEndEvent, closestCenter } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CalendarClock, CalendarPlus, ChevronRight, Clock3, GripVertical, MapPinned, Plus, Star, Trash2, X } from "lucide-react";
+import { CalendarClock, CalendarPlus, ChevronRight, Clock3, GripVertical, Map as MapIcon, MapPinned, Plus, Star, TrainFront, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { KakaoMap } from "@/components/KakaoMap";
+import { ClearableInput } from "@/components/ClearableInput";
+import { SubwayRouteBoard } from "@/components/SubwayRouteBoard";
 import { api } from "@/lib/api";
 import { dateInSeoul } from "@/lib/date";
 import { useSession } from "@/lib/session";
+import { calculateSubwayRouteSchedule, type SubwayRouteSchedule } from "@/lib/transitTimetable";
 
 type Station = components["schemas"]["StationSummary"];
 type StationDetail = components["schemas"]["StationDetail"];
@@ -32,6 +35,7 @@ type TimelineItemProps = {
   label: string;
   timeEditing: boolean;
   warning: string | null;
+  stationRole: "출발" | "경유" | "도착" | null;
   onSetTime: (value: string) => void;
   onOpenTimePicker: () => void;
   onOpenTimetable: () => void;
@@ -39,14 +43,14 @@ type TimelineItemProps = {
   onFocus: () => void;
 };
 
-function SortableTimelineItem({ item, index, label, timeEditing, warning, onSetTime, onOpenTimePicker, onOpenTimetable, onRemove, onFocus }: TimelineItemProps) {
+function SortableTimelineItem({ item, index, label, timeEditing, warning, stationRole, onSetTime, onOpenTimePicker, onOpenTimetable, onRemove, onFocus }: TimelineItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const isStation = item.itemType === "STATION";
   return <li ref={setNodeRef} style={style} className={`${item.itemType.toLowerCase()} ${isDragging ? "dragging" : ""}`}>
     <button type="button" className="dragHandle" aria-label={`${index + 1}번 ${label} 순서 이동`} {...attributes} {...listeners}><GripVertical size={17} aria-hidden /></button>
     <button type="button" className="timelineNode" aria-label={`${index + 1}번 ${label} 지도에서 보기`} onClick={onFocus}>{isStation ? <MapPinned size={14} aria-hidden /> : index + 1}</button>
-    <div><strong>{label}</strong>{isStation ? <div className="timelineTime"><span>{item.scheduledTime?.slice(0, 5) ?? "시간 미지정"}</span><button type="button" onClick={onOpenTimetable}><Clock3 size={14} aria-hidden /> 시간표에서 선택</button></div> : item.itemType === "PLACE" ? <div className="timelineTime">{item.scheduledTime && !timeEditing ? <span>{item.scheduledTime.slice(0, 5)}</span> : null}{timeEditing ? <label><span className="srOnly">{label} 시각</span><input autoFocus type="time" value={item.scheduledTime?.slice(0, 5) ?? ""} onChange={(event) => onSetTime(event.target.value)} /></label> : <button type="button" onClick={onOpenTimePicker}><Clock3 size={14} aria-hidden /> 시간 지정</button>}</div> : <small>{item.note ?? "메모"}</small>}{warning ? <p className="timelineWarning">{warning}</p> : null}</div>
+    <div><strong>{label}{stationRole ? <span className={`timelineStationRole ${stationRole === "경유" ? "via" : ""}`}>{stationRole}</span> : null}</strong>{isStation ? <div className="timelineTime"><span>{item.scheduledTime?.slice(0, 5) ?? "시간 미지정"}</span><button type="button" onClick={onOpenTimetable}><Clock3 size={14} aria-hidden /> 시간표에서 선택</button></div> : item.itemType === "PLACE" ? <div className="timelineTime">{item.scheduledTime && !timeEditing ? <span>{item.scheduledTime.slice(0, 5)}</span> : null}{timeEditing ? <label><span className="srOnly">{label} 시각</span><input autoFocus type="time" value={item.scheduledTime?.slice(0, 5) ?? ""} onChange={(event) => onSetTime(event.target.value)} /></label> : <button type="button" onClick={onOpenTimePicker}><Clock3 size={14} aria-hidden /> 시간 지정</button>}</div> : <small>{item.note ?? "메모"}</small>}{warning ? <p className="timelineWarning">{warning}</p> : null}</div>
     <button type="button" className="timelineDelete" aria-label={`${label} 삭제`} onClick={onRemove}><Trash2 size={16} aria-hidden /></button>
   </li>;
 }
@@ -90,6 +94,18 @@ function toWriteRequest(plan: PlanView): PlanWriteRequest {
   };
 }
 
+function stationIdsFromPlan(plan: PlanView) {
+  return [...new Set(plan.days
+    .flatMap((day) => day.items)
+    .filter((item) => item.itemType === "STATION" && item.stationId)
+    .map((item) => item.stationId as string))];
+}
+
+function localClock() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
 export default function DiscoverPage() {
   const { status } = useSession();
   const [stations, setStations] = useState<Station[]>([]);
@@ -115,6 +131,12 @@ export default function DiscoverPage() {
   const [favoriteStationIds, setFavoriteStationIds] = useState<Set<string>>(new Set());
   const [authPrompt, setAuthPrompt] = useState(false);
   const [rightPanel, setRightPanel] = useState<"planner" | null>(null);
+  const [viewMode, setViewMode] = useState<"map" | "subway">("map");
+  const [subwayRouteStationIds, setSubwayRouteStationIds] = useState<string[]>([]);
+  const [subwayDepartureTime, setSubwayDepartureTime] = useState("");
+  const [subwaySchedule, setSubwaySchedule] = useState<SubwayRouteSchedule | null>(null);
+  const [subwayScheduleStatus, setSubwayScheduleStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [subwayScheduleError, setSubwayScheduleError] = useState<string | null>(null);
   const [inspectorMode, setInspectorMode] = useState<"place" | "timetable">("place");
   const [, setPlanSummaries] = useState<PlanSummary[]>([]);
   const [plannerPlan, setPlannerPlan] = useState<PlanView | null>(null);
@@ -129,10 +151,41 @@ export default function DiscoverPage() {
   const initialPlaceHandled = useRef(false);
   const initialPlannerHandled = useRef(false);
   const initialRecruitmentPlannerHandled = useRef(false);
+  const plannerPlanRef = useRef<PlanView | null>(null);
+  const plannerReadOnlyRef = useRef(false);
+
+  useEffect(() => {
+    plannerPlanRef.current = plannerPlan;
+    plannerReadOnlyRef.current = plannerReadOnly;
+  }, [plannerPlan, plannerReadOnly]);
+
+  useEffect(() => {
+    const syncClock = () => {
+      const currentTime = localClock();
+      if (currentTime === subwayDepartureTime) return;
+      setSubwayDepartureTime(currentTime);
+      setSubwaySchedule(null);
+      setSubwayScheduleError(null);
+      setSubwayScheduleStatus(subwayRouteStationIds.length >= 2 ? "loading" : "idle");
+    };
+    const initialTask = window.setTimeout(syncClock, 0);
+    const interval = window.setInterval(syncClock, 15_000);
+    return () => {
+      window.clearTimeout(initialTask);
+      window.clearInterval(interval);
+    };
+  }, [subwayDepartureTime, subwayRouteStationIds.length]);
 
   const selectedStation = useMemo(
     () => stations.find((station) => station.id === selectedStationId) ?? null,
     [stations, selectedStationId],
+  );
+
+  const subwayRouteStations = useMemo(
+    () => subwayRouteStationIds
+      .map((stationId) => stations.find((station) => station.id === stationId))
+      .filter((station): station is Station => Boolean(station)),
+    [stations, subwayRouteStationIds],
   );
 
   const mapPlaces = useMemo(() => {
@@ -322,6 +375,46 @@ export default function DiscoverPage() {
     }
   }, [planPlaces, plannerPlan]);
 
+  useEffect(() => {
+    if (subwayRouteStations.length < 2 || !subwayDepartureTime) return;
+    let active = true;
+    void calculateSubwayRouteSchedule(subwayRouteStations, subwayDepartureTime)
+      .then((schedule) => {
+        if (!active) return;
+        setSubwaySchedule(schedule);
+        setSubwayScheduleStatus("success");
+        const currentPlan = plannerPlanRef.current;
+        if (!currentPlan || plannerReadOnlyRef.current) return;
+        const times = new Map(schedule.stops.map((stop) => [stop.id, `${stop.time}:00`]));
+        let changed = false;
+        const nextPlan: PlanView = {
+          ...currentPlan,
+          days: currentPlan.days.map((day) => ({
+            ...day,
+            items: day.items.map((item) => {
+              if (item.itemType !== "STATION" || !item.stationId) return item;
+              const scheduledTime = times.get(item.stationId);
+              if (!scheduledTime || item.scheduledTime === scheduledTime) return item;
+              changed = true;
+              return { ...item, scheduledTime };
+            }),
+          })),
+        };
+        if (changed) {
+          plannerPlanRef.current = nextPlan;
+          setPlannerPlan(nextPlan);
+          setPlannerDirty(true);
+        }
+      })
+      .catch((scheduleFailure: unknown) => {
+        if (!active) return;
+        setSubwaySchedule(null);
+        setSubwayScheduleError(scheduleFailure instanceof Error ? scheduleFailure.message : "시간표 기반 경로를 계산하지 못했습니다.");
+        setSubwayScheduleStatus("error");
+      });
+    return () => { active = false; };
+  }, [subwayDepartureTime, subwayRouteStations]);
+
   const persistPlan = useCallback(async (plan: PlanView) => {
     setPlannerPending(true);
     const { data, error: apiError } = await api.PUT("/api/v1/plans/{plan_id}", {
@@ -407,6 +500,13 @@ export default function DiscoverPage() {
     }
   }
 
+  function replaceSubwayRoute(stationIds: string[]) {
+    setSubwayRouteStationIds(stationIds);
+    setSubwaySchedule(null);
+    setSubwayScheduleError(null);
+    setSubwayScheduleStatus(stationIds.length >= 2 ? "loading" : "idle");
+  }
+
   async function openPlanner() {
     if (requireAccount()) return;
     setPlannerReadOnly(false);
@@ -415,14 +515,14 @@ export default function DiscoverPage() {
     setPlanSummaries(data?.items ?? []);
   }
 
-  async function createPlanWithSelectedPlace() {
+  async function createPlanWithSelectedPlace(includeSelectedPlace = true) {
     if (!selectedStation || requireAccount()) return;
     setPlannerPending(true);
     const date = dateInSeoul();
     const items: PlanWriteRequest["days"][number]["items"] = [
       { itemType: "STATION", stationId: selectedStation.id },
     ];
-    if (selectedPlace) items.push({ itemType: "PLACE", placeId: selectedPlace.id });
+    if (includeSelectedPlace && selectedPlace) items.push({ itemType: "PLACE", placeId: selectedPlace.id });
     const { data, error: apiError } = await api.POST("/api/v1/plans", {
       body: {
         title: `${selectedStation.name}역 하루 여행`,
@@ -435,6 +535,7 @@ export default function DiscoverPage() {
     });
     if (data) {
       setPlannerPlan(data);
+      replaceSubwayRoute(stationIdsFromPlan(data));
       setRightPanel("planner");
       setNotice("새 일정을 만들었습니다.");
       const summaries = await api.GET("/api/v1/plans", { params: { query: { limit: 50 } } });
@@ -461,7 +562,11 @@ export default function DiscoverPage() {
     const { data, error: apiError } = await api.GET("/api/v1/plans/{plan_id}", {
       params: { path: { plan_id: planId } },
     });
-    if (data) { setPlannerPlan(data); setPlannerReadOnly(false); }
+    if (data) {
+      setPlannerPlan(data);
+      setPlannerReadOnly(false);
+      replaceSubwayRoute(stationIdsFromPlan(data));
+    }
     else setError(readError(apiError));
     setPlannerPending(false);
   }
@@ -488,7 +593,13 @@ export default function DiscoverPage() {
     void (async () => {
       setPlannerPending(true);
       const { data, error: apiError } = await api.GET("/api/v1/recruitments/{recruitment_id}/plan", { params: { path: { recruitment_id: recruitmentId } } });
-      if (data) { setPlannerPlan(data); setPlannerReadOnly(true); setRightPanel("planner"); setNotice("모집 일정은 조회만 할 수 있습니다."); }
+      if (data) {
+        setPlannerPlan(data);
+        setPlannerReadOnly(true);
+        replaceSubwayRoute(stationIdsFromPlan(data));
+        setRightPanel("planner");
+        setNotice("모집 일정은 조회만 할 수 있습니다.");
+      }
       else setError(readError(apiError));
       setPlannerPending(false);
     })();
@@ -498,7 +609,7 @@ export default function DiscoverPage() {
     if (plannerReadOnly) return;
     if (!selectedStation || requireAccount()) return;
     if (!plannerPlan) {
-      await createPlanWithSelectedPlace();
+      await createPlanWithSelectedPlace(false);
       return;
     }
     const day = plannerPlan.days[0];
@@ -510,6 +621,33 @@ export default function DiscoverPage() {
     setPlannerPlan({ ...plannerPlan, days: plannerPlan.days.map((entry, index) => index === 0 ? { ...entry, items: [...entry.items, stationItem] } : entry) });
     setPlannerDirty(true);
     setRightPanel("planner");
+  }
+
+  async function addSelectedSubwayStation() {
+    if (!selectedStation) return;
+    if (subwayRouteStationIds.includes(selectedStation.id)) {
+      setNotice(`${selectedStation.name}역은 이미 지하철 경로에 있습니다.`);
+      return;
+    }
+    const nextRoute = [...subwayRouteStationIds, selectedStation.id];
+    setSubwayRouteStationIds(nextRoute);
+    setSubwaySchedule(null);
+    setSubwayScheduleError(null);
+    setSubwayScheduleStatus(nextRoute.length >= 2 ? "loading" : "idle");
+    if (status === "authenticated") {
+      await addSelectedStationToPlan();
+      setNotice(`${selectedStation.name}역을 경로와 일정에 추가했습니다.`);
+    } else {
+      setNotice(`${selectedStation.name}역을 경로에 추가했습니다. 로그인하면 일정으로 저장할 수 있어요.`);
+    }
+  }
+
+  function removeSubwayStation(stationId: string) {
+    replaceSubwayRoute(subwayRouteStationIds.filter((item) => item !== stationId));
+  }
+
+  function resetSubwayRoute() {
+    replaceSubwayRoute([]);
   }
 
   async function addSelectedPlaceToPlan() {
@@ -653,7 +791,7 @@ export default function DiscoverPage() {
       <section className="stationStrip" aria-label="역 선택">
         <div className="stationStripInner">
           <span className="lineBadge">1</span>
-          <label className="stationSearch"><span className="srOnly">역 검색</span><input value={stationQuery} onChange={(event) => setStationQuery(event.target.value)} placeholder="역 이름 검색" /></label>
+          <label className="stationSearch"><span className="srOnly">역 검색</span><ClearableInput value={stationQuery} onChange={(event) => setStationQuery(event.target.value)} placeholder="역 이름 검색" /></label>
           {loadingStations ? <span className="muted">역 목록을 불러오는 중…</span> : stations.map((station) => (
             <button type="button" key={station.id} aria-pressed={station.id === selectedStationId} onClick={() => selectStation(station.id)}>
               {station.name}
@@ -674,7 +812,7 @@ export default function DiscoverPage() {
               <button type="button" onClick={() => { setInspectorMode("timetable"); setTimeTargetItemId(null); }}><Clock3 size={14} aria-hidden /> 시간표</button>
             </div>
           </header>
-          <div className="placeSearch"><label className="srOnly" htmlFor="place-query">장소 검색</label><input id="place-query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="장소 이름으로 검색" /></div>
+          <div className="placeSearch"><label className="srOnly" htmlFor="place-query">장소 검색</label><ClearableInput id="place-query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="장소 이름으로 검색" /></div>
           <div className="categoryTabs multi" aria-label="장소 카테고리">
             {categoryOptions.map((item) => <button type="button" key={item.value} aria-pressed={categories.includes(item.value)} onClick={() => toggleCategory(item.value)}>{item.label}</button>)}
           </div>
@@ -711,21 +849,44 @@ export default function DiscoverPage() {
           </> : <div className="emptyState"><MapPinned size={30} aria-hidden /><strong>장소를 선택해 주세요</strong><p>목록과 지도 마커가 함께 선택됩니다.</p></div>}
         </aside>
 
-        <div className="mapStage">
-          <KakaoMap station={selectedStation} places={mapPlaces} selectedPlaceId={selectedPlace?.id ?? null} radiusMeters={radiusMeters} favoritePlaceIds={favoritePlaceIds} routePath={mapPath} focusPlaceIds={focusPlaceIds} focusMode={focusMode} onSelectPlace={selectPlace} onViewportChange={setPendingViewport} />
-          {pendingViewport && (!searchCenter || Math.abs(pendingViewport.latitude - searchCenter.latitude) > 0.0005 || Math.abs(pendingViewport.longitude - searchCenter.longitude) > 0.0005) ? <button className="searchThisArea" type="button" onClick={() => setSearchCenter(pendingViewport)}>이 영역 검색</button> : null}
-          {focusMode ? <div className="focusModeBanner"><strong>일정 순서 보기</strong><span>다른 장소 마커를 숨겼습니다.</span><button type="button" onClick={() => setFocusMode(false)}>종료</button></div> : null}
-          <button type="button" className="plannerFab" aria-label="일정 열기" onClick={() => void openPlanner()}><CalendarClock size={22} aria-hidden /></button>
+        <div className={`mapStage ${viewMode}Mode`}>
+          <div className={`viewModeSwitch ${viewMode}`} role="group" aria-label="탐색 화면 전환">
+            <span className="viewModeThumb" aria-hidden />
+            <button type="button" aria-pressed={viewMode === "map"} onClick={() => setViewMode("map")}><MapIcon size={15} aria-hidden /> 지도</button>
+            <button type="button" aria-pressed={viewMode === "subway"} onClick={() => setViewMode("subway")}><TrainFront size={15} aria-hidden /> 지하철</button>
+          </div>
+          {viewMode === "map" ? <>
+            <KakaoMap station={selectedStation} places={mapPlaces} selectedPlaceId={selectedPlace?.id ?? null} radiusMeters={radiusMeters} favoritePlaceIds={favoritePlaceIds} routePath={mapPath} focusPlaceIds={focusPlaceIds} focusMode={focusMode} onSelectPlace={selectPlace} onViewportChange={setPendingViewport} />
+            {pendingViewport && (!searchCenter || Math.abs(pendingViewport.latitude - searchCenter.latitude) > 0.0005 || Math.abs(pendingViewport.longitude - searchCenter.longitude) > 0.0005) ? <button className="searchThisArea" type="button" onClick={() => setSearchCenter(pendingViewport)}>이 영역 검색</button> : null}
+            {focusMode ? <div className="focusModeBanner"><strong>일정 순서 보기</strong><span>다른 장소 마커를 숨겼습니다.</span><button type="button" onClick={() => setFocusMode(false)}>종료</button></div> : null}
+          </> : <SubwayRouteBoard
+            stations={stations}
+            selectedStationId={selectedStationId}
+            routeStationIds={subwayRouteStationIds}
+            departureTime={subwayDepartureTime}
+            schedule={subwaySchedule}
+            scheduleStatus={subwayScheduleStatus}
+            scheduleError={subwayScheduleError}
+            onSelectStation={selectStation}
+            onRemoveRouteStation={removeSubwayStation}
+            onResetRoute={resetSubwayRoute}
+            stationsLoading={loadingStations}
+            onRetryStations={() => void loadStations()}
+          />}
+          <button type="button" className={`plannerFab ${viewMode === "subway" ? "subwayAddFab" : ""}`} aria-label={viewMode === "subway" ? "선택한 역을 경로에 추가" : "일정 열기"} onClick={() => viewMode === "subway" ? void addSelectedSubwayStation() : void openPlanner()}>{viewMode === "subway" ? <CalendarPlus size={22} aria-hidden /> : <CalendarClock size={22} aria-hidden />}</button>
         </div>
 
         {rightPanel === "planner" ? <aside className="rightDrawer plannerDrawer"><header><div><p className="eyebrow">MAP PLANNER</p><h2>내 일정</h2></div><div className="plannerHeaderActions">{plannerPlan && !plannerReadOnly ? <button type="button" aria-label="일정 삭제" onClick={() => void deleteCurrentPlan()}><Trash2 size={18} aria-hidden /></button> : null}<button type="button" onClick={() => setRightPanel(null)} aria-label="일정 닫기"><X size={20} aria-hidden /></button></div></header>
           {!plannerPlan ? <div className="plannerStart"><p>새 일정은 현재 선택한 역을 시작점으로 만듭니다.</p><button type="button" className="primaryButton" onClick={() => void createPlanWithSelectedPlace()} disabled={plannerPending}><Plus size={16} aria-hidden /> 새 일정 만들기</button></div> : <>
-            <div className="plannerTitle"><input value={plannerPlan.title} aria-label="일정 제목" disabled={plannerReadOnly} onChange={(event) => { setPlannerPlan({ ...plannerPlan, title: event.target.value }); setPlannerDirty(true); }} /><span>{plannerReadOnly ? "모집 참여자 조회용 일정" : plannerPending ? "저장 중…" : plannerDirty ? "변경됨" : "자동 저장됨"}</span></div>
+            <div className="plannerTitle"><ClearableInput value={plannerPlan.title} aria-label="일정 제목" disabled={plannerReadOnly} onChange={(event) => { setPlannerPlan({ ...plannerPlan, title: event.target.value }); setPlannerDirty(true); }} /><span>{plannerReadOnly ? "모집 참여자 조회용 일정" : plannerPending ? "저장 중…" : plannerDirty ? "변경됨" : "자동 저장됨"}</span></div>
             <div className="plannerToolbar"><button type="button" aria-pressed={focusMode} onClick={() => setFocusMode((value) => !value)}><MapPinned size={14} aria-hidden /> 일정 순서 보기</button>{!plannerReadOnly ? <><button type="button" onClick={() => void addSelectedStationToPlan()}><Plus size={14} aria-hidden /> 현재 역 추가</button>{selectedPlace ? <button type="button" onClick={() => void addSelectedPlaceToPlan()}><Plus size={14} aria-hidden /> {selectedPlace.name}</button> : null}</> : null}</div>
             <DndContext collisionDetection={closestCenter} onDragEnd={reorderPlanItems}><SortableContext items={plannerPlan.days[0]?.items.map((item) => item.id) ?? []} strategy={verticalListSortingStrategy}><ol className="mapTimeline">{plannerPlan.days[0]?.items.map((item, index, items) => {
               const station = item.stationId ? stations.find((candidate) => candidate.id === item.stationId) : null;
               const label = item.itemType === "STATION" ? `${station?.name ?? "저장한 역"}역` : item.itemType === "PLACE" && item.placeId ? placeNames[item.placeId] ?? "저장한 장소" : item.note ?? "메모";
-              return <SortableTimelineItem key={item.id} item={item} index={index} label={label} timeEditing={timeEditingItemId === item.id} warning={timelineWarning(items, index)} onSetTime={(value) => updatePlanItem(item.id, { scheduledTime: value || null })} onOpenTimePicker={() => setTimeEditingItemId(item.id)} onOpenTimetable={() => { setTimeTargetItemId(item.id); setInspectorMode("timetable"); }} onRemove={() => removePlanItem(item.id)} onFocus={() => { if (item.stationId) setSelectedStationId(item.stationId); if (item.placeId) { const place = mapPlaces.find((candidate) => candidate.id === item.placeId); if (place) selectPlace(place); } }} />;
+              const stationItems = items.filter((candidate) => candidate.itemType === "STATION");
+              const stationIndex = stationItems.findIndex((candidate) => candidate.id === item.id);
+              const stationRole = item.itemType !== "STATION" ? null : stationIndex === 0 ? "출발" : stationIndex === stationItems.length - 1 ? "도착" : "경유";
+              return <SortableTimelineItem key={item.id} item={item} index={index} label={label} timeEditing={timeEditingItemId === item.id} warning={timelineWarning(items, index)} stationRole={stationRole} onSetTime={(value) => updatePlanItem(item.id, { scheduledTime: value || null })} onOpenTimePicker={() => setTimeEditingItemId(item.id)} onOpenTimetable={() => { setTimeTargetItemId(item.id); setInspectorMode("timetable"); }} onRemove={() => removePlanItem(item.id)} onFocus={() => { if (item.stationId) setSelectedStationId(item.stationId); if (item.placeId) { const place = mapPlaces.find((candidate) => candidate.id === item.placeId); if (place) selectPlace(place); } }} />;
             })}</ol></SortableContext></DndContext>
           </>}
         </aside> : null}
