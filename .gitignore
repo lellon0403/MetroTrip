@@ -20,6 +20,10 @@ __pycache__/
 .env.*
 !.env.example
 certs/
+deploy/*.env
+!deploy/*.env.example
+deploy/**/*.env
+!deploy/**/*.env.example
 
 # 로컬에 저장되는 업로드 미디어 (오브젝트 스토리지 미연동 상태)
 backend/media/

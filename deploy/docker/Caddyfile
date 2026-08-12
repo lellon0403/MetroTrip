@@ -1,0 +1,4 @@
+metrotrip.kro.kr {
+	encode zstd gzip
+	reverse_proxy frontend:5173
+}
