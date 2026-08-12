@@ -16,7 +16,9 @@ class _FakeSession:
 @pytest.fixture(autouse=True)
 def _reset_failover_state():
     """테스트 간 헬스체크 캐시/카운터가 새지 않도록 초기화한다."""
-    db_failover._state.update({"healthy": True, "checked_at": 0.0, "fail": 0, "ok": 0})
+    db_failover._state.update(
+        {"healthy": True, "checked_at": float("-inf"), "fail": 0, "ok": 0}
+    )
     db_failover.settings.failover_cache_seconds = 0
     db_failover.settings.failover_fail_threshold = 2
     db_failover.settings.failover_recover_threshold = 2

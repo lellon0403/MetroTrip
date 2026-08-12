@@ -32,7 +32,7 @@ settings = get_settings()
 SYNC_STATE_PATH = BACKEND_DIR / "var" / "sync_state.json"
 _PROBE_TIMEOUT_SECONDS = 2
 
-_state = {"healthy": True, "checked_at": 0.0, "fail": 0, "ok": 0}
+_state = {"healthy": True, "checked_at": float("-inf"), "fail": 0, "ok": 0}
 _state_lock = threading.Lock()
 _probe_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db-healthcheck")
 
