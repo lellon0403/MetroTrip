@@ -16,7 +16,7 @@ from app.db_failover import get_db, get_read_db
 from app.integrations.security import sign_token
 from app.main import app
 from app.models.auth import User
-from app.models.transit import LineViewLog, SubwayLine
+from app.models.transit import LineStation, LineViewLog, Station, SubwayLine
 
 
 @pytest.fixture
@@ -244,3 +244,87 @@ def test_suggest_lines_returns_top_three_recent_views(db: Session) -> None:
     assert response.status_code == 200
     assert response.json()["basis"] == "RECENT_VIEWS"
     assert [item["lineId"] for item in response.json()["items"]] == [1, 3, 2]
+
+
+def test_list_line_stations_returns_station_order(db: Session) -> None:
+    """노선의 역을 station_order 오름차순으로 반환하며 다른 노선 역은 섞이지 않는다."""
+    db.add_all(
+        [
+            Station(
+                station_id=1,
+                station_name="소요산",
+                latitude=37.9,
+                longitude=127.06,
+            ),
+            Station(
+                station_id=2,
+                station_name="동두천",
+                latitude=37.9,
+                longitude=127.05,
+            ),
+            Station(
+                station_id=3,
+                station_name="가능",
+                latitude=37.7,
+                longitude=127.04,
+            ),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            # 순서를 뒤섞어 넣어서 응답이 삽입 순서가 아니라
+            # station_order 기준으로 정렬되는지 확인한다.
+            LineStation(line_id=1, station_id=2, station_order=2),
+            LineStation(line_id=1, station_id=1, station_order=1),
+            LineStation(line_id=1, station_id=3, station_order=3),
+            # 다른 노선(2호선)의 역은 결과에 섞이면 안 된다.
+            LineStation(line_id=3, station_id=3, station_order=1),
+        ]
+    )
+    db.commit()
+
+    async def request_line_stations() -> httpx.Response:
+        """ASGI 애플리케이션에 1호선 역 순서 조회를 요청한다."""
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            return await client.get("/api/v1/lines/1/stations")
+
+    app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
+    try:
+        response = asyncio.run(request_line_stations())
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["lineId"] == 1
+    assert [item["stationName"] for item in body["items"]] == ["소요산", "동두천", "가능"]
+    assert [item["stationOrder"] for item in body["items"]] == [1, 2, 3]
+
+
+def test_list_line_stations_rejects_unknown_line(db: Session) -> None:
+    """없는 노선을 조회하면 404를 반환한다."""
+
+    async def request_unknown_line() -> httpx.Response:
+        """ASGI 애플리케이션에 없는 노선의 역 목록을 요청한다."""
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            return await client.get("/api/v1/lines/999/stations")
+
+    app.dependency_overrides[get_db] = _override_database(db)
+    app.dependency_overrides[get_read_db] = _override_database(db)
+    try:
+        response = asyncio.run(request_unknown_line())
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "LINE_NOT_FOUND"

@@ -13,6 +13,8 @@ from app.schemas.transit import (
     DayType,
     Direction,
     LineListResponse,
+    LineStationListResponse,
+    LineStationResponse,
     LineSuggestionResponse,
     PlaceAdminResponse,
     PlaceCategory,
@@ -210,6 +212,28 @@ def list_stations(
         size=size,
         total_elements=total,
         total_pages=math.ceil(total / size) if total else 0,
+    )
+
+
+def get_line_stations(db: Session, line_id: int) -> LineStationListResponse:
+    """한 노선에 속한 역을 노선을 따라가는 순서(station_order)대로 반환한다."""
+    repository = TransitRepository(db)
+    if not repository.find_line_by_id(line_id):
+        raise _error("LINE_NOT_FOUND", "노선을 찾을 수 없습니다.", 404)
+
+    rows = repository.list_line_stations(line_id)
+    return LineStationListResponse(
+        line_id=line_id,
+        items=[
+            LineStationResponse(
+                station_id=station.station_id,
+                station_name=station.station_name,
+                station_order=station_order,
+                latitude=float(station.latitude),
+                longitude=float(station.longitude),
+            )
+            for station, station_order in rows
+        ],
     )
 
 

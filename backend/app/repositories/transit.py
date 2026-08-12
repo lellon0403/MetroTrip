@@ -41,6 +41,16 @@ class TransitRepository:
         """식별자에 해당하는 역을 조회한다."""
         return self.session.get(Station, station_id)
 
+    def list_line_stations(self, line_id: int) -> list[tuple[Station, int]]:
+        """한 노선에 속한 역을 station_order 오름차순으로 조회한다."""
+        statement = (
+            select(Station, LineStation.station_order)
+            .join(LineStation, LineStation.station_id == Station.station_id)
+            .where(LineStation.line_id == line_id)
+            .order_by(LineStation.station_order)
+        )
+        return [(station, order) for station, order in self.session.execute(statement)]
+
     def existing_station_ids(self, station_ids: set[int]) -> set[int]:
         """전달한 역 ID 중 실제로 존재하는 ID를 반환한다."""
         if not station_ids:

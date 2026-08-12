@@ -17,6 +17,7 @@ from app.schemas.transit import (
     DayType,
     Direction,
     LineListResponse,
+    LineStationListResponse,
     LineSuggestionResponse,
     PlaceAdminResponse,
     PlaceCategory,
@@ -78,6 +79,18 @@ def record_line_view(
     """회원 또는 비회원의 노선 조회 기록을 저장한다."""
     transit_service.record_line_view(db, line_id, user_id)
     return MessageResponse(message="노선 조회 기록이 저장되었습니다.")
+
+
+@router.get(
+    "/lines/{line_id}/stations",
+    response_model=LineStationListResponse,
+    summary="노선의 역을 순서대로 조회",
+    description="노선도를 실제 순서대로 그릴 때 사용한다. station_order 오름차순으로 반환한다.",
+    responses=ERROR_RESPONSES,
+)
+def list_line_stations(line_id: int, db: ReadDatabaseSession) -> LineStationListResponse:
+    """한 노선에 속한 역을 노선 순서(station_order)대로 반환한다."""
+    return transit_service.get_line_stations(db, line_id)
 
 
 @router.get(

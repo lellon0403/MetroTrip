@@ -109,7 +109,7 @@ function localClock() {
 export default function DiscoverPage() {
   const { status } = useSession();
   const [stations, setStations] = useState<Station[]>([]);
-  const [stationQuery, setStationQuery] = useState("");
+  const [stationSuggestions, setStationSuggestions] = useState<Station[]>([]);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
   const [, setStationDetail] = useState<StationDetail | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
@@ -194,10 +194,13 @@ export default function DiscoverPage() {
     return [...byId.values()];
   }, [places, planPlaces]);
 
+  // 역 목록은 검색어와 무관하게 한 번만 불러온다. 화면 어딘가에서 선택한 역을
+  // 조회(stations.find)하는 코드가 많아서, 검색으로 이 목록 자체를 바꾸면
+  // 검색어와 무관한 역을 고른 상태에서 선택이 갑자기 풀린다.
   const loadStations = useCallback(async () => {
     setLoadingStations(true);
     const { data, error: apiError } = await api.GET("/api/v1/stations", {
-      params: { query: { query: stationQuery.trim() || null, limit: 100 } },
+      params: { query: { query: null, limit: 100 } },
     });
     if (!data) {
       setStations([]);
@@ -211,12 +214,36 @@ export default function DiscoverPage() {
       );
     }
     setLoadingStations(false);
-  }, [stationQuery]);
+  }, []);
 
   useEffect(() => {
-    const task = window.setTimeout(() => void loadStations(), 250);
+    const task = window.setTimeout(() => void loadStations(), 0);
     return () => window.clearTimeout(task);
   }, [loadStations]);
+
+  // 아래 "장소 이름으로 검색" 입력에 역 이름이 매칭되면 함께 제안한다.
+  // 위 stations 목록과는 별개 상태라, 타이핑 중에는 현재 선택된 역이 풀리지 않는다.
+  useEffect(() => {
+    const trimmed = query.trim();
+    const task = window.setTimeout(async () => {
+      if (!trimmed) {
+        setStationSuggestions([]);
+        return;
+      }
+      const { data } = await api.GET("/api/v1/stations", {
+        params: { query: { query: trimmed, limit: 6 } },
+      });
+      setStationSuggestions(data?.items ?? []);
+    }, trimmed ? 250 : 0);
+    return () => window.clearTimeout(task);
+  }, [query]);
+
+  function selectStationFromSearch(station: Station) {
+    setStations((current) => (current.some((item) => item.id === station.id) ? current : [...current, station]));
+    selectStation(station.id);
+    setQuery("");
+    setStationSuggestions([]);
+  }
 
   const loadPlaces = useCallback(async () => {
     if (!selectedStationId || categories.length === 0) return;
@@ -291,6 +318,13 @@ export default function DiscoverPage() {
     ]).then(([detail, schedule]) => {
       setStationDetail(detail.data ?? null);
       setDepartures(schedule.data?.items ?? []);
+      // 기본 역 목록(최대 100개, 이름순)에 없는 역도 노선도·검색으로 고를 수 있다.
+      // 상세 조회가 성공했다는 건 실존하는 역이라는 뜻이니, 목록에 없으면 채워 넣어
+      // "역역"처럼 이름이 안 뜨는 문제를 막는다.
+      if (detail.data) {
+        const station = detail.data;
+        setStations((current) => (current.some((item) => item.id === station.id) ? current : [...current, station]));
+      }
     });
   }, [selectedStationId]);
 
@@ -788,18 +822,6 @@ export default function DiscoverPage() {
 
   return (
     <main className="discoverPage">
-      <section className="stationStrip" aria-label="역 선택">
-        <div className="stationStripInner">
-          <span className="lineBadge">1</span>
-          <label className="stationSearch"><span className="srOnly">역 검색</span><ClearableInput value={stationQuery} onChange={(event) => setStationQuery(event.target.value)} placeholder="역 이름 검색" /></label>
-          {loadingStations ? <span className="muted">역 목록을 불러오는 중…</span> : stations.map((station) => (
-            <button type="button" key={station.id} aria-pressed={station.id === selectedStationId} onClick={() => selectStation(station.id)}>
-              {station.name}
-            </button>
-          ))}
-        </div>
-      </section>
-
       <div className={`discoverLayout ${rightPanel ? "hasRightPanel" : ""}`}>
         <aside className="placePanel">
           <header>
@@ -812,7 +834,16 @@ export default function DiscoverPage() {
               <button type="button" onClick={() => { setInspectorMode("timetable"); setTimeTargetItemId(null); }}><Clock3 size={14} aria-hidden /> 시간표</button>
             </div>
           </header>
-          <div className="placeSearch"><label className="srOnly" htmlFor="place-query">장소 검색</label><ClearableInput id="place-query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="장소 이름으로 검색" /></div>
+          <div className="placeSearch"><label className="srOnly" htmlFor="place-query">장소 또는 역 검색</label><ClearableInput id="place-query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="장소 또는 역 이름으로 검색" /></div>
+          {stationSuggestions.length > 0 ? <ul className="stationSuggestions" aria-label="검색어와 일치하는 역">
+            {stationSuggestions.map((station) => (
+              <li key={station.id}>
+                <button type="button" onClick={() => selectStationFromSearch(station)}>
+                  <TrainFront size={14} aria-hidden /> {station.name}역
+                </button>
+              </li>
+            ))}
+          </ul> : null}
           <div className="categoryTabs multi" aria-label="장소 카테고리">
             {categoryOptions.map((item) => <button type="button" key={item.value} aria-pressed={categories.includes(item.value)} onClick={() => toggleCategory(item.value)}>{item.label}</button>)}
           </div>

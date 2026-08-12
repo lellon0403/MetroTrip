@@ -7,7 +7,7 @@ type Station = components["schemas"]["StationSummary"];
 type Place = components["schemas"]["PlaceSummary"];
 type RouteCoordinate = components["schemas"]["RouteCoordinate"];
 
-interface KakaoLatLng {
+export interface KakaoLatLng {
   getLat(): number;
   getLng(): number;
 }
@@ -17,23 +17,36 @@ interface KakaoBounds {
   getNorthEast(): KakaoLatLng;
 }
 
-interface KakaoMapInstance {
+export interface KakaoMapInstance {
   relayout(): void;
   setCenter(position: KakaoLatLng): void;
   getCenter(): KakaoLatLng;
   getBounds(): KakaoBounds;
+  setLevel(level: number): void;
+  getLevel(): number;
+  panTo(position: KakaoLatLng): void;
+  /** level 숫자가 작을수록 확대된 상태다. 이 값보다 더 확대(더 작은 level)하지 못하게 막는다. */
+  setMinLevel(level: number): void;
+  /** 이 값보다 더 축소(더 큰 level)하지 못하게 막는다. */
+  setMaxLevel(level: number): void;
+  /** false로 주면 휠 스크롤·더블클릭·핀치 확대/축소를 전부 막는다(현재 level에 고정). */
+  setZoomable(zoomable: boolean): void;
 }
 
-interface KakaoOverlay {
+export interface KakaoOverlay {
   setMap(map: KakaoMapInstance | null): void;
 }
 
-interface KakaoMaps {
+export interface KakaoPolyline extends KakaoOverlay {
+  setOptions(options: { strokeOpacity?: number; strokeColor?: string; strokeWeight?: number }): void;
+}
+
+export interface KakaoMaps {
   load(callback: () => void): void;
   LatLng: new (latitude: number, longitude: number) => KakaoLatLng;
   Map: new (
     container: HTMLElement,
-    options: { center: KakaoLatLng; level: number },
+    options: { center: KakaoLatLng; level: number; disableDoubleClickZoom?: boolean },
   ) => KakaoMapInstance;
   CustomOverlay: new (options: {
     content: HTMLElement;
@@ -58,7 +71,7 @@ interface KakaoMaps {
     strokeColor: string;
     strokeOpacity: number;
     strokeStyle: string;
-  }) => KakaoOverlay;
+  }) => KakaoPolyline;
   event: {
     addListener(target: KakaoMapInstance, event: string, callback: () => void): void;
   };
@@ -72,7 +85,7 @@ declare global {
 
 let sdkPromise: Promise<KakaoMaps> | null = null;
 
-function loadKakaoMaps(appKey: string): Promise<KakaoMaps> {
+export function loadKakaoMaps(appKey: string): Promise<KakaoMaps> {
   if (window.kakao?.maps) {
     return new Promise((resolve) => window.kakao?.maps.load(() => resolve(window.kakao!.maps)));
   }

@@ -77,6 +77,23 @@ class StationDetailResponse(StationSummary):
     address: str | None
 
 
+class LineStationResponse(ApiSchema):
+    """한 노선 안에서의 역 순서 정보. 노선도를 실제 순서대로 그릴 때 사용한다."""
+
+    station_id: int
+    station_name: str
+    station_order: int
+    latitude: float
+    longitude: float
+
+
+class LineStationListResponse(ApiSchema):
+    """한 노선에 속한 역을 station_order 순서대로 담은 응답."""
+
+    line_id: int
+    items: list[LineStationResponse]
+
+
 class TimetableResponse(ApiSchema):
     """역과 노선에 해당하는 열차 시간표 정보 응답."""
 
