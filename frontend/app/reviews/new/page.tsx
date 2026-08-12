@@ -99,7 +99,13 @@ function ReviewComposerPage() {
 
 
   useEffect(() => {
-    void api.GET("/api/v1/stations", { params: { query: { limit: 100 } } }).then(({ data }) => setStations(data?.items ?? []));
+    void Promise.all([
+      api.GET("/api/v1/stations", { params: { query: { limit: 100, cursor: "1" } } }),
+      api.GET("/api/v1/stations", { params: { query: { limit: 100, cursor: "2" } } }),
+    ]).then((results) => {
+      const byId = new Map(results.flatMap(({ data }) => data?.items ?? []).map((station) => [station.id, station]));
+      setStations([...byId.values()]);
+    });
   }, []);
   useEffect(() => {
     if (status === "authenticated") void api.GET("/api/v1/plans", { params: { query: { limit: 50 } } }).then(({ data }) => setPlans(data?.items ?? []));

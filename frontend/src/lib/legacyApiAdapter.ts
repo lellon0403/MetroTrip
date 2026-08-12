@@ -170,7 +170,7 @@ async function handleStations(path: string, url: URL, request: Request): Promise
     return result.response.ok ? json((result.data?.items ?? []).map((line: Json) => ({ id: String(line.lineId), name: line.lineName, shortName: line.lineNumber ?? line.lineName, color: "#0052a4", textColor: "#fff" }))) : passthrough(result);
   }
   if (path === "/api/v1/stations" && request.method === "GET") {
-    const result = await forward(`/api/v1/stations${encodeQuery({ keyword: url.searchParams.get("query"), size: url.searchParams.get("limit") ?? 100 })}`, request);
+    const result = await forward(`/api/v1/stations${encodeQuery({ keyword: url.searchParams.get("query"), page: url.searchParams.get("cursor") ?? 1, size: url.searchParams.get("limit") ?? 100 })}`, request);
     if (!result.response.ok) return passthrough(result);
     const items = (result.data?.items ?? []).map((item: Json) => { stationCache.set(String(item.stationId), item); return mapLegacyStation(item); });
     return json({ items, nextCursor: null });
@@ -311,6 +311,21 @@ async function handleMe(path: string, request: Request, body: Json): Promise<Res
     const result = await forward("/api/v1/users/me", request, { method: "DELETE", headers: { "X-Reauthentication-Token": String(verified.data.verificationToken) } });
     if (result.response.ok) { storageSet(REFRESH_KEY, null); return json({ message: "회원 탈퇴가 완료되었습니다." }); }
     return passthrough(result);
+  }
+  if (path === "/api/v1/me/password" && request.method === "PATCH") {
+    const verified = await reauthenticate(request, String(body.currentPassword ?? ""), "PASSWORD_CHANGE");
+    if (!verified.response.ok) return passthrough(verified);
+    const result = await forward("/api/v1/users/me/password", request, {
+      method: "PATCH",
+      headers: { "X-Reauthentication-Token": String(verified.data.verificationToken) },
+      body: JSON.stringify({
+        newPassword: body.newPassword,
+        newPasswordConfirm: body.newPasswordConfirm,
+      }),
+    });
+    if (!result.response.ok) return passthrough(result);
+    storageSet(REFRESH_KEY, null);
+    return json({ message: "비밀번호를 변경했습니다. 새 비밀번호로 다시 로그인해 주세요." });
   }
   if (path === "/api/v1/me/favorites" && request.method === "GET") {
     const result = await forward("/api/v1/users/me/favorites", request);

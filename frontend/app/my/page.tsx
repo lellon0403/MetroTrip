@@ -3,6 +3,7 @@
 import type { components } from "@metrotrip/contracts";
 import { Star, ThumbsUp } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 
 import { ClearableInput } from "@/components/ClearableInput";
@@ -18,16 +19,25 @@ type Dashboard = {
 };
 
 type MyPanel = "dashboard" | "recentPlans" | "favorites" | "reviews" | "recruitments" | "account";
+type AccountOption = "profile" | "password" | "withdrawal";
 
 const empty: Dashboard = { plans: [], reviews: [], recruitments: [], applications: [], favorites: null };
 
 export default function MyPage() {
-  const { status, user, updateProfile, deleteAccount } = useSession();
+  const { status, user, updateProfile, changePassword, deleteAccount } = useSession();
+  const router = useRouter();
   const [data, setData] = useState<Dashboard>(empty);
   const [failed, setFailed] = useState<string[]>([]);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<MyPanel>("dashboard");
+  const [activeAccountOption, setActiveAccountOption] = useState<AccountOption>("profile");
+
+  function selectAccountOption(option: AccountOption) {
+    setActiveAccountOption(option);
+    setAccountMessage(null);
+    setAccountError(null);
+  }
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -82,6 +92,26 @@ export default function MyPage() {
     }
   }
 
+  async function updatePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const currentPassword = String(form.get("currentPassword") ?? "");
+    const newPassword = String(form.get("newPassword") ?? "");
+    const newPasswordConfirm = String(form.get("newPasswordConfirm") ?? "");
+    if (newPassword !== newPasswordConfirm) {
+      setAccountError("새 비밀번호와 확인 값이 일치하지 않습니다.");
+      return;
+    }
+    setAccountError(null);
+    try {
+      await changePassword(currentPassword, newPassword, newPasswordConfirm);
+      window.alert("비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요.");
+      router.push("/login");
+    } catch (caught) {
+      setAccountError(caught instanceof SessionRequestError ? caught.message : "비밀번호를 변경하지 못했습니다.");
+    }
+  }
+
   if (status === "loading") return <main className="centerState"><p>내 활동을 불러오는 중…</p></main>;
   if (status === "anonymous") return <main className="centerState"><h1>내 활동은 로그인 후 확인할 수 있어요</h1><Link className="primaryButton" href="/login">로그인</Link></main>;
 
@@ -110,19 +140,34 @@ export default function MyPage() {
         <section><div className="mySectionTitle"><h2>모집 활동</h2><Link href="/recruitments">전체 보기</Link></div>{data.recruitments.map((item) => <Link className="myRow" href={`/recruitments/${item.id}`} key={item.id} prefetch={false}><strong>{item.title}</strong><span>{item.acceptedCount}/{item.capacity}명</span></Link>)}{data.applications.map((item) => <Link className="myRow" href={`/recruitments/${item.recruitmentId}`} key={item.id} prefetch={false}><strong>참여 신청</strong><span>{item.status}</span></Link>)}</section>
         <section id="account" className="accountSettings">
           <div className="mySectionTitle"><h2>계정 설정</h2><span>PII 익명화 정책</span></div>
-          <form onSubmit={saveProfile}>
-            <label>이메일<ClearableInput value={user?.email ?? ""} disabled /></label>
-            <label>표시 이름<ClearableInput name="displayName" defaultValue={user?.displayName ?? ""} minLength={2} maxLength={40} required /></label>
-            <button className="primaryButton" type="submit">프로필 저장</button>
-          </form>
-          {accountMessage && <p className="formNotice" role="status">{accountMessage}</p>}
-          {accountError && <p className="formError" role="alert">{accountError}</p>}
-          <form className="dangerZone" onSubmit={removeAccount}>
-            <div><strong>회원 탈퇴</strong><p>현재 비밀번호와 DELETE를 입력하면 개인정보를 익명화하고 모든 세션을 폐기합니다.</p></div>
-            <label>현재 비밀번호<ClearableInput name="deletePassword" type="password" autoComplete="current-password" required /></label>
-            <label>확인 문구<ClearableInput name="deleteConfirmation" placeholder="DELETE" autoComplete="off" required /></label>
-            <button type="submit">탈퇴</button>
-          </form>
+          <div className="accountOptionList" role="tablist" aria-label="계정 설정 옵션">
+            <button className={activeAccountOption === "profile" ? "isActive" : ""} type="button" role="tab" aria-selected={activeAccountOption === "profile"} onClick={() => selectAccountOption("profile")}>프로필 관리</button>
+            <button className={activeAccountOption === "password" ? "isActive" : ""} type="button" role="tab" aria-selected={activeAccountOption === "password"} onClick={() => selectAccountOption("password")}>비밀번호 변경</button>
+            <button className={activeAccountOption === "withdrawal" ? "isDanger" : ""} type="button" role="tab" aria-selected={activeAccountOption === "withdrawal"} onClick={() => selectAccountOption("withdrawal")}>회원 탈퇴</button>
+          </div>
+          <div className={`accountOptionPanel ${activeAccountOption === "withdrawal" ? "isDanger" : ""}`} role="tabpanel">
+            {activeAccountOption === "profile" ? <form onSubmit={saveProfile}>
+              <label>이메일<ClearableInput value={user?.email ?? ""} disabled /></label>
+              <label>표시 이름<ClearableInput name="displayName" defaultValue={user?.displayName ?? ""} minLength={2} maxLength={40} required /></label>
+              <label>현재 비밀번호<ClearableInput name="profilePassword" type="password" autoComplete="current-password" required /></label>
+              <button className="primaryButton" type="submit">프로필 저장</button>
+              {accountMessage && <p className="formNotice" role="status">{accountMessage}</p>}
+            </form> : null}
+            {activeAccountOption === "password" ? <form onSubmit={updatePassword}>
+              <div><strong>비밀번호 변경</strong><p>현재 비밀번호를 확인한 뒤 새 비밀번호로 변경합니다. 변경 후에는 다시 로그인해야 합니다.</p></div>
+              <label>현재 비밀번호<ClearableInput name="currentPassword" type="password" autoComplete="current-password" required /></label>
+              <label>새 비밀번호<ClearableInput name="newPassword" type="password" minLength={8} autoComplete="new-password" required /></label>
+              <label>새 비밀번호 확인<ClearableInput name="newPasswordConfirm" type="password" minLength={8} autoComplete="new-password" required /></label>
+              <button className="primaryButton" type="submit">비밀번호 변경</button>
+            </form> : null}
+            {activeAccountOption === "withdrawal" ? <form className="dangerZone" onSubmit={removeAccount}>
+              <div><strong>회원 탈퇴</strong><p>현재 비밀번호와 DELETE를 입력하면 개인정보를 익명화하고 모든 세션을 폐기합니다.</p></div>
+              <label>현재 비밀번호<ClearableInput name="deletePassword" type="password" autoComplete="current-password" required /></label>
+              <label>확인 문구<ClearableInput name="deleteConfirmation" placeholder="DELETE" autoComplete="off" required /></label>
+              <button type="submit">탈퇴</button>
+            </form> : null}
+            {accountError && <p className="formError" role="alert">{accountError}</p>}
+          </div>
         </section>
       </div>
       </div>

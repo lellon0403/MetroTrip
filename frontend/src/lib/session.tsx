@@ -2,7 +2,8 @@
 
 import type { components } from "@metrotrip/contracts";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, setAccessToken } from "./api";
+import { api, getAccessToken, setAccessToken } from "./api";
+import { legacyApiFetch } from "./legacyApiAdapter";
 
 type UserProfile = components["schemas"]["UserProfile"];
 type LoginRequest = components["schemas"]["LoginRequest"];
@@ -25,6 +26,7 @@ type SessionContextValue = {
   logout: () => Promise<void>;
   refresh: () => Promise<boolean>;
   updateProfile: (displayName: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string, newPasswordConfirm: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
 };
 
@@ -170,8 +172,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setRefreshAfterSeconds(null);
   }, []);
 
-  const updateProfile = useCallback(async (displayName: string) => {
-    const { data, error } = await api.PATCH("/api/v1/me", { body: { displayName } });
+  const updateProfile = useCallback(async (displayName: string, password: string) => {
+    const { data, error } = await api.PATCH("/api/v1/me", { body: { displayName, password } });
     if (!data) throw new SessionRequestError(errorMessage(error));
     setUser(data);
   }, []);
@@ -188,9 +190,28 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setRefreshAfterSeconds(null);
   }, []);
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string, newPasswordConfirm: string) => {
+    const token = getAccessToken();
+    const response = await legacyApiFetch(new Request(`${window.location.origin}/api/v1/me/password`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ currentPassword, newPassword, newPasswordConfirm }),
+    }));
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new SessionRequestError(errorMessage(payload));
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    setAccessToken(null);
+    setUser(null);
+    setStatus("anonymous");
+    setRefreshAfterSeconds(null);
+  }, []);
+
   const value = useMemo(
-    () => ({ status, user, login, register, logout, refresh, updateProfile, deleteAccount }),
-    [status, user, login, register, logout, refresh, updateProfile, deleteAccount],
+    () => ({ status, user, login, register, logout, refresh, updateProfile, changePassword, deleteAccount }),
+    [status, user, login, register, logout, refresh, updateProfile, changePassword, deleteAccount],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

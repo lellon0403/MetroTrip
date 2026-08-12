@@ -12,7 +12,7 @@ export function ClearableInput({ className, onChange, type = "text", value, defa
   const [uncontrolledHasValue, setUncontrolledHasValue] = useState(() => String(defaultValue ?? "").length > 0);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const isPassword = type === "password";
-  const canClear = !disabled && !readOnly && !nonClearableTypes.has(type);
+  const canClear = !isPassword && !disabled && !readOnly && !nonClearableTypes.has(type);
   const hasValue = value !== undefined ? String(value).length > 0 : uncontrolledHasValue;
 
   function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
