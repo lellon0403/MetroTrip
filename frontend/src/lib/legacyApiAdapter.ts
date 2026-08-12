@@ -72,12 +72,6 @@ async function forward(path: string, request: Request, init: RequestInit = {}): 
   try { data = await response.clone().json(); } catch { data = null; }
   return { response, data };
 }
-function oldPassthrough(result: ForwardResult) {
-  if (result.response.ok) return json(result.data, result.response.status);
-  const detail = result.data?.detail;
-  const message = typeof detail === "string" ? detail : "백엔드 요청을 처리하지 못했습니다.";
-  return json(errorEnvelope(message, result.response.headers.get("X-Error-Code") ?? "LEGACY_API_ERROR"), result.response.status);
-}
 function backendError(result: ForwardResult) {
   const code = String(result.data?.code ?? result.data?.error?.code ?? result.response.headers.get("X-Error-Code") ?? `HTTP_${result.response.status}`);
   const message = String(result.data?.message ?? result.data?.error?.message ?? result.data?.detail ?? `백엔드 요청이 실패했습니다. (${code})`);
@@ -97,7 +91,16 @@ async function userForToken(token: Json, request: Request) {
   const result = await forward("/api/v1/users/me", request, { method: "GET", headers: { Authorization: `Bearer ${String(token.accessToken ?? "")}` } });
   return result.response.ok ? result.data : null;
 }
-function dateOnly(value: unknown) { return String(value ?? new Date().toISOString()).slice(0, 10); }
+function dateOnly(value: unknown) {
+  const source = value ?? new Date();
+  if (source instanceof Date) {
+    return `${source.getFullYear()}-${String(source.getMonth() + 1).padStart(2, "0")}-${String(source.getDate()).padStart(2, "0")}`;
+  }
+  const text = String(source);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? text.slice(0, 10) : `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+}
 function numeric(value: unknown, fallback = 0) {
   if (value === null || value === undefined || value === "" ) return fallback;
   const parsed = Number(value);
@@ -357,7 +360,7 @@ async function handleMe(path: string, request: Request, body: Json): Promise<Res
   }
   if (path === "/api/v1/me/recruitment-applications" && request.method === "GET") {
     const results = await Promise.all(["APPLIED", "ACCEPTED"].map((status) => forward(`/api/v1/users/me/participating-posts?status=${status}&size=100`, request)));
-    const items = results.flatMap((result) => (result.data?.items ?? []).map((item: Json) => ({ ...mapLegacyApplication(item.participation ?? {}, String(item.postId)), recruitmentTitle: item.title })));
+    const items = results.flatMap((result) => (result.data?.items ?? []).map((item: Json) => ({ ...mapLegacyApplication(item.participation ?? {}, String(item.postId)), recruitmentTitle: item.title, meetingAt: item.recruitment?.meetingDate ?? null })));
     return json(page(items));
   }
   return null;
@@ -439,6 +442,18 @@ async function handlePlans(path: string, url: URL, request: Request, body: Json)
     const result = await forward(`/api/v1/plans/${detail[1]}`, request, { method: "DELETE" });
     return result.response.ok ? new Response(null, { status: 204 }) : passthrough(result);
   }
+  const share = path.match(/^\/api\/v1\/plans\/([^/]+)\/share-links$/);
+  if (share && request.method === "POST") {
+    const result = await forward(`/api/v1/plans/${share[1]}/share-links`, request, { method: "POST" });
+    if (!result.response.ok) return passthrough(result);
+    return json({
+      id: `share-${share[1]}`,
+      token: String(result.data.shareToken),
+      urlPath: `/shared/plans/${String(result.data.shareToken)}`,
+      expiresAt: result.data.expiresAt ?? null,
+      maxUses: null,
+    }, 201);
+  }
   return null;
 }
 function legacyRecruitmentWrite(body: Json) {
@@ -450,6 +465,20 @@ function legacyRecruitmentWrite(body: Json) {
     meetingDate: body.meetingAt ? dateOnly(body.meetingAt) : null,
     planId: body.planId ? numeric(body.planId) : null,
   };
+}
+
+function mapPublicPlan(source: Json, key: string) {
+  const today = dateOnly(new Date());
+  const startId = source.startStationId ? String(source.startStationId) : null;
+  const endId = source.endStationId ? String(source.endStationId) : null;
+  const placeItems = (source.items ?? []).map((item: Json, index: number) => ({ id: String(item.planItemId), itemType: "PLACE", stationId: item.stationId ? String(item.stationId) : null, placeId: item.placeId ? String(item.placeId) : null, routeSnapshot: null, note: item.placeName ?? item.memo ?? null, scheduledTime: item.visitTime ?? null, durationMinutes: null, position: index + 2 }));
+  const items = [
+    { id: `${key}-start`, itemType: "STATION", stationId: startId, placeId: null, routeSnapshot: null, note: source.startStationName, scheduledTime: null, durationMinutes: null, position: 1 },
+    ...placeItems,
+    ...(endId && endId !== startId ? [{ id: `${key}-end`, itemType: "STATION", stationId: endId, placeId: null, routeSnapshot: null, note: source.endStationName, scheduledTime: null, durationMinutes: null, position: placeItems.length + 2 }] : []),
+  ];
+  const now = new Date().toISOString();
+  return { id: key, ownerId: "", title: source.planTitle, description: null, startDate: today, endDate: today, visibility: "UNLISTED", status: "ACTIVE", version: 1, days: [{ id: `${key}-day-1`, dayDate: today, title: "1일차", position: 1, items }], createdAt: now, updatedAt: now, readOnly: true };
 }
 
 async function handleRecruitments(path: string, url: URL, request: Request, body: Json): Promise<Response | null> {
@@ -474,6 +503,11 @@ async function handleRecruitments(path: string, url: URL, request: Request, body
   if (detail && request.method === "DELETE") {
     const result = await forward(`/api/v1/posts/${detail[1]}`, request, { method: "DELETE" });
     return result.response.ok ? new Response(null, { status: 204 }) : passthrough(result);
+  }
+  const linkedPlan = path.match(/^\/api\/v1\/recruitments\/([^/]+)\/plan$/);
+  if (linkedPlan && request.method === "GET") {
+    const result = await forward(`/api/v1/posts/${linkedPlan[1]}/plan`, request);
+    return result.response.ok ? json(mapPublicPlan(result.data, `recruitment-${linkedPlan[1]}`)) : passthrough(result);
   }
   const comments = path.match(/^\/api\/v1\/recruitments\/([^/]+)\/comments$/);
   if (comments && request.method === "POST") {
@@ -502,7 +536,6 @@ async function handleRecruitments(path: string, url: URL, request: Request, body
     return result.response.ok ? json(mapLegacyRecruitmentDetail(result.data)) : passthrough(result);
   }
   if (/\/reports$/.test(path)) return unsupported("모집 신고");
-  if (/\/plan$/.test(path)) return unsupported("모집 연결 일정 조회");
   return null;
 }
 
@@ -591,9 +624,7 @@ async function handleShared(path: string, request: Request): Promise<Response | 
   if (detail && request.method === "GET") {
     const result = await forward(`/api/v1/shared-plans/${detail[1]}`, request);
     if (!result.response.ok) return passthrough(result);
-    const source = result.data;
-    const items = (source.items ?? []).map((item: Json, index: number) => ({ id: String(item.planItemId), itemType: "PLACE", stationId: item.stationId ? String(item.stationId) : null, placeId: String(item.placeId), routeSnapshot: null, note: item.memo ?? null, scheduledTime: item.visitTime ?? null, durationMinutes: null, position: index + 1 }));
-    return json({ id: `shared-${detail[1]}`, ownerId: "", title: source.planTitle, description: null, startDate: dateOnly(new Date()), endDate: dateOnly(new Date()), visibility: "LINK", status: "ACTIVE", version: 1, days: [{ id: `day-${detail[1]}`, dayDate: dateOnly(new Date()), title: "1일차", position: 1, items }], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), readOnly: true });
+    return json(mapPublicPlan(result.data, `shared-${detail[1]}`));
   }
   if (/\/copies$/.test(path)) return unsupported("공유 일정 복제");
   return null;

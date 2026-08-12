@@ -96,7 +96,9 @@ class SharedPlanResponse(ApiSchema):
     """로그인 없이 조회하는 공유 여행 계획 응답."""
 
     plan_title: str
+    start_station_id: int
     start_station_name: str
+    end_station_id: int
     end_station_name: str
     items: list[PlanItemResponse]
     read_only: bool = True

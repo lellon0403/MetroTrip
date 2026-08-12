@@ -24,6 +24,7 @@ from app.schemas.community import (
     PostUpdateRequest,
     RecruitStatus,
 )
+from app.schemas.plans import SharedPlanResponse
 from app.services import community as community_service
 
 router = APIRouter(prefix="/posts", tags=["게시판"])
@@ -86,6 +87,17 @@ def create_post(
 def get_post(post_id: int, db: ReadDatabaseSession) -> PostDetailResponse:
     """게시글 상세를 조회한다."""
     return community_service.get_post(db, post_id)
+
+
+@router.get(
+    "/{post_id}/plan",
+    response_model=SharedPlanResponse,
+    summary="모집글 연결 일정 공개 조회",
+    description="공개 모집글에 연결된 일정을 로그인 없이 읽기 전용으로 조회합니다.",
+    responses=ERROR_RESPONSES,
+)
+def get_post_plan(post_id: int, db: ReadDatabaseSession) -> SharedPlanResponse:
+    return community_service.get_post_plan(db, post_id)
 
 
 @router.patch(

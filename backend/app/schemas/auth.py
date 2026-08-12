@@ -71,6 +71,12 @@ class EmailVerificationConfirmResponse(ApiSchema):
     verification_token: str
 
 
+class AvailabilityResponse(ApiSchema):
+    """회원가입 식별자의 사용 가능 여부 응답."""
+
+    available: bool
+
+
 class PasswordResetConfirmRequest(EmailVerificationConfirmRequest):
     """이메일 인증 코드와 새 비밀번호를 제출하는 재설정 요청."""
 

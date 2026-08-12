@@ -277,7 +277,7 @@ export function mapLegacyPlan(plan: LegacyJson, metadata: PlanMetadata = {}) {
         itemType: "PLACE",
         stationId: item.stationId == null ? null : toId(item.stationId),
         placeId: toId(item.placeId),
-        routeSnapshot: null,
+        routeSnapshot: item.placeName == null ? null : { placeName: String(item.placeName) },
         note: item.memo == null ? null : String(item.memo),
         scheduledTime: item.visitTime == null ? null : String(item.visitTime),
         durationMinutes: null,
@@ -303,7 +303,9 @@ export function mapLegacyPlan(plan: LegacyJson, metadata: PlanMetadata = {}) {
           ? serverPlace?.stationId == null ? null : toId(serverPlace.stationId)
           : toId(savedItem.stationId),
         placeId,
-        routeSnapshot: savedItem.routeSnapshot ?? null,
+        routeSnapshot: serverPlace?.placeName == null
+          ? savedItem.routeSnapshot ?? null
+          : { ...(savedItem.routeSnapshot ?? {}), placeName: String(serverPlace.placeName) },
         note: savedItem.note ?? (serverPlace?.memo == null ? null : String(serverPlace.memo)),
         scheduledTime: savedItem.scheduledTime ?? (serverPlace?.visitTime == null ? null : String(serverPlace.visitTime)),
         durationMinutes: savedItem.durationMinutes ?? null,

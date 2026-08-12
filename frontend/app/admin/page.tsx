@@ -1,128 +1,89 @@
 "use client";
 
-import type { components } from "@metrotrip/contracts";
+import { BellRing, MapPin, MessageSquareWarning, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { ClearableInput } from "@/components/ClearableInput";
-import { api } from "@/lib/api";
+import { adminApi, type NoticeAdmin, type PlaceAdminInput, type PostAdmin, type ReviewAdmin } from "@/lib/adminApi";
 import { useSession } from "@/lib/session";
 
-type Notice = components["schemas"]["NoticeView"];
-type Report = components["schemas"]["ReportView"];
-type SyncResult = components["schemas"]["DataSyncResult"];
-type PlaceRow = { id: string; name: string; dataStatus: string };
-type AuditRow = { id: string; action: string; resourceType: string; resourceId: string; reason: string; createdAt: string };
+type Section = "notices" | "content" | "places";
 
-function pageItems<T>(data: unknown): T[] {
-  if (!data || typeof data !== "object" || !("items" in data)) return [];
-  const items = (data as { items?: unknown }).items;
-  return Array.isArray(items) ? items as T[] : [];
-}
-
-function message(error: unknown): string {
-  if (error && typeof error === "object" && "error" in error) {
-    const envelope = error as { error?: { message?: string } };
-    if (envelope.error?.message) return envelope.error.message;
-  }
-  return "요청을 처리하지 못했습니다.";
+function placeBody(form: FormData): PlaceAdminInput {
+  const selectedCategory = String(form.get("category") ?? "FOOD");
+  const category = ({ FOOD: "RESTAURANT", CULTURE: "TOUR", NATURE: "TOUR", STAY: "ETC" } as Record<string, string>)[selectedCategory] ?? selectedCategory;
+  return {
+    placeName: String(form.get("placeName") ?? "").trim(), category,
+    description: String(form.get("description") ?? "").trim() || null, address: String(form.get("address") ?? "").trim(),
+    latitude: Number(form.get("latitude")), longitude: Number(form.get("longitude")), phone: String(form.get("phone") ?? "").trim() || null,
+    stationIds: String(form.get("stationIds") ?? "").split(",").map(Number).filter((id) => Number.isInteger(id) && id > 0),
+    imageUrls: String(form.get("imageUrls") ?? "").split("\n").map((value) => value.trim()).filter(Boolean),
+  };
 }
 
 export default function AdminPage() {
   const { status, user } = useSession();
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [reports, setReports] = useState<Report[]>([]);
-  const [places, setPlaces] = useState<PlaceRow[]>([]);
-  const [audits, setAudits] = useState<AuditRow[]>([]);
-  const [reportStatus, setReportStatus] = useState<"" | "OPEN" | "RESOLVED" | "DISMISSED">("OPEN");
+  const [section, setSection] = useState<Section>("notices");
+  const [notices, setNotices] = useState<NoticeAdmin[]>([]);
+  const [reviews, setReviews] = useState<ReviewAdmin[]>([]);
+  const [posts, setPosts] = useState<PostAdmin[]>([]);
+  const [editingNotice, setEditingNotice] = useState<NoticeAdmin | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (status !== "authenticated" || user?.role !== "ADMIN") return;
     try {
-      const [noticeResult, reportResult, placeResult, auditResult] = await Promise.all([
-        api.GET("/api/v1/admin/notices"),
-        api.GET("/api/v1/admin/reports", { params: { query: { status: reportStatus || null } } }),
-        api.GET("/api/v1/admin/places"),
-        api.GET("/api/v1/admin/audit-logs", { params: { query: { limit: 50 } } }),
-      ]);
-      const firstError = noticeResult.error ?? reportResult.error ?? placeResult.error ?? auditResult.error;
-      if (firstError) setError(message(firstError));
-      setNotices(pageItems<Notice>(noticeResult.data));
-      setReports(pageItems<Report>(reportResult.data));
-      setPlaces(pageItems<PlaceRow>(placeResult.data));
-      setAudits(pageItems<AuditRow>(auditResult.data));
-    } catch {
-      setError("운영 데이터를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.");
-    }
-  }, [reportStatus, status, user?.role]);
+      const [noticeData, reviewData, postData] = await Promise.all([adminApi.listNotices(), adminApi.listReviews(), adminApi.listPosts()]);
+      setNotices(noticeData.items); setReviews(reviewData.items); setPosts(postData.items); setError(null);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "관리자 데이터를 불러오지 못했습니다."); }
+  }, [status, user?.role]);
 
-  useEffect(() => { queueMicrotask(() => void load()); }, [load]);
+  useEffect(() => {
+    const task = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(task);
+  }, [load]);
 
-  async function createNotice(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const { data, error: apiError } = await api.POST("/api/v1/admin/notices", { body: {
-      title: String(form.get("title")), body: String(form.get("body")),
-      status: String(form.get("status")) as "DRAFT" | "PUBLISHED",
-      kind: String(form.get("kind")) as "NOTICE" | "EVENT",
-      bannerUrl: String(form.get("bannerUrl") || "") || null,
-      startsAt: form.get("startsAt") ? new Date(String(form.get("startsAt"))).toISOString() : null,
-      endsAt: form.get("endsAt") ? new Date(String(form.get("endsAt"))).toISOString() : null,
-    } });
-    if (!data) return setError(message(apiError));
-    formElement.reset();
-    setNotice("공지를 저장했습니다.");
-    await load();
+  async function saveNotice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
+    const body = { title: String(data.get("title")), content: String(data.get("content")), noticeType: String(data.get("noticeType")) };
+    try {
+      if (editingNotice) await adminApi.updateNotice(editingNotice.noticeId, body);
+      else await adminApi.createNotice(body);
+      setEditingNotice(null); form.reset(); setFeedback(editingNotice ? "공지를 수정했습니다." : "공지를 추가했습니다."); await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "공지를 저장하지 못했습니다."); }
   }
 
-  async function publishNotice(item: Notice) {
-    const { error: apiError } = await api.PUT("/api/v1/admin/notices/{notice_id}", {
-      params: { path: { notice_id: item.id } }, body: { title: item.title, body: item.body, status: "PUBLISHED", kind: item.kind, bannerUrl: item.bannerUrl, startsAt: item.startsAt, endsAt: item.endsAt },
-    });
-    if (apiError) setError(message(apiError)); else { setNotice("공지를 게시했습니다."); await load(); }
+  async function remove(kind: "notice" | "review" | "post" | "place", id: number, label: string) {
+    if (!window.confirm(`‘${label}’을(를) 삭제할까요? 이 작업은 되돌리기 어렵습니다.`)) return;
+    try {
+      if (kind === "notice") await adminApi.deleteNotice(id); else if (kind === "review") await adminApi.deleteReview(id); else if (kind === "post") await adminApi.deletePost(id); else await adminApi.deletePlace(id);
+      setFeedback("삭제했습니다."); await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "삭제하지 못했습니다."); }
   }
 
-  async function resolveReport(item: Report, action: "RESOLVED" | "DISMISSED", hideContent = false) {
-    const reason = window.prompt("처리 사유를 입력해 주세요.");
-    if (!reason) return;
-    const { error: apiError } = await api.POST("/api/v1/admin/reports/{report_id}/actions", {
-      params: { path: { report_id: item.id } }, body: { status: action, reason, hideContent },
-    });
-    if (apiError) setError(message(apiError)); else { setNotice("신고를 처리했습니다."); await load(); }
+  async function savePlace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form); const id = Number(data.get("placeId")); const body = placeBody(data);
+    if (!body.stationIds.length) return setError("접근 가능한 역 ID를 하나 이상 입력해 주세요.");
+    try {
+      if (id) await adminApi.updatePlace(id, body);
+      else await adminApi.createPlace(body);
+      setFeedback(id ? "장소를 수정했습니다." : "장소를 추가했습니다."); form.reset();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "장소를 저장하지 못했습니다."); }
   }
 
-  async function verifyPlace(placeId: string) {
-    const { error: apiError } = await api.POST("/api/v1/admin/places/{place_id}/verify", { params: { path: { place_id: placeId } } });
-    if (apiError) setError(message(apiError)); else { setNotice("장소를 검증 상태로 변경했습니다."); await load(); }
-  }
+  if (status === "loading") return <main className="centerState"><p>관리자 권한을 확인하는 중…</p></main>;
+  if (status === "anonymous") return <main className="centerState"><h1>로그인이 필요합니다</h1><Link href="/login">로그인하기</Link></main>;
+  if (user?.role !== "ADMIN") return <main className="centerState"><h1>접근 권한이 없습니다</h1><p>관리자 계정만 사용할 수 있습니다.</p></main>;
 
-  async function startSync(dryRun: boolean) {
-    const { data, error: apiError } = await api.POST("/api/v1/admin/data-sync-jobs", { body: { source: "fixture", dryRun } });
-    if (!data) setError(message(apiError)); else { setSyncResult(data); await load(); }
-  }
+  return <main className="adminPage contentShell">
+    <header className="adminHero"><div><p className="eyebrow">METROTRIP CONTROL CENTER</p><h1>관리자 페이지</h1><p>서비스 콘텐츠와 추천 장소를 안전하게 관리합니다.</p></div><button className="outlineButton" type="button" onClick={() => void load()}><RefreshCw size={16} /> 새로고침</button></header>
+    <nav className="adminTabs" aria-label="관리 메뉴"><button aria-pressed={section === "notices"} onClick={() => setSection("notices")}><BellRing size={17} /> 공지사항</button><button aria-pressed={section === "content"} onClick={() => setSection("content")}><MessageSquareWarning size={17} /> 콘텐츠 관리</button><button aria-pressed={section === "places"} onClick={() => setSection("places")}><MapPin size={17} /> 장소 관리</button></nav>
+    {feedback ? <div className="successBanner" role="status">{feedback}</div> : null}{error ? <div className="inlineError"><p>{error}</p><button onClick={() => setError(null)}>닫기</button></div> : null}
 
-  if (status === "loading") return <main className="contentShell statePage"><p>관리자 권한을 확인하고 있습니다.</p></main>;
-  if (status === "anonymous") return <main className="contentShell statePage"><h1>로그인이 필요합니다</h1><Link href="/login">로그인하기</Link></main>;
-  if (user?.role !== "ADMIN") return <main className="contentShell statePage"><h1>접근 권한이 없습니다</h1><p>관리자 계정에서만 운영 도구를 사용할 수 있습니다.</p></main>;
+    {section === "notices" ? <section className="adminWorkspace"><div className="adminPanel"><h2>{editingNotice ? "공지 수정" : "공지 추가"}</h2><form className="adminForm" key={editingNotice?.noticeId ?? "new"} onSubmit={saveNotice}><label>유형<select name="noticeType" defaultValue={editingNotice?.noticeType ?? "BOARD"}><option value="BOARD">게시판 공지</option><option value="ALARM">알림 공지</option></select></label><label>제목<input name="title" required maxLength={200} defaultValue={editingNotice?.title ?? ""} /></label><label>내용<textarea name="content" required rows={8} defaultValue={editingNotice?.content ?? ""} /></label><div className="rowActions"><button className="primaryButton" type="submit">{editingNotice ? "수정 저장" : "공지 추가"}</button>{editingNotice ? <button type="button" onClick={() => setEditingNotice(null)}>취소</button> : null}</div></form></div><div className="adminPanel"><h2>등록된 공지 <small>{notices.length}</small></h2><div className="adminRows">{notices.map((item) => <article className="adminRow" key={item.noticeId}><div><span className="adminBadge">{item.noticeType === "ALARM" ? "알림" : "게시판"}</span><strong>{item.title}</strong><p>{item.content}</p><small>{new Date(item.updatedAt).toLocaleString("ko-KR")}</small></div><div className="rowActions"><button onClick={() => setEditingNotice(item)}>수정</button><button className="dangerButton" onClick={() => void remove("notice", item.noticeId, item.title)}><Trash2 size={14} /> 삭제</button></div></article>)}</div></div></section> : null}
 
-  return <main className="contentShell adminPage">
-    <header className="sectionHeader"><div><p className="eyebrow">OPERATIONS</p><h1>운영 콘솔</h1><p>공지, 신고, 장소 품질과 동기화 이력을 한곳에서 관리합니다.</p></div><button type="button" className="quietButton" onClick={() => void load()}>새로고침</button></header>
-    {notice ? <div className="successBanner" role="status">{notice}</div> : null}
-    {error ? <div className="inlineError"><p>{error}</p><button type="button" onClick={() => setError(null)}>닫기</button></div> : null}
+    {section === "content" ? <section className="adminContentGrid"><div className="adminPanel"><h2>후기 관리 <small>{reviews.length}</small></h2><p className="adminHelp">부적절한 후기를 확인한 후 관리자 권한으로 강제 삭제합니다.</p><div className="adminRows">{reviews.map((item) => <article className="adminRow" key={item.reviewId}><div><strong>{item.title}</strong><p>{item.authorNickname} · {item.startStationName} → {item.endStationName}</p><small>후기 #{item.reviewId} · {new Date(item.createdAt).toLocaleDateString("ko-KR")}</small></div><button className="dangerButton" onClick={() => void remove("review", item.reviewId, item.title)}><Trash2 size={14} /> 강제 삭제</button></article>)}</div></div><div className="adminPanel"><h2>모집글 관리 <small>{posts.length}</small></h2><p className="adminHelp">운영 정책에 맞지 않는 모집글을 관리자 권한으로 삭제합니다.</p><div className="adminRows">{posts.map((item) => <article className="adminRow" key={item.postId}><div><strong>{item.title}</strong><p>{item.author.nickname} · {item.recruitment.recruitStatus}</p><small>모집글 #{item.postId} · {new Date(item.createdAt).toLocaleDateString("ko-KR")}</small></div><button className="dangerButton" onClick={() => void remove("post", item.postId, item.title)}><Trash2 size={14} /> 강제 삭제</button></article>)}</div></div></section> : null}
 
-    <section className="adminPanel"><div className="adminPanelHeader"><div><p className="eyebrow">MODERATION</p><h2>신고 큐</h2></div><select value={reportStatus} onChange={(event) => setReportStatus(event.target.value as typeof reportStatus)}><option value="">전체</option><option value="OPEN">미처리</option><option value="RESOLVED">처리 완료</option><option value="DISMISSED">기각</option></select></div>
-      <div className="adminRows">{reports.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.resourceType} · {item.reason}</strong><p>{item.detail ?? "상세 사유 없음"}</p><small>{new Date(item.createdAt).toLocaleString("ko-KR")} · {item.status}</small></div>{item.status === "OPEN" ? <div className="rowActions"><button type="button" onClick={() => void resolveReport(item, "RESOLVED")}>처리</button><button type="button" onClick={() => void resolveReport(item, "RESOLVED", true)}>숨김 처리</button><button type="button" onClick={() => void resolveReport(item, "DISMISSED")}>기각</button></div> : null}</article>)}</div>
-    </section>
-
-    <section className="adminGrid"><div className="adminPanel"><h2>공지 · 이벤트 관리</h2><form className="adminForm" onSubmit={createNotice}><label>종류<select name="kind" defaultValue="NOTICE"><option value="NOTICE">공지</option><option value="EVENT">이벤트</option></select></label><label>제목<ClearableInput name="title" minLength={2} required /></label><label>본문<textarea name="body" rows={5} minLength={2} required /></label><label>배너 URL (선택)<ClearableInput name="bannerUrl" type="url" /></label><div className="adminDateFields"><label>시작일<input name="startsAt" type="datetime-local" /></label><label>종료일<input name="endsAt" type="datetime-local" /></label></div><label>상태<select name="status" defaultValue="DRAFT"><option value="DRAFT">초안</option><option value="PUBLISHED">즉시 게시</option></select></label><button className="primaryButton" type="submit">저장</button></form><div className="adminRows compact">{notices.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.title}</strong><small>{item.kind === "EVENT" ? "이벤트" : "공지"} · {item.status}</small></div>{item.status === "DRAFT" ? <button type="button" onClick={() => void publishNotice(item)}>게시</button> : null}</article>)}</div></div>
-      <div className="adminPanel"><h2>장소 품질</h2><div className="adminRows compact">{places.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.name}</strong><small>{item.dataStatus}</small></div>{item.dataStatus !== "VERIFIED" ? <button type="button" onClick={() => void verifyPlace(item.id)}>검증 완료</button> : null}</article>)}</div></div>
-    </section>
-
-    <section className="adminGrid"><div className="adminPanel"><h2>데이터 동기화</h2><p>먼저 dry-run으로 입력과 잠금을 검증한 뒤 실제 작업을 큐에 등록합니다.</p><div className="rowActions"><button type="button" onClick={() => void startSync(true)}>Dry-run</button><button type="button" onClick={() => void startSync(false)}>동기화 요청</button></div>{syncResult ? <pre className="syncResult">{syncResult.status}\n{syncResult.message}</pre> : null}</div>
-      <div className="adminPanel"><h2>최근 감사 로그</h2><div className="adminRows compact auditRows">{audits.map((item) => <article className="adminRow" key={item.id}><div><strong>{item.action}</strong><p>{item.resourceType} · {item.resourceId}</p><small>{item.reason} · {new Date(item.createdAt).toLocaleString("ko-KR")}</small></div></article>)}</div></div>
-    </section>
+    {section === "places" ? <section className="adminWorkspace"><div className="adminPanel"><h2>장소 추가·수정</h2><p className="adminHelp">장소 ID를 비우면 추가, 입력하면 해당 장소를 수정합니다.</p><form className="adminForm" onSubmit={savePlace}><label>수정할 장소 ID (추가 시 비움)<input name="placeId" type="number" min="1" /></label><div className="adminFieldGrid"><label>장소명<input name="placeName" required /></label><label>카테고리<select name="category"><option value="FOOD">맛집</option><option value="CAFE">카페</option><option value="CULTURE">문화</option><option value="NATURE">산책</option><option value="SHOPPING">쇼핑</option><option value="STAY">숙박</option></select></label></div><label>주소<input name="address" required /></label><div className="adminFieldGrid"><label>위도<input name="latitude" type="number" step="any" required /></label><label>경도<input name="longitude" type="number" step="any" required /></label></div><label>접근 역 ID (쉼표 구분)<input name="stationIds" required placeholder="1, 2" /></label><label>전화번호<input name="phone" /></label><label>설명<textarea name="description" rows={4} /></label><label>이미지 URL (한 줄에 하나)<textarea name="imageUrls" rows={3} /></label><button className="primaryButton" type="submit">장소 저장</button></form></div><div className="adminPanel adminDangerPanel"><h2>장소 삭제</h2><p>현재 백엔드에는 관리자용 전체 장소 목록 API가 없습니다. 공개 화면에서 확인한 장소 ID로 삭제할 수 있습니다.</p><form className="adminInlineDelete" onSubmit={(event) => { event.preventDefault(); const id = Number(new FormData(event.currentTarget).get("deletePlaceId")); if (id) void remove("place", id, `장소 #${id}`); }}><input name="deletePlaceId" type="number" min="1" required placeholder="장소 ID" /><button className="dangerButton" type="submit"><Trash2 size={15} /> 장소 삭제</button></form></div></section> : null}
   </main>;
 }

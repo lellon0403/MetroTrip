@@ -1,7 +1,7 @@
 "use client";
 
 import type { components } from "@metrotrip/contracts";
-import { Star, ThumbsUp } from "lucide-react";
+import { Star, ThumbsUp, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
@@ -20,6 +20,8 @@ type Dashboard = {
 
 type MyPanel = "dashboard" | "recentPlans" | "favorites" | "reviews" | "recruitments" | "account";
 type AccountOption = "profile" | "password" | "withdrawal";
+type RecruitmentTab = "owned" | "applied";
+type MyApplication = components["schemas"]["ApplicationView"] & { recruitmentTitle?: string; meetingAt?: string | null };
 
 const empty: Dashboard = { plans: [], reviews: [], recruitments: [], applications: [], favorites: null };
 
@@ -32,6 +34,7 @@ export default function MyPage() {
   const [accountError, setAccountError] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<MyPanel>("dashboard");
   const [activeAccountOption, setActiveAccountOption] = useState<AccountOption>("profile");
+  const [recruitmentTab, setRecruitmentTab] = useState<RecruitmentTab>("owned");
 
   function selectAccountOption(option: AccountOption) {
     setActiveAccountOption(option);
@@ -112,6 +115,24 @@ export default function MyPage() {
     }
   }
 
+  async function deleteOwnedRecruitment(id: string, title: string) {
+    if (!window.confirm(`‘${title}’ 모집글을 삭제할까요?`)) return;
+    const { response } = await api.DELETE("/api/v1/recruitments/{recruitment_id}", { params: { path: { recruitment_id: id } } });
+    if (response.ok) setData((current) => ({ ...current, recruitments: current.recruitments.filter((item) => item.id !== id) }));
+    else setAccountError("모집글을 삭제하지 못했습니다.");
+  }
+
+  async function leaveRecruitment(application: MyApplication) {
+    const meetingAt = application.meetingAt ? new Date(application.meetingAt) : null;
+    const upcoming = Boolean(meetingAt && !Number.isNaN(meetingAt.getTime()) && meetingAt >= new Date());
+    if (application.status === "ACCEPTED" && upcoming) {
+      if (window.prompt("예정된 모집에서 탈퇴하려면 ‘해당 모집에서 탈퇴합니다’를 입력해 주세요.") !== "해당 모집에서 탈퇴합니다") return;
+    } else if (!window.confirm("신청 목록에서 삭제할까요?")) return;
+    const { error: apiError } = await api.DELETE("/api/v1/recruitments/{recruitment_id}/applications/me", { params: { path: { recruitment_id: application.recruitmentId } } });
+    if (apiError) setAccountError("모집 신청을 삭제하지 못했습니다.");
+    else setData((current) => ({ ...current, applications: current.applications.filter((item) => item.id !== application.id) }));
+  }
+
   if (status === "loading") return <main className="centerState"><p>내 활동을 불러오는 중…</p></main>;
   if (status === "anonymous") return <main className="centerState"><h1>내 활동은 로그인 후 확인할 수 있어요</h1><Link className="primaryButton" href="/login">로그인</Link></main>;
 
@@ -137,7 +158,7 @@ export default function MyPage() {
         <section><div className="mySectionTitle"><h2>최근 일정</h2><Link href="/plans">전체 보기</Link></div>{data.plans.map((plan) => <Link className="myRow" key={plan.id} href="/plans"><strong>{plan.title}</strong><span>{plan.startDate} · {plan.status}</span></Link>)}</section>
         <section><div className="mySectionTitle"><h2>내 후기</h2><Link href="/reviews/new">작성</Link></div>{data.reviews.map((review) => <Link className="myRow" key={review.id} href={`/reviews/${review.id}`} prefetch={false}><strong>{review.title}</strong><span><Star size={13} fill="currentColor" aria-hidden /> {review.rating} · <ThumbsUp size={12} aria-hidden /> {review.likeCount}</span></Link>)}</section>
         <section><div className="mySectionTitle"><h2>저장한 곳</h2><Link href="/discover">탐색</Link></div>{data.favorites?.stations.map((station) => <div className="myRow" key={station.id}><strong>{station.name}역</strong><span>즐겨찾는 역</span></div>)}{data.favorites?.places.map((place) => <div className="myRow" key={place.id}><strong>{place.name}</strong><span>{place.category}</span></div>)}</section>
-        <section><div className="mySectionTitle"><h2>모집 활동</h2><Link href="/recruitments">전체 보기</Link></div>{data.recruitments.map((item) => <Link className="myRow" href={`/recruitments/${item.id}`} key={item.id} prefetch={false}><strong>{item.title}</strong><span>{item.acceptedCount}/{item.capacity}명</span></Link>)}{data.applications.map((item) => <Link className="myRow" href={`/recruitments/${item.recruitmentId}`} key={item.id} prefetch={false}><strong>참여 신청</strong><span>{item.status}</span></Link>)}</section>
+        <section><div className="mySectionTitle"><h2>모집 활동</h2><Link href="/recruitments">전체 보기</Link></div><div className="accountOptionList recruitmentActivityTabs" role="tablist"><button className={recruitmentTab === "owned" ? "isActive" : ""} onClick={() => setRecruitmentTab("owned")}>내가 작성한 모집글</button><button className={recruitmentTab === "applied" ? "isActive" : ""} onClick={() => setRecruitmentTab("applied")}>내가 신청한 모집글</button></div>{recruitmentTab === "owned" ? data.recruitments.map((item) => <div className="myRecruitmentRow" key={item.id}><Link className="myRow" href={`/recruitments/${item.id}`} prefetch={false}><strong>{item.title}</strong><span>{item.acceptedCount}/{item.capacity}명</span></Link><button aria-label={`${item.title} 삭제`} onClick={() => void deleteOwnedRecruitment(item.id, item.title)}><Trash2 size={16} /></button></div>) : (data.applications as MyApplication[]).map((item) => <div className="myRecruitmentRow" key={item.id}><Link className="myRow" href={`/recruitments/${item.recruitmentId}`} prefetch={false}><strong>{item.recruitmentTitle ?? "참여 신청 모집글"}</strong><span>{item.status === "ACCEPTED" ? "수락" : "신청 완료"}</span></Link><button aria-label={`${item.recruitmentTitle ?? "모집 신청"} 삭제`} onClick={() => void leaveRecruitment(item)}><Trash2 size={16} /></button></div>)}</section>
         <section id="account" className="accountSettings">
           <div className="mySectionTitle"><h2>계정 설정</h2><span>PII 익명화 정책</span></div>
           <div className="accountOptionList" role="tablist" aria-label="계정 설정 옵션">

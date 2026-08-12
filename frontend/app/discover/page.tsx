@@ -41,17 +41,18 @@ type TimelineItemProps = {
   onOpenTimetable: () => void;
   onRemove: () => void;
   onFocus: () => void;
+  readOnly: boolean;
 };
 
-function SortableTimelineItem({ item, index, label, timeEditing, warning, stationRole, onSetTime, onOpenTimePicker, onOpenTimetable, onRemove, onFocus }: TimelineItemProps) {
+function SortableTimelineItem({ item, index, label, timeEditing, warning, stationRole, onSetTime, onOpenTimePicker, onOpenTimetable, onRemove, onFocus, readOnly }: TimelineItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const isStation = item.itemType === "STATION";
   return <li ref={setNodeRef} style={style} className={`${item.itemType.toLowerCase()} ${isDragging ? "dragging" : ""}`}>
-    <button type="button" className="dragHandle" aria-label={`${index + 1}번 ${label} 순서 이동`} {...attributes} {...listeners}><GripVertical size={17} aria-hidden /></button>
+    {!readOnly ? <button type="button" className="dragHandle" aria-label={`${index + 1}번 ${label} 순서 이동`} {...attributes} {...listeners}><GripVertical size={17} aria-hidden /></button> : <span className="dragHandle" aria-hidden><GripVertical size={17} /></span>}
     <button type="button" className="timelineNode" aria-label={`${index + 1}번 ${label} 지도에서 보기`} onClick={onFocus}>{isStation ? <MapPinned size={14} aria-hidden /> : index + 1}</button>
-    <div><strong>{label}{stationRole ? <span className={`timelineStationRole ${stationRole === "경유" ? "via" : ""}`}>{stationRole}</span> : null}</strong>{isStation ? <div className="timelineTime"><span>{item.scheduledTime?.slice(0, 5) ?? "시간 미지정"}</span><button type="button" onClick={onOpenTimetable}><Clock3 size={14} aria-hidden /> 시간표에서 선택</button></div> : item.itemType === "PLACE" ? <div className="timelineTime">{item.scheduledTime && !timeEditing ? <span>{item.scheduledTime.slice(0, 5)}</span> : null}{timeEditing ? <label><span className="srOnly">{label} 시각</span><input autoFocus type="time" value={item.scheduledTime?.slice(0, 5) ?? ""} onChange={(event) => onSetTime(event.target.value)} /></label> : <button type="button" onClick={onOpenTimePicker}><Clock3 size={14} aria-hidden /> 시간 지정</button>}</div> : <small>{item.note ?? "메모"}</small>}{warning ? <p className="timelineWarning">{warning}</p> : null}</div>
-    <button type="button" className="timelineDelete" aria-label={`${label} 삭제`} onClick={onRemove}><Trash2 size={16} aria-hidden /></button>
+    <div><strong>{label}{stationRole ? <span className={`timelineStationRole ${stationRole === "경유" ? "via" : ""}`}>{stationRole}</span> : null}</strong>{isStation ? <div className="timelineTime"><span>{item.scheduledTime?.slice(0, 5) ?? "시간 미지정"}</span>{!readOnly ? <button type="button" onClick={onOpenTimetable}><Clock3 size={14} aria-hidden /> 시간표에서 선택</button> : null}</div> : item.itemType === "PLACE" ? <div className="timelineTime">{item.scheduledTime && !timeEditing ? <span>{item.scheduledTime.slice(0, 5)}</span> : null}{!readOnly && (timeEditing ? <label><span className="srOnly">{label} 시각</span><input autoFocus type="time" value={item.scheduledTime?.slice(0, 5) ?? ""} onChange={(event) => onSetTime(event.target.value)} /></label> : <button type="button" onClick={onOpenTimePicker}><Clock3 size={14} aria-hidden /> 시간 지정</button>)}</div> : <small>{item.note ?? "메모"}</small>}{warning ? <p className="timelineWarning">{warning}</p> : null}</div>
+    {!readOnly ? <button type="button" className="timelineDelete" aria-label={`${label} 삭제`} onClick={onRemove}><Trash2 size={16} aria-hidden /></button> : null}
   </li>;
 }
 
@@ -82,6 +83,7 @@ function toWriteRequest(plan: PlanView): PlanWriteRequest {
       dayDate: day.dayDate,
       title: day.title,
       items: day.items.map((item) => ({
+        id: item.id,
         itemType: item.itemType,
         stationId: item.stationId ?? null,
         placeId: item.placeId ?? null,
@@ -917,7 +919,7 @@ export default function DiscoverPage() {
               const stationItems = items.filter((candidate) => candidate.itemType === "STATION");
               const stationIndex = stationItems.findIndex((candidate) => candidate.id === item.id);
               const stationRole = item.itemType !== "STATION" ? null : stationIndex === 0 ? "출발" : stationIndex === stationItems.length - 1 ? "도착" : "경유";
-              return <SortableTimelineItem key={item.id} item={item} index={index} label={label} timeEditing={timeEditingItemId === item.id} warning={timelineWarning(items, index)} stationRole={stationRole} onSetTime={(value) => updatePlanItem(item.id, { scheduledTime: value || null })} onOpenTimePicker={() => setTimeEditingItemId(item.id)} onOpenTimetable={() => { setTimeTargetItemId(item.id); setInspectorMode("timetable"); }} onRemove={() => removePlanItem(item.id)} onFocus={() => { if (item.stationId) setSelectedStationId(item.stationId); if (item.placeId) { const place = mapPlaces.find((candidate) => candidate.id === item.placeId); if (place) selectPlace(place); } }} />;
+              return <SortableTimelineItem key={item.id} item={item} index={index} label={label} timeEditing={timeEditingItemId === item.id} warning={timelineWarning(items, index)} stationRole={stationRole} readOnly={plannerReadOnly} onSetTime={(value) => updatePlanItem(item.id, { scheduledTime: value || null })} onOpenTimePicker={() => setTimeEditingItemId(item.id)} onOpenTimetable={() => { setTimeTargetItemId(item.id); setInspectorMode("timetable"); }} onRemove={() => removePlanItem(item.id)} onFocus={() => { if (item.stationId) setSelectedStationId(item.stationId); if (item.placeId) { const place = mapPlaces.find((candidate) => candidate.id === item.placeId); if (place) selectPlace(place); } }} />;
             })}</ol></SortableContext></DndContext>
           </>}
         </aside> : null}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { ClearableInput } from "@/components/ClearableInput";
-import { api, legacyPublicPost } from "@/lib/api";
+import { api, checkSignupAvailability, legacyPublicPost } from "@/lib/api";
 import { SessionRequestError, useSession, type RegisterInput } from "@/lib/session";
 
 type Mode = "login" | "register" | "reset";
@@ -69,7 +69,10 @@ export default function LoginPage() {
         if (!termsAgreed || !privacyAgreed) throw new Error("필수 약관에 동의해 주세요.");
         setRegisterWizardDraft((current) => ({ ...current, termsAgreed, privacyAgreed }));
       } else if (registerStep === 1) {
-        setRegisterWizardDraft((current) => ({ ...current, name: String(form.get("name") ?? "").trim(), nickname: String(form.get("nickname") ?? "").trim() }));
+        const nickname = String(form.get("nickname") ?? "").trim();
+        if (!await checkSignupAvailability("nickname", nickname)) throw new Error("이미 사용 중인 닉네임입니다.");
+        setNotice("사용 가능한 닉네임입니다.");
+        setRegisterWizardDraft((current) => ({ ...current, name: String(form.get("name") ?? "").trim(), nickname }));
       } else if (registerStep === 2) {
         const password = String(form.get("password") ?? "");
         const passwordConfirm = String(form.get("passwordConfirm") ?? "");
@@ -80,6 +83,7 @@ export default function LoginPage() {
         setRegisterWizardDraft((current) => ({ ...current, password, passwordConfirm }));
       } else if (registerStep === 3) {
         const email = String(form.get("email") ?? "").trim().toLowerCase();
+        if (!await checkSignupAvailability("email", email)) throw new Error("이미 가입된 이메일입니다.");
         await legacyPublicPost("/api/v1/auth/email-verifications", { email, purpose: "SIGNUP" });
         setRegisterWizardDraft((current) => ({ ...current, email }));
         setRegisterCode("");

@@ -291,6 +291,19 @@ def get_post(db: Session, post_id: int) -> PostDetailResponse:
     return _to_detail(post, author_nickname=nickname, accepted_count=accepted_count)
 
 
+def get_post_plan(db: Session, post_id: int):
+    """공개 모집글에 연결된 일정을 읽기 전용으로 반환한다."""
+    repository = CommunityRepository(db)
+    post = repository.find_post_by_id(post_id)
+    if not post:
+        raise _error("POST_NOT_FOUND", "모집글을 찾을 수 없습니다.", 404)
+    if post.plan_id is None:
+        raise _error("PLAN_NOT_FOUND", "연결된 일정이 없습니다.", 404)
+    from app.services import plans as plan_service
+
+    return plan_service.get_public_plan_by_id(db, post.plan_id)
+
+
 def update_post(
     db: Session,
     post_id: int,

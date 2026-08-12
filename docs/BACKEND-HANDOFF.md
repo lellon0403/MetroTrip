@@ -9,6 +9,12 @@
 
 ## 0. 2026-08-10 새 프론트 연동 상태
 
+### 2026-08-12 회원가입 중복 확인
+
+- `GET /api/v1/auth/email-availability?email=...` → `{ "available": boolean }`
+- `GET /api/v1/auth/nickname-availability?nickname=...` → `{ "available": boolean }`
+- 회원가입 UI는 다음 단계로 이동하거나 인증번호를 발송하기 전에 각각의 API를 호출합니다.
+
 기존 Vite 데이터 접근 경로 대신 Next.js UI의 `frontend/src/lib/api.ts`가 단일 진입점입니다. Codex UI 계약과 현재 FastAPI 계약의 필드·경로 차이는 `frontend/src/lib/legacyApiAdapter.ts`에서 변환합니다. 새 백엔드 기능을 추가할 때는 어댑터 우회를 늘리지 말고, OpenAPI 계약과 실제 FastAPI 엔드포인트를 맞춘 뒤 해당 변환을 제거하는 방향으로 진행합니다.
 
 현재 서버 계약에 없어 후속 구현이 필요한 항목:
@@ -626,3 +632,9 @@ DB 시드(`seed_03_stations`, `seed_04_line_stations`)를 변환해 **역 100개
   분기를 표현하기 어렵습니다. 처리 방식을 정해서 알려주세요.
 - 공개 데이터셋(jhj0517 gist)을 검토했으나 **천안·아산 구간이 통째로 누락**되어 있고,
   파일 자체에 좌표 부정확 경고가 붙어 있어 쓰지 않기로 했습니다.
+# 일정 공유 및 모집글 연결 (2026-08-12)
+
+- `POST /api/v1/plans/{plan_id}/share-links`: 소유자가 7일간 유효한 읽기 전용 링크를 발급합니다.
+- `GET /api/v1/shared-plans/{share_token}`: 로그인 없이 공유 일정을 조회합니다.
+- `board_posts.plan_id`: 모집글 작성 시 소유자의 일정을 선택적으로 연결합니다.
+- `GET /api/v1/posts/{post_id}/plan`: 공개 모집글에 연결된 일정을 로그인 없이 읽기 전용으로 조회합니다. 연결 일정이 없으면 404를 반환합니다.

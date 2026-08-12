@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, use, useCallback, useEffect, useState } from "react";
 import { ClearableInput } from "@/components/ClearableInput";
-import { api, applyToRecruitment } from "@/lib/api";
+import { api, applyToRecruitment, getRecruitmentPlan, type PublicRecruitmentPlan } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 type Recruitment = components["schemas"]["RecruitmentDetail"];
@@ -43,11 +43,16 @@ export default function RecruitmentDetailPage({ params }: { params: Promise<{ re
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [linkedPlan, setLinkedPlan] = useState<PublicRecruitmentPlan | null>(null);
 
   const load = useCallback(async () => {
     const { data, error: apiError } = await api.GET("/api/v1/recruitments/{recruitment_id}", { params: { path: { recruitment_id: recruitmentId } } });
     if (!data) { setError(apiMessage(apiError)); return; }
     setItem(data);
+    if (data.planId) {
+      try { setLinkedPlan(await getRecruitmentPlan(recruitmentId)); }
+      catch { setLinkedPlan(null); }
+    } else setLinkedPlan(null);
     if (user?.id === data.ownerId) {
       const result = await api.GET("/api/v1/recruitments/{recruitment_id}/applications", { params: { path: { recruitment_id: recruitmentId } } });
       setApplications(result.data?.items ?? []);
@@ -79,15 +84,20 @@ export default function RecruitmentDetailPage({ params }: { params: Promise<{ re
   }
 
   async function decide(id: string, decision: "ACCEPTED" | "REJECTED") {
-    const { error: apiError } = await api.PUT("/api/v1/recruitments/{recruitment_id}/applications/{application_id}", { params: { path: { recruitment_id: recruitmentId, application_id: id } }, body: { status: decision } });
-    if (apiError) setError(apiMessage(apiError)); else await load();
+    const { data, error: apiError } = await api.PUT("/api/v1/recruitments/{recruitment_id}/applications/{application_id}", { params: { path: { recruitment_id: recruitmentId, application_id: id } }, body: { status: decision } });
+    if (apiError || !data) setError(apiMessage(apiError));
+    else {
+      setApplications((current) => decision === "REJECTED" ? current.filter((application) => application.id !== id) : current.map((application) => application.id === id ? data : application));
+      if (decision === "ACCEPTED") setItem((current) => current ? { ...current, acceptedCount: current.acceptedCount + 1 } : current);
+      setNotice(decision === "ACCEPTED" ? "신청을 수락했습니다." : "신청을 거절했습니다.");
+    }
   }
 
   async function update(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!item) return;
     const form = new FormData(event.currentTarget);
     const meetingValue = String(form.get("meetingAt") ?? "");
-    const { data, error: apiError } = await api.PUT("/api/v1/recruitments/{recruitment_id}", { params: { path: { recruitment_id: item.id } }, headers: { "If-Match": `W/"${item.version}"` }, body: { planId: "", title: String(form.get("title")), body: String(form.get("body")), capacity: Number(form.get("capacity")), deadline: new Date(String(form.get("deadline"))).toISOString(), meetingAt: meetingValue ? new Date(meetingValue).toISOString() : "" } });
+    const { data, error: apiError } = await api.PUT("/api/v1/recruitments/{recruitment_id}", { params: { path: { recruitment_id: item.id } }, headers: { "If-Match": `W/"${item.version}"` }, body: { planId: item.planId ?? "", title: String(form.get("title")), body: String(form.get("body")), capacity: Number(form.get("capacity")), deadline: new Date(String(form.get("deadline"))).toISOString(), meetingAt: meetingValue ? new Date(meetingValue).toISOString() : "" } });
     if (data) { setEditing(false); setNotice("모집글을 수정했습니다."); await load(); } else setError(apiMessage(apiError));
   }
 
@@ -124,6 +134,7 @@ export default function RecruitmentDetailPage({ params }: { params: Promise<{ re
       </section>
 
       {notice ? <div className="successBanner storyNotice" role="status">{notice}</div> : null}
+      {myApplicationStatus === "ACCEPTED" ? <div className="successBanner storyNotice" role="status">참여 중인 모집입니다.</div> : null}
 
       <div className="storyLayout">
         <article className="storyArticle">
@@ -136,7 +147,7 @@ export default function RecruitmentDetailPage({ params }: { params: Promise<{ re
             <h2>자유 모집</h2>
             <div className="tripSummaryRoute"><i /><span>함께 떠나는 여행</span><i /></div>
             <dl><div><dt><CalendarClock size={17} aria-hidden /> 만남일</dt><dd>{formatDate(item.meetingAt)}</dd></div><div><dt><MapPinned size={17} aria-hidden /> 모집 방식</dt><dd>자유 모집</dd></div><div><dt><Users size={17} aria-hidden /> 모집 인원</dt><dd><b>{item.acceptedCount}</b> / {item.capacity}명</dd></div></dl>
-            <span className="storyPlanButton"><CalendarDays size={17} aria-hidden /> {formatDate(item.meetingAt)}</span>
+            {linkedPlan ? <Link className="storyLinkedPlan" href={`/recruitments/${recruitmentId}/plan`}><span><CalendarDays size={17} aria-hidden /> 공유 일정 · 읽기 전용</span><strong>{linkedPlan.planTitle}</strong><small>{linkedPlan.startStationName} → {linkedPlan.endStationName}</small><ol>{linkedPlan.items.map((planItem) => <li key={planItem.planItemId}><span>{planItem.visitTime.slice(0, 5)}</span>{planItem.placeName}</li>)}</ol><em>일정 전체 보기 →</em></Link> : <span className="storyPlanButton"><CalendarDays size={17} aria-hidden /> {formatDate(item.meetingAt)}</span>}
           </section>
           {!owner && status === "authenticated" ? <section className="storyApplyCard"><span>같은 방향의 여행을 찾고 있다면</span><b>이 모집에 합류해 보세요.</b>{myApplicationStatus && myApplicationStatus !== "CANCELED" ? <button type="button" className="outlineButton" onClick={() => void cancel()}>참여 신청 취소 ({myApplicationStatus})</button> : <button type="button" disabled={!isOpen} onClick={() => void apply()}><UserPlus size={17} aria-hidden /> 참여 신청하기</button>}</section> : !owner ? <section className="storyApplyCard"><Link className="outlineButton" href="/login">로그인 후 참여 신청하기</Link></section> : null}
           {owner ? <section className="applicationPanel storyApplications"><h2>신청자 관리</h2>{applications.length === 0 ? <p>아직 신청자가 없습니다.</p> : applications.map((application) => <div className="applicationRow" key={application.id}><div><strong>{application.applicantName}</strong><span>{application.status}</span></div>{application.status === "APPLIED" ? <div><button type="button" onClick={() => void decide(application.id, "ACCEPTED")}>수락</button><button type="button" onClick={() => void decide(application.id, "REJECTED")}>거절</button></div> : null}</div>)}</section> : null}

@@ -398,7 +398,26 @@ def get_shared_plan(db: Session, share_token: str) -> SharedPlanResponse:
     detail = _build_responses(repository, [plan])[0]
     return SharedPlanResponse(
         plan_title=detail.plan_title,
+        start_station_id=detail.start_station_id,
         start_station_name=detail.start_station_name,
+        end_station_id=detail.end_station_id,
+        end_station_name=detail.end_station_name,
+        items=detail.items,
+    )
+
+
+def get_public_plan_by_id(db: Session, plan_id: int) -> SharedPlanResponse:
+    """공개 게시글에 연결된 계획을 수정 권한 없는 응답으로 조회한다."""
+    repository = PlanRepository(db)
+    plan = repository.find_plan_by_id(plan_id)
+    if not plan:
+        raise _error("SHARED_PLAN_NOT_FOUND", "연결된 일정을 찾을 수 없습니다.", 404)
+    detail = _build_responses(repository, [plan])[0]
+    return SharedPlanResponse(
+        plan_title=detail.plan_title,
+        start_station_id=detail.start_station_id,
+        start_station_name=detail.start_station_name,
+        end_station_id=detail.end_station_id,
         end_station_name=detail.end_station_name,
         items=detail.items,
     )

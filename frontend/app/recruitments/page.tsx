@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 type Recruitment = components["schemas"]["RecruitmentSummary"];
+type PlanSummary = components["schemas"]["PlanSummary"];
 type RecruitmentStatus = "" | "OPEN" | "CLOSED" | "CANCELED";
 type RecruitmentSort = "latest" | "popular" | "closing";
 
@@ -37,6 +38,7 @@ export default function RecruitmentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [plans, setPlans] = useState<PlanSummary[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +68,11 @@ export default function RecruitmentsPage() {
     return () => window.clearTimeout(task);
   }, [load]);
 
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    void api.GET("/api/v1/plans", { params: { query: { limit: 50 } } }).then(({ data }) => setPlans(data?.items ?? []));
+  }, [status]);
+
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -82,7 +89,7 @@ export default function RecruitmentsPage() {
     try {
       const { data, error: apiError } = await api.POST("/api/v1/recruitments", {
         body: {
-          planId: "",
+          planId: String(form.get("planId") ?? ""),
           title: String(form.get("title")),
           body: String(form.get("body")),
           capacity: Number(form.get("capacity")),
@@ -145,7 +152,7 @@ export default function RecruitmentsPage() {
       {showForm ? (
         <form className="recruitmentComposer feedComposer" onSubmit={create}>
           <h2>새 모집글</h2>
-          <label>모집 방식<select disabled defaultValue="free"><option value="free">자유 모집</option></select></label>
+          <label>공유 일정<select name="planId" defaultValue=""><option value="">일정 없이 자유 모집</option>{plans.map((plan) => <option key={plan.id} value={plan.id}>{plan.title}</option>)}</select><small>선택한 일정은 모집글에서 누구나 읽기 전용으로 볼 수 있습니다.</small></label>
           <label>제목<ClearableInput name="title" minLength={1} required /></label>
           <label>소개<textarea name="body" minLength={1} rows={5} required /></label>
           <div>
@@ -165,7 +172,7 @@ export default function RecruitmentsPage() {
             <span className="feedAvatar" aria-hidden>{item.ownerName.slice(0, 1)}</span>
             <div className="recruitmentPostBody">
               <header>
-                <strong>r/{item.ownerName}</strong><span className="routeSlash">/</span><b>자유 모집</b><span>·</span>
+                <strong>r/{item.ownerName}</strong><span className="routeSlash">/</span><b>{item.routeLabel}</b><span>·</span>
                 <time>{timeLabel(item.createdAt)}</time>
                 <span className={`statusPill ${item.status.toLowerCase()}`}>{item.status === "OPEN" ? "모집 중" : item.status === "CLOSED" ? "마감" : "취소"}</span>
               </header>

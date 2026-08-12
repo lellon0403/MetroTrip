@@ -160,6 +160,16 @@ def confirm_verification(
     )
 
 
+def email_available(db: Session, email: str) -> bool:
+    """회원가입 이메일을 사용할 수 있는지 확인한다."""
+    return AuthRepository(db).find_user_by_email(email.strip().lower()) is None
+
+
+def nickname_available(db: Session, nickname: str) -> bool:
+    """회원가입 닉네임을 사용할 수 있는지 확인한다."""
+    return not AuthRepository(db).nickname_exists(nickname.strip())
+
+
 def register(
     db: Session,
     request: RegisterRequest,
