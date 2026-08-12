@@ -25,10 +25,7 @@ class Settings(BaseSettings):
     debug: bool = False
     api_v1_prefix: str = "/api/v1"
     database_url: str
-    ssl_ca_path: str | None = Field(
-        default=None,
-        validation_alias="SSL_CA_PATH",
-    )
+    ssl_ca_path: str | None = None
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://192.168.0.108:5173"]
     jwt_secret: str = "local-only-change-this-secret"
     access_token_expire_minutes: int = 30
@@ -37,7 +34,7 @@ class Settings(BaseSettings):
     share_link_expire_days: int = Field(default=7, ge=1)
     verification_code_expire_minutes: int = 5
     verification_max_attempts: int = 5
-    email_mode: str = "console"
+    email_mode: str | None = None
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
