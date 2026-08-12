@@ -323,12 +323,12 @@ def create_media_upload(
     file_name = f"{secrets.token_hex(16)}{extension}"
     settings = get_settings()
     return MediaUploadResponse(
-        upload_url=str(
-            http_request.url_for("upload_review_media", file_name=file_name)
-        ),
-        media_url=str(
-            http_request.url_for("media", path=f"reviews/{file_name}")
-        ),
+        upload_url=http_request.url_for(
+            "upload_review_media", file_name=file_name
+        ).path,
+        media_url=http_request.url_for(
+            "media", path=f"reviews/{file_name}"
+        ).path,
         expires_in=settings.media_upload_expire_minutes * 60,
     )
 
