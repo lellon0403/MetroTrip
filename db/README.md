@@ -3,7 +3,7 @@
 MetroTrip 서비스의 데이터베이스 스키마와 관련 산출물입니다.
 
 > **MVP 단계에서는 사용하지 않습니다.** 현재 발표용 MVP는 프론트엔드 단독으로 동작하며 백엔드가 없습니다.
-> 이 폴더는 백엔드 연동(P1) 대비 산출물이며, [요구사항 정의서 V1.3](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) 기준으로 작성했습니다.
+> 이 폴더는 백엔드 연동(P1) 대비 산출물이며, [요구사항 정의서 V1.4](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) 기준으로 작성했습니다.
 
 ---
 
@@ -36,10 +36,10 @@ CREATE DATABASE IF NOT EXISTS metrotrip
 
 **새로 만드는 경우**
 
-1. `schema/mysql/schema_mysql_V1.11.sql`
+1. `schema/mysql/schema_mysql_V1.12.sql`
 2. `seed/` 하위 파일을 **번호 순서대로**. 파일명 앞 번호가 FK 의존 순서입니다.
 
-Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V1.11.sql`을 사용합니다 (Oracle Database 19c 기준, MySQL 장애 시 읽기 전용 대체 조회 용도).
+Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V1.12.sql`을 사용합니다 (Oracle Database 19c 기준, MySQL 장애 시 읽기 전용 대체 조회 용도).
 
 | 파일 | 테이블 | 건수 | 선행 |
 | --- | --- | --- | --- |
@@ -53,7 +53,21 @@ Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V
 | `seed_08_train_timetables.sql` | `train_timetables` | 1,690 | 02, 03 |
 
 각 파일 상단에 재적재용 `DELETE` 문이 주석으로 들어 있습니다.
-`seed_01_users.sql` 의 비밀번호는 전건 `test1234` 의 scrypt 해시이며 테스트 전용입니다.
+`seed_01_users.sql` 의 비밀번호는 전건 `test1234` 의 bcrypt 해시이며 테스트 전용입니다.
+
+**이미 만들어둔 DB 가 있는 경우**
+
+`migrations/` 하위 파일을 번호 순서대로 실행합니다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `001__add_indexes.sql` | 조회 성능용 인덱스 3건 |
+| `002__add_travel_plan_share_links.sql` | 여행 계획 공유 링크 테이블 신설 |
+| `003__alter_plan_items_add_type_position.sql` | `travel_plan_items` 에 `item_type`·`position` 추가 |
+
+`003` 은 여러 번 실행해도 안전합니다. 각 단계 앞에서 적용 여부를 확인해 이미 반영된 구간은
+건너뛰므로, 중간에 실패해 일부만 적용된 DB 에도 그대로 쓸 수 있습니다.
+Oracle 백업 DB 는 `003__alter_plan_items_oracle.sql` 을 사용합니다.
 
 ### 실행 결과 확인
 
@@ -67,7 +81,7 @@ FROM information_schema.table_constraints
 WHERE table_schema = 'metrotrip'
 GROUP BY constraint_type;
 
--- CHECK 22
+-- CHECK 24
 SELECT COUNT(*) FROM information_schema.check_constraints
 WHERE constraint_schema = 'metrotrip';
 ```
@@ -81,11 +95,11 @@ WHERE constraint_schema = 'metrotrip';
 | 항목 | 수 |
 | --- | --- |
 | 테이블 | 23 |
-| 컬럼 | 146 |
+| 컬럼 | 148 |
 | PRIMARY KEY | 23 |
 | UNIQUE | 11 |
-| FOREIGN KEY | 35 (CASCADE 16 / RESTRICT 12 / SET NULL 7) |
-| CHECK | 22 |
+| FOREIGN KEY | 35 (CASCADE 16 / RESTRICT 13 / SET NULL 6) |
+| CHECK | 24 |
 
 ### 테이블 목록
 
@@ -114,18 +128,15 @@ WHERE constraint_schema = 'metrotrip';
 `post_participants` 는 `board_posts` 에 CASCADE 로 묶여 있어, 작성자가 탈퇴하면 참여 신청 내역이
 DB 레벨에서 조용히 삭제됩니다. FK CASCADE 는 애플리케이션을 거치지 않으므로,
 **탈퇴 처리 직전에 참여자 목록을 읽어 취소 알림을 보내야** 합니다. 삭제 후에는 조회할 방법이 없습니다.
-관리자 모집 글 삭제 API도 같은 CASCADE를 사용하며, 현재 백엔드에는 참여자 알림과 관리자
-삭제 감사 로그가 구현되어 있지 않습니다.
 
 **마스터 테이블 FK 정책**
 `subway_lines` `stations` `places` 를 참조하는 FK 는 `ON DELETE RESTRICT` 로 통일했습니다.
-예외로 `train_timetables.destination_station_id`(종착역)와 `travel_plan_items.station_id`(경유역)는
-부가 정보이므로 `SET NULL` 입니다.
+예외는 `train_timetables.destination_station_id`(종착역) 하나뿐입니다. 부가 정보이므로 `SET NULL` 입니다.
 
-`travel_plan_items.place_id`의 RESTRICT 정책은 유지합니다. 관리자 장소 삭제 API는 같은
-트랜잭션에서 해당 장소를 참조하는 계획 항목을 명시적으로 먼저 삭제하고, 영향받은 계획의
-`updated_at`을 갱신한 다음 장소를 삭제합니다. 계획 자체는 유지됩니다. 애플리케이션을 거치지
-않고 장소를 직접 삭제하면 DB가 계속 거부합니다.
+`travel_plan_items.station_id` 도 예전에는 예외였으나 `SET NULL` → `RESTRICT` 로 바꿨습니다.
+`item_type = 'STATION'` 항목의 필수값이 되면서, 역이 삭제되어 NULL 이 되면
+`ck_tpi_item_reference` 를 위반하기 때문입니다. MySQL 은 `ON DELETE SET NULL` 인 컬럼을
+CHECK 조건에 넣지 못하게 막습니다(Error 3823).
 
 **역 코드를 보유하지 않습니다**
 `stations` 에 외부 코드 컬럼이 없습니다. 공공데이터 출처마다 체계가 달라
@@ -192,13 +203,32 @@ WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > NOW()
 `created_at` 이 `DEFAULT CURRENT_TIMESTAMP` 이므로 **INSERT 시 `created_at` 을 명시해야**
 `CHECK (expires_at > created_at)` 이 의도대로 평가됩니다.
 
-**여행 계획 동선 정렬**
-`travel_plan_items` 에 순번 컬럼이 없습니다. 동선 순서는 `visit_time` 오름차순으로 결정합니다.
-같은 시각이 둘 이상일 수 있으므로 조회 시 아래처럼 정렬해야 순서가 흔들리지 않습니다.
+**여행 계획 항목**
+`travel_plan_items` 는 `item_type` 으로 역(`STATION`)과 장소(`PLACE`)를 구분합니다.
+역 자체를 동선에 담을 수 있어 "천안역 → 역전시장 → 달식당 → 온양온천역" 같은 계획을 표현합니다.
+
+```
+position 1 : STATION  천안역
+position 2 : PLACE    천안역전시장
+position 3 : PLACE    달식당
+position 4 : STATION  온양온천역
+```
+
+`ck_tpi_item_reference` 가 조합을 강제합니다. STATION 이면 `station_id` 필수에 `place_id` 는 NULL,
+PLACE 면 `place_id` 가 필수입니다.
+
+동선 순서는 `position` 오름차순으로 결정합니다. 시각과 분리되어 있어 `visit_time` 없이도
+순서를 정할 수 있고, 드래그로 재배치할 때 시각을 건드리지 않아도 됩니다.
 
 ```sql
-ORDER BY visit_time, plan_item_id
+ORDER BY `position`, plan_item_id
 ```
+
+`POSITION` 은 MySQL 내장 함수명입니다. 실행에는 문제가 없지만 워크벤치 편집기가 문법 오류로
+표시하므로 쿼리에서는 백틱으로 감싸는 편이 좋습니다.
+
+`(plan_id, position)` UNIQUE 는 걸지 않았습니다. 드래그 재배치 중 순서를 맞바꾸는 순간
+일시적으로 중복이 생겨 제약에 걸릴 수 있기 때문입니다.
 
 **장소 대표 이미지**
 `places` 에 썸네일 컬럼이 없습니다. `place_images` 에서 `sort_order` 값이 가장 작은 행이 대표 이미지입니다.
@@ -391,9 +421,6 @@ ORDER BY table_name, index_name;
 
 다음 항목은 아직 확정되지 않았습니다.
 
-- **`travel_plan_items` 의 `(plan_id, visit_time)` UNIQUE** — 명세서 인덱스 시트에는 올라와 있지만
-  컬럼 명세와 DDL 에는 없습니다. 같은 시각에 두 장소를 등록할 수 있게 할지 결정이 필요합니다.
-  UNIQUE 는 데이터가 쌓인 뒤에 추가하기 어려우므로 테이블 생성 전에 정해야 합니다.
 - **게시판 요구사항 ID** — `board_posts` `post_participants` 의 근거가 `MB-신규` 로 되어 있습니다.
   요구사항 정의서를 V1.4 로 올려 정식 ID 를 부여한 뒤 명세서에 반영해야 합니다.
 - **`places.content_id`** — TourAPI 콘텐츠 ID 를 저장할 컬럼이 없어, 재수집·갱신 시 원본과
@@ -418,10 +445,9 @@ ORDER BY table_name, index_name;
 
 | 문서 | 위치 |
 | --- | --- |
-| 데이터베이스 명세서 V1.11 | 팀 공유 드라이브 |
+| 데이터베이스 명세서 V1.12 | 팀 공유 드라이브 |
 | 요구사항 정의서 V1.3 | [Google Sheets](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) |
-| ERD | `erd/ERD_V1.11.mmd` |
+| ERD | `erd/ERD_V1.12.mmd` |
 | 백엔드 연동 지점 | [docs/BACKEND-HANDOFF.md](../docs/BACKEND-HANDOFF.md) |
-| DB 이중화(MySQL/Oracle 페일오버) 설계 | [docs/DB-FAILOVER.md](../docs/DB-FAILOVER.md) |
 
 담당: 김유진
