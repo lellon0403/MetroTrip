@@ -9,6 +9,7 @@ import pytest
 from app import scheduler
 from scripts import sync_to_oracle as sync_module
 
+
 @pytest.fixture(autouse=True)
 def _reset_scheduler_state():
     scheduler._scheduler = None
