@@ -210,7 +210,7 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | GET | `/api/v1/reviews/{review_id}` | 후기 상세 |
 | PATCH | `/api/v1/reviews/{review_id}` | 후기 수정 |
 | DELETE | `/api/v1/reviews/{review_id}` | 후기 삭제 |
-| POST | `/api/v1/review-media` | 후기 미디어 업로드 URL 발급 |
+| POST | `/api/v1/review-media` | 후기 미디어 동일 출처 상대 업로드 URL 발급 |
 | GET | `/api/v1/notices` | 공지사항 목록 |
 | GET | `/api/v1/notices/{notice_id}` | 공지사항 상세 |
 | GET | `/api/v1/posts` | 일반·모집 게시글 목록 |

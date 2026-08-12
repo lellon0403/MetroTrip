@@ -58,7 +58,7 @@ DB의 `stations` 테이블에서 아무 값이나 두 개 확인해두세요(예
 
 ```json
 "media": [
-  { "mediaUrl": "http://localhost:8000/api/v1/media/reviews/xxxxx.jpg", "mediaType": "IMAGE" }
+  { "mediaUrl": "/api/v1/media/reviews/xxxxx.jpg", "mediaType": "IMAGE" }
 ]
 ```
 
@@ -96,7 +96,7 @@ DB의 `stations` 테이블에서 아무 값이나 두 개 확인해두세요(예
 - [o] 다른 계정으로 `PATCH /reviews/{id}` 시도 → 403 `REVIEW_FORBIDDEN`
 - [o] 본인 계정으로 `PATCH /reviews/{id}` (태그 교체 포함) → 200, `tags`가 새 값으로 바뀜
 - [o] 본인 계정으로 `DELETE /reviews/{id}` → 204, 이후 `GET`은 404
-- [o] `POST /review-media` (`contentType: image/jpeg`) → `uploadUrl`/`mediaUrl`/`expiresIn` 발급
+- [o] `POST /review-media` (`contentType: image/jpeg`) → 동일 출처 상대 경로인 `uploadUrl`/`mediaUrl`과 `expiresIn` 발급
 - [o] 위 `uploadUrl`에 아무 파일이나 **PUT**(raw body)으로 업로드 → 204
 - [o] 위 `mediaUrl`을 브라우저로 열기 → 방금 올린 파일이 그대로 보임
 - [o] `contentType: text/plain` 등 지원 안 하는 타입으로 업로드 URL 요청 → 400 `UNSUPPORTED_MEDIA_TYPE`
