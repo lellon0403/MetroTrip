@@ -20,6 +20,9 @@ export function toNumber(value: unknown, fallback = 0) {
 export function normalizeMediaUrl(value: unknown) {
   const raw = String(value ?? "");
   if (!raw) return raw;
+  if (/^http:\/\/tong\.visitkorea\.or\.kr\//i.test(raw)) {
+    return raw.replace(/^http:\/\//i, "https://");
+  }
   try {
     const url = new URL(raw);
     if (!/^localhost$|^127(?:\.\d{1,3}){3}$/.test(url.hostname)) return raw;
@@ -86,6 +89,8 @@ export function toLegacyCategory(category: string) {
 }
 
 export function mapLegacyPlace(place: LegacyJson, distanceMeters?: number | null) {
+  const firstImage = Array.isArray(place.images) ? place.images[0] : null;
+  const imageUrl = normalizeMediaUrl(place.imageUrl ?? firstImage?.imageUrl);
   return {
     id: toId(place.placeId),
     name: String(place.placeName ?? ""),
@@ -96,6 +101,7 @@ export function mapLegacyPlace(place: LegacyJson, distanceMeters?: number | null
     distanceMeters: distanceMeters ?? null,
     dataStatus: "VERIFIED",
     favoriteCount: 0,
+    imageUrl: imageUrl || null,
   };
 }
 
