@@ -552,3 +552,15 @@ Oracle 인스턴스는 우선 **MySQL과 같은 머신**에 둡니다. 이에 �
 - `sync_to_oracle.py`의 행 조회·배치 삽입 로직이 `_upsert_table()`/`run_sync()`에 중복
 - `get_db()`/`get_read_db()`의 MySQL 세션 yield 블록이 동일하게 중복
 - `db_failover._state`가 타입 없는 dict — dataclass가 더 명확할 수 있음
+
+## 15. 추가 발견 — `ORA-00932`: CLOB 컬럼에 DISTINCT 사용 불가 (2026-08-11)
+
+MySQL을 실제로 내려서 Oracle 폴백을 라이브로 테스트하던 중 발견. `GET /stations/{station_id}/places`(역 반경 1km 내 장소 조회 — 핵심 기능)가 Oracle 폴백 중 `ORA-00932: inconsistent datatypes: expected - got CLOB`로 실패했다.
+
+**원인**: [`app/repositories/transit.py`](../backend/app/repositories/transit.py)의 `list_places_by_station_id()`가 `select(Place)...distinct()`로 `Place` 엔티티 전체를 조회했는데, `Place.description`이 `Text`(Oracle에서 `CLOB`으로 매핑)라서 Oracle이 `SELECT DISTINCT`에 CLOB 컬럼이 섞이는 것을 거부한다. `place_stations`에 `(place_id, station_id)` 유니크 제약이 없어 조인 결과 중복 가능성 때문에 `.distinct()`를 걸어둔 게 원인 — MySQL은 이 제약이 없어 지금까지 안 걸렸다.
+
+**수정**: place_id만 먼저 distinct로 뽑고(CLOB 없음), 그 ID로 `Place` 전체를 다시 조회(이미 중복 없는 ID라 DISTINCT 불필요)하는 2단계 쿼리로 변경. `.distinct()`를 쓰는 다른 3곳(`transit.py`)은 전수 확인 결과 CLOB 컬럼을 포함하지 않아 문제없음 — 이 쿼리 하나로 범위가 한정된다.
+
+**검증**: 단위 테스트(SQLite, 중복 매핑 시나리오 포함) 그대로 통과. 실제 Oracle에 `station_id=93`(장소 114건 매핑)로 직접 질의해 `ORA-00932` 없이 정상 반환 확인.
+
+**시사점**: 이번이 §14 버그(`get_post`/`get_review`)에 이어 **두 번째**로, "MySQL에서만 돌려봤고 Oracle 폴백 경로로는 한 번도 안 타본 쿼리"에서 나온 버그다. `.distinct()`/CLOB 조합처럼 Oracle 고유의 SQL 제약이 더 있을 수 있으니, GET 엔드포인트를 늘릴 때 Oracle 폴백 경로도 최소 한 번은 실제로 태워보는 습관이 필요하다.

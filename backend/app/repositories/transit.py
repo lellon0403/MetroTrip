@@ -281,27 +281,40 @@ class TransitRepository:
         page: int,
         size: int,
     ) -> tuple[list[Place], int]:
-        """역 주변 장소를 중복 없이 페이지 조회하고 전체 건수를 반환한다."""
+        """역 주변 장소를 중복 없이 페이지 조회하고 전체 건수를 반환한다.
+
+        place_stations에 (place_id, station_id) 유니크 제약이 없어 조인 결과가
+        중복될 수 있다. 예전에는 select(Place)에 바로 distinct()를 걸었는데,
+        Place.description이 CLOB(Oracle)이라 Oracle 폴백 경로에서
+        "ORA-00932: inconsistent datatypes: expected - got CLOB"로 깨졌다
+        (CLOB 컬럼이 섞인 SELECT에는 DISTINCT를 못 씀). place_id만 먼저
+        distinct로 뽑고, 그 ID로 Place 전체를 다시 조회하는 2단계로 우회한다
+        — 2단계는 이미 중복 없는 ID 목록이라 DISTINCT가 필요 없다.
+        """
         conditions = [PlaceStation.station_id == station_id]
         if category is not None:
             conditions.append(Place.category == category)
 
-        total_statement = (
-            select(func.count(func.distinct(Place.place_id)))
-            .select_from(Place)
-            .join(PlaceStation, PlaceStation.place_id == Place.place_id)
-            .where(*conditions)
-        )
-        total = self.session.scalar(total_statement) or 0
-
-        statement = (
-            select(Place)
+        id_statement = (
+            select(Place.place_id)
             .join(PlaceStation, PlaceStation.place_id == Place.place_id)
             .where(*conditions)
             .distinct()
-            .order_by(Place.place_id)
+        )
+        total = self.session.scalar(select(func.count()).select_from(id_statement.subquery())) or 0
+
+        place_ids = self.session.scalars(
+            id_statement.order_by(Place.place_id)
             .offset((page - 1) * size)
             .limit(size)
+        ).all()
+        if not place_ids:
+            return [], total
+
+        statement = (
+            select(Place)
+            .where(Place.place_id.in_(place_ids))
+            .order_by(Place.place_id)
         )
         return list(self.session.scalars(statement)), total
 
