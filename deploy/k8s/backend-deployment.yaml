@@ -1,0 +1,88 @@
+# FastAPI 백엔드와 Oracle 동기화 스케줄러를 단일 Pod로 실행한다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: metrotrip
+  labels:
+    app.kubernetes.io/name: metrotrip
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: metrotrip
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: metrotrip
+        app.kubernetes.io/component: backend
+    spec:
+      containers:
+        - name: api
+          image: jeonseho00/metrotrip-backend:main
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: backend-env
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: media
+              mountPath: /app/media
+            - name: sync-state
+              mountPath: /app/var
+            - name: mysql-ca
+              mountPath: /run/certs/mysql
+              readOnly: true
+            - name: oracle-wallet
+              mountPath: /run/certs/oracle
+              readOnly: true
+      volumes:
+        - name: media
+          persistentVolumeClaim:
+            claimName: backend-media
+        - name: sync-state
+          emptyDir: {}
+        - name: mysql-ca
+          secret:
+            secretName: mysql-ca
+        - name: oracle-wallet
+          secret:
+            secretName: oracle-wallet
