@@ -3,13 +3,51 @@
 > 데스크톱에서 작업하던 내용을 **노트북 등 다른 PC에서 그대로 이어받기 위한 문서**입니다.
 > 이 문서만 읽으면 지금까지의 맥락 없이도 이어서 작업할 수 있습니다.
 >
-> 마지막 갱신: 2026-07-29 / 작업 브랜치: `feat/fe-metromap-viewer`
+> 마지막 갱신: 2026-08-06 / 기준 브랜치: `develop`
 
 ---
 
+> 마지막 갱신: 2026-08-11 / 작업 브랜치: `feat/fe-timetable-route`
+
+---
+
+## 0-A. 2026-08-11 지도·지하철 일정 경로
+
+- 최신 `origin/develop`에서 `feat/fe-timetable-route`를 만들었다.
+- `/discover` 지도 영역 왼쪽 위에 지도/지하철 슬라이드 전환을 추가했다.
+- 지하철 화면의 파란 일정 추가 버튼으로 역을 쌓으며 첫 역/중간 역/마지막 역을 출발/경유/도착으로 표시한다.
+- 브라우저 현지 현재 시각을 자동 갱신하고 `frontend/src/lib/transitTimetable.ts`가 공식 역별 시간표 API에서 현재 이후 가장 먼저 출발하는 동일 `trainNo` 열차를 이어 계산한다. 시간표 누락 구간은 임의 추정하지 않는다.
+- 역 API가 실패하면 노선 영역을 비워 두지 않고 백엔드 연결 오류와 `역 다시 불러오기` 버튼을 표시한다.
+- 기존 루트 `.env`의 `VITE_KAKAO_MAP_KEY`는 삭제되지 않았으며 로컬 실행용 `frontend/.env.local`에 복사했다. 이 파일은 Git에 포함하지 않는다.
+- 이 PC에는 `backend/.env`와 `METROTRIP_DATABASE_URL`이 없어 실제 DB 통합 확인은 백엔드 설정이 있는 환경에서 추가로 해야 한다.
+
+## 0. 2026-08-10 프론트 교체 우선 안내
+
+이 문서 아래쪽의 Vite/Feature-based 구조 설명은 이전 구현 기록입니다. 현재 작업 브랜치에서는 `experiment/codex-implementation`의 Next.js 16 UI를 `frontend/` 루트로 이식했습니다.
+
+- 실행: `cd frontend && npm install && npm run dev` (5173)
+- 라우트: `frontend/app/`
+- 화면 컴포넌트: `frontend/src/components/`
+- API 클라이언트: `frontend/src/lib/api.ts`
+- 기존 FastAPI 변환: `frontend/src/lib/legacyApiAdapter.ts`, `legacyMappers.ts`
+- 타입 계약: `frontend/src/contracts/schema.d.ts`
+- 디자인 토큰: `frontend/src/styles/tokens.css`
+- 카카오 키: `NEXT_PUBLIC_KAKAO_JS_KEY` 권장. 기존 `VITE_KAKAO_MAP_KEY`도 호환.
+- API 주소: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1` 권장. 기존 `VITE_API_BASE_URL`도 호환.
+
+현재 백엔드로 실제 연결되는 영역은 인증/재인증, 역·시간표·역 주변 장소, 일정 CRUD, 모집 CRUD·신청, 후기 CRUD·미디어, 공지입니다. 백엔드 계약에 없는 장소 즐겨찾기는 브라우저 로컬 전용이며 후기 좋아요·신고, 모집 질문·신고, 삭제 일정 복원, 일부 관리자 기능은 미지원 응답을 표시합니다.
+
+### 0-1. 2026-08-10 런타임 검증 결과
+
+- `GET /api/v1/stations` 호환 응답을 `{ items, nextCursor }`로 맞춰 역 목록 무한 로딩을 해결했습니다.
+- 역 조회 한도를 100개로 올려 기본 역 `천안`이 포함되도록 했습니다.
+- 다중 카테고리 쿼리의 콤마 구분값을 분리하고 빈 위도·경도는 선택 역 좌표로 대체해 천안역 맛집 4건과 지도 마커가 정상 표시됩니다.
+- 홈, 로그인, 맵, 후기 목록·상세·작성 권한, 모집 목록·상세, 일정·삭제 일정, 마이페이지, 관리자 권한 가드를 실제 브라우저에서 확인했으며 콘솔 오류는 0건입니다.
+- `npm run lint`, `npm run typecheck`, `npm run build`가 통과했습니다. Codex 샌드박스에서는 `.env` 읽기 경고가 발생하지만 일반 사용자로 실행 중인 개발 서버에서는 Kakao 지도가 정상 로드됩니다.
+
 ## 1. 지금 상태 요약
 
-프론트엔드 MVP의 **1~5단계와 마커·인포윈도우까지 완료**되어 있고, 배포본에서도 동작을 확인했습니다.
+프론트엔드 MVP의 **1~5단계와 마커·인포윈도우까지 완료**되어 있습니다. Feature-based architecture와 shadcn 기반 공용 UI 구조를 사용하며, 이메일 인증 회원가입·로그인·비밀번호 재설정 화면이 백엔드 인증 API와 연결되어 있습니다. 백엔드에는 회원 조회, 목적별 비밀번호 재인증, 이름·닉네임 수정, 비밀번호 변경과 회원 탈퇴까지 구현되어 있으며 프론트 회원 관리 화면 연결이 남아 있습니다.
 
 | SPEC 단계 | 내용 | 상태 |
 |---|---|---|
@@ -21,37 +59,69 @@
 | 6 | 반경 1km 장소 검색 → 마커 | 🔸 일부 (탕정역 2곳만 수동) — **다음 작업** |
 | 7 | 마커 클릭 → 인포윈도우 | ✅ 완료 |
 | 8 | 반응형 정리 + README | 🔸 반응형은 확인, README 남음 |
-| — | 발표용 프리뷰 화면 4종 (SPEC 2-1) | ✅ 완료 (노선도/경로/시간표/마이페이지, 동작 없음) |
+| — | 발표용 프리뷰 화면 3종 (SPEC 2-1) | ✅ 완료 (노선도/시간표/마이페이지, 동작 없음) |
+| — | 경로 — 최소 시간·최소 환승 + 경유역 장소 추천 (SPEC 2-2) | ✅ 동작 (역 100개, 환승·실제 시간표 반영) |
+| — | 이메일 인증 회원가입·로그인·비밀번호 재설정 | ✅ 프론트·백엔드 연동 완료 |
+| — | 회원 조회·수정·탈퇴 | ✅ 백엔드 완료 / 🔸 프론트 연동 필요 |
+| — | 역 즐겨찾기 조회·추가·삭제 | ✅ 백엔드 완료 / 🔸 프론트 연동 필요 |
+| — | 내가 작성한 후기 목록 조회 | ✅ 백엔드 완료 / 🔸 프론트 연동 필요 |
+| — | 내가 작성·참여한 모집 글 목록 조회 | ✅ 백엔드 완료 / 🔸 프론트 연동 필요 |
 
-### 만들어져 있는 것
+### 현재 프론트엔드 구조
 
 ```
-src/
-├─ api/stations.ts             역 데이터 접근 계층 (async, 나중에 fetch로 교체)
-├─ api/places.ts               역 주변 장소 접근 계층 (지금은 탕정역 2곳만)
-├─ data/stations.json          1호선 천안·아산 11개 역 (배열 순서 = 노선 순서)
-├─ data/places.json            장소 데이터 — 백엔드 응답 형태에 맞춰 둠
-├─ types/station.ts            Station 타입
-├─ types/place.ts              Place 타입 (백엔드 응답 예정 형태)
-├─ types/view.ts               화면 종류 (map / line / route / timetable / mypage)
-├─ types/kakao.d.ts            카카오맵 SDK 타입 선언
-├─ components/MapView/         지도 + 장소 마커 + 인포윈도우
-├─ components/StationList/     역 검색 + 목록 (지도 위 플로팅 카드)
-├─ components/TopNav/          상단 내비 + navItems.ts (메뉴 정의)
-├─ components/Preview/         프리뷰 화면 공통 껍데기
-├─ components/LineMap/         노선도 프리뷰
-│                              └ MetroMapPanel: 끌어보는 노선도 뷰어
-├─ components/RoutePlan/       경로 프리뷰
-├─ components/Timetable/       시간표 프리뷰
-├─ components/MyPage/          마이페이지 프리뷰
-├─ lib/asset.ts                public/ 파일 주소 만들기 (배포 경로 대응)
-└─ App.tsx                     화면 전환 + 선택 역 상태
+frontend/src/
+├─ app/                        앱 진입점·라우팅·전역 내비게이션
+├─ pages/                      MapPage·LineMapPage·RoutePage·MyPage·AuthPage
+├─ features/
+│  ├─ auth/                    인증 API·폼 상태·로그인/회원가입/재설정 UI
+│  ├─ station-map/             카카오맵·장소·역 선택 Feature
+│  │  ├─ api/                  장소 데이터 접근
+│  │  ├─ hooks/                SDK, 마커, 장소 조회, 역 검색 상태
+│  │  └─ ui/                   지도·컨트롤·역 목록·장소 목록
+│  ├─ line-map/                노선도 Feature
+│  │  ├─ data/                 노선도 좌표
+│  │  ├─ hooks/                역 조회·drag/zoom 상태
+│  │  └─ ui/                   노선도 SVG UI
+│  ├─ timetable/               시간표 Feature·다이얼로그 Hook/UI
+│  ├─ route-plan/              경로 Feature — 지도 선택·탐색·비교·타임라인
+│  │  ├─ api/                  경로 조회·시간표 (나중에 API 로 교체)
+│  │  ├─ data/                 노선별 역 순서 (임시 — API 로 대체될 것)
+│  │  ├─ hooks/                출발·도착 선택, 출발 시각, 계산 상태
+│  │  ├─ lib/                  그래프 탐색·도식 배치·시각 계산
+│  │  └─ ui/                   지하철 지도·커버 헤더·경로 비교·타임라인
+│  └─ my-page/                 마이페이지 프리뷰 Feature
+└─ shared/
+   ├─ lib/                     cn, asset, 역 데이터 접근 유틸리티
+   ├─ types/                   여러 기능이 공유하는 타입
+   └─ ui/                      shadcn 기반 Button·Input·Card·Dialog·Badge 등
 ```
+
+### 인증과 공용 UI
+
+- 인증 경로: `/login`, `/signup`, `/password-reset`
+- API 연결: `frontend/src/features/auth/api/auth.ts`
+- 로그인 토큰: `localStorage`의 `metrotrip-access-token`, `metrotrip-refresh-token`
+- 로그인만 Radix Dialog 기반 중앙 모달로 표시하고, 회원가입·비밀번호 찾기는 독립 페이지로 표시합니다.
+- 회원가입은 약관 동의 → 닉네임 → 이메일 인증 → 비밀번호 → 비밀번호 확인의 단계형 플로우입니다.
+- 반응형 레이아웃은 데스크톱(1024px 이상)에서 왼쪽 고정 사이드바를 사용하고, 태블릿·모바일에서는 하단 고정 메뉴와 하단 콘텐츠 패널을 사용합니다. 주요 반응형 값은 `frontend/src/index.css`의 공용 토큰으로 관리하며, 1024~1439px compact desktop, 데스크톱 높이 820px 이하 compact height, 1920px 이상 지도 확장 규칙을 적용합니다. 역 순서 목록은 모바일에서 `w-max`/`flex-nowrap` 가로 스크롤을 사용합니다.
+- 공용 UI는 `frontend/src/shared/ui/`에 두며 `Button`, `Input`, `Card`, `Dialog`, `Badge`, `SectionHeader`를 우선 재사용합니다.
+- className 결합은 `frontend/src/shared/lib/cn.ts`의 `cn()`을 사용합니다.
+- 디자인은 기존 색상 토큰을 유지하면서 지도 중심 Wanderlog 스타일의 카드·pill·여백 체계를 적용합니다.
 
 ### 아직 없는 것
 
-- 카테고리 기반 장소 검색 (지금은 탕정역 2곳만 손으로 넣어 둠)
+- 카테고리 기반 장소 검색 (지금은 탕정역 2곳만 정적 데이터로 제공)
 - 노선도/경로/시간표/마이페이지의 **실제 동작** (지금은 화면만 — SPEC 2-1 참고)
+- `/api/v1/users/me` 회원 조회와 목적별 재인증·수정·탈퇴 API를 마이페이지에 연결
+- 지도와 마이페이지에서 공용으로 사용할 역 즐겨찾기 API 모듈 연결
+- 마이페이지 후기 영역에 `GET /api/v1/users/me/reviews` 페이지 조회 연결
+- 마이페이지 모집 글 영역에 작성 글과 `APPLIED`·`ACCEPTED` 참여 글 페이지 조회 연결
+- 상세 계약과 헤더 처리 규칙은 `docs/BACKEND-HANDOFF.md` 5장 참고
+- 2~4호선 등 **1호선 외 노선** — DB 시드에 아직 1호선(인천·신창 갈래)만 있다
+- 시간표가 **8개 역만** 채워져 있다 (직산·탕정·신창은 0건). 없는 역은 앞뒤에서
+  추정해 `약 17:44` 처럼 표시한다 (BACKEND-HANDOFF 참고)
+- `/api/v1/users/me` 회원 조회 연동 (현재 로그인 후 마이페이지에는 조회 실패 안내 표시)
 
 ---
 
@@ -71,14 +141,14 @@ cd MetroTrip
 
 ### ② 최신 코드 받기
 
-앱 코드는 이제 `main`에 있습니다. 새 작업은 `main`에서 브랜치를 따서 시작하세요.
+앱 코드는 `develop`에 있습니다. 새 작업은 `develop`에서 브랜치를 따서 시작하세요.
 
 ```bash
 git fetch origin
 ```
 
 ```bash
-git checkout main
+git checkout develop
 ```
 
 ```bash
@@ -88,18 +158,22 @@ git pull
 ### ③ 패키지 설치
 
 ```bash
+cd frontend
+```
+
+```bash
 npm install
 ```
 
-### ④ `.env` 만들기 ← 이걸 빼먹으면 지도가 안 뜹니다
+### ④ `frontend/.env` 만들기 ← 이걸 빼먹으면 지도가 안 뜹니다
 
-`.env`는 GitHub에 올라가지 않습니다. **노트북에서 직접 만들어야 합니다.**
+`frontend/.env`는 GitHub에 올라가지 않습니다. **노트북에서 직접 만들어야 합니다.**
 
 ```bash
 cp .env.example .env
 ```
 
-그다음 `.env` 파일을 열어 값을 채웁니다.
+그다음 `frontend/.env` 파일을 열어 값을 채웁니다.
 
 ```
 VITE_KAKAO_MAP_KEY=여기에_JavaScript_키
@@ -154,7 +228,7 @@ Git 규칙·검증 규칙·한국어 응답 같은 팀 규칙은 **노트북에�
 | `http://192.168.x.x:5173` (LAN) | ❌ 401 |
 
 - **반드시 `localhost`로 접속**하세요. `127.0.0.1`은 안 됩니다
-- 포트는 `vite.config.ts`에서 5173으로 고정해 뒀습니다 (`strictPort`).
+- 포트는 `frontend/vite.config.ts`에서 5173으로 고정해 뒀습니다 (`strictPort`).
   5173이 사용 중이면 서버가 **에러를 내고 멈춥니다.** 이건 의도한 동작입니다 —
   조용히 다른 포트로 옮겨가면 원인을 못 찾기 때문입니다.
   이때는 5173을 쓰는 다른 프로그램을 끄세요
@@ -181,20 +255,20 @@ Git 규칙·검증 규칙·한국어 응답 같은 팀 규칙은 **노트북에�
 
 무료 쿼터: 지도 SDK 30만건/일, 장소 검색 10만건/일 — 데모에는 충분합니다.
 
-### ⑤ `public/` 이미지는 `asset()` 을 거쳐서 쓴다
+### ⑤ `frontend/public/` 이미지는 `asset()` 을 거쳐서 쓴다
 
 GitHub Pages 는 `https://lellon0403.github.io/MetroTrip/` 하위로 서비스됩니다.
 그래서 `<img src="/logo.png">` 처럼 슬래시로 시작하는 주소를 쓰면
 **로컬에서는 되는데 배포본에서만 404** 가 납니다. 찾기 어려운 실수입니다.
 
 ```tsx
-import { asset } from '../../lib/asset';
+import { asset } from '../../shared/lib/asset';
 <img src={asset('logo.png')} />
 ```
 
 ### ⑥ `max-w-md` 같은 클래스는 쓰면 안 된다
 
-`src/index.css`의 `@theme`에서 `--spacing-md: 16px`를 정의해 뒀기 때문에,
+`frontend/src/index.css`의 `@theme`에서 `--spacing-md: 16px`를 정의해 뒀기 때문에,
 같은 이름을 쓰는 `max-w-md` / `w-lg` 등이 **28rem이 아니라 16px로 계산**됩니다.
 글자가 한 줄에 하나씩 떨어지면 이 문제입니다. `max-w-[28rem]`처럼 값을 직접 적으세요.
 (`max-w-4xl`처럼 이름이 겹치지 않는 것은 정상 동작합니다)
@@ -204,9 +278,23 @@ import { asset } from '../../lib/asset';
 에러도 안 나고 그냥 안 보여서 헷갈립니다. `.map-view`는 부모 높이를 채우도록 되어 있고,
 부모(`.app-main`)에 `min-height: 0`이 필요합니다. 레이아웃을 고칠 때 이 부분을 깨뜨리지 마세요.
 
+### ⑧ 지도 영역의 크기가 바뀌면 `relayout()`이 필요하다
+
+카카오맵은 생성 시점의 컨테이너 크기로 내부 픽셀 좌표를 계산합니다.
+반응형 전환이나 패널 변경 뒤 확대·축소 화면이 작아 보이면 `useKakaoMap`의 `ResizeObserver`가
+`map.relayout()`을 호출하는지 확인하세요. 이 처리를 빼면 지도 타일이 부자연스럽게 갱신될 수 있습니다.
+
 ---
 
-## 5. 배포 — GitHub Pages ✅ 완료
+## 5. 배포 — GitHub Pages ⛔ 중단 (2026-08-11)
+
+> **프론트·백엔드 모두 Docker로 배포하는 방향으로 바뀌면서 GitHub Pages 배포는 중단했습니다.**
+> `.github/workflows/deploy.yml`은 push 트리거를 지워 더 이상 자동 실행되지 않습니다
+> (수동 실행만 가능). 배포 주소 `https://lellon0403.github.io/MetroTrip/`도 이후 자동 갱신
+> 안 됩니다. 현재 배포 계획은 `docs/CICD.md` 4·5장을 참고하세요 — 배포 서버(self-hosted
+> runner)가 아직 없어 실제 Docker 배포는 진행 전입니다.
+>
+> 아래는 GitHub Pages를 썼을 때의 설정 기록입니다. 재활성화할 일이 생기면 참고하세요.
 
 **배포 주소: https://lellon0403.github.io/MetroTrip/**
 
@@ -222,7 +310,7 @@ import { asset } from '../../lib/asset';
 ### 이미 되어 있는 것 (코드)
 
 - `.github/workflows/deploy.yml` — `main`에 푸시되면 자동 빌드·배포
-- `vite.config.ts` — 빌드 시에만 `base: '/MetroTrip/'` 적용
+- `frontend/vite.config.ts` — 빌드 시에만 `base: '/MetroTrip/'` 적용
   (개발 서버는 `/` 그대로라 `localhost:5173` 접속 방식은 바뀌지 않음)
 
 ### 저장소 설정 (완료됨 — 재설정 시 참고)
@@ -264,8 +352,14 @@ import { asset } from '../../lib/asset';
 ## 6. 팀원이 로컬에서 실행해보고 싶다고 할 때
 
 배포 전이라면 위 **2번 세팅 절차**를 그대로 전달하면 됩니다.
-`.env`의 키는 GitHub에 없으므로 **Discord DM 등으로 따로** 전달해야 합니다.
+`frontend/.env`의 키는 GitHub에 없으므로 **Discord DM 등으로 따로** 전달해야 합니다.
 (채팅방이나 스크린샷으로 키를 공유하지 마세요)
 
 카카오에 `http://localhost:5173`이 등록되어 있고, 팀원 PC에서도 주소가 같으므로
 **추가 등록 없이 그대로 작동**합니다.
+# 2026-08-12 일정 공유 UI/모집 연동
+
+- `/plans` 상세에 공유 링크 발급 버튼을 추가했습니다. 링크는 현재 브라우저 호스트 기준 `/shared/plans/{token}`으로 공유됩니다.
+- 공유 일정 화면은 비로그인 조회가 가능하고 읽기 전용임을 명시합니다.
+- 모집글 작성 폼에서 내 일정을 선택할 수 있으며, 모집 상세에서 연결 일정을 공개 읽기 전용으로 표시합니다.
+- 로컬 Docker는 `metrotrip-api`에 네트워크 별칭 `api`가 필요합니다. 현재 컨테이너에는 적용되어 있습니다.

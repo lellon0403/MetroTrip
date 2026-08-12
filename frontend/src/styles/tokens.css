@@ -1,0 +1,17 @@
+:root {
+  --mt-color-ink: #172033;
+  --mt-color-muted: #667085;
+  --mt-color-canvas: #f5f7fb;
+  --mt-color-surface: #ffffff;
+  --mt-color-line: #dce3ee;
+  --mt-color-brand: #175cd3;
+  --mt-color-brand-strong: #0b3b91;
+  --mt-color-accent: #f79009;
+  --mt-color-success: #067647;
+  --mt-color-danger: #b42318;
+  --mt-layout-content-max: 1180px;
+  --mt-layout-reading-max: 760px;
+  --mt-layout-rail: 88px;
+  --mt-radius-card: 24px;
+  --mt-shadow-card: 0 16px 44px rgb(23 32 51 / 8%);
+}

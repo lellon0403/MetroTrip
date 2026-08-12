@@ -73,17 +73,26 @@ docs: MVP 범위에서 다크모드 제외 명시
 >
 > 작업 시작 전 [WORKLOG.md](WORKLOG.md)에 **어떤 파일을 만질지** 적어두면 충돌을 미리 피할 수 있습니다.
 
+> 2026-08-10 이후 프론트는 Next.js App Router 구조입니다.
+
 | 영역 | 파일/폴더 | 주의사항 |
 |---|---|---|
-| 지도 | `src/components/MapView/*` | |
-| 역 목록/검색 | `src/components/StationList/*` | |
-| 역 데이터 | `src/data/stations.json` | **수정 전 공지** — 모두가 참조 |
-| 공통 타입 | `src/types/*` | **단독 수정 금지**, PR 필수 |
-| 전역 스타일 | `src/index.css`, `src/App.css` | 수정 전 공지 |
+| 화면·라우트 | `frontend/app/*` | Next.js 페이지와 페이지 전용 컴포넌트 |
+| 공용 UI | `frontend/src/components/*` | 여러 화면에서 재사용하는 컴포넌트 |
+| API·세션 | `frontend/src/lib/*` | API 클라이언트, FastAPI 호환 변환, 인증 세션 |
+| API 타입 | `frontend/src/contracts/*` | **단독 수정 금지**, UI와 어댑터가 함께 참조 |
+| 전역 스타일 | `frontend/app/globals.css`, `frontend/src/styles/tokens.css` | 디자인 토큰 변경 시 모든 화면 확인 |
 
-> `src/types/*` 와 `stations.json` 은 **모두가 참조하는 공용 파일**입니다.
-> 여기를 바꾸면 남의 코드가 깨집니다. 바꾸기 전에 반드시 알리세요.
+> `frontend/src/contracts/*`와 `frontend/src/styles/tokens.css`는 여러 화면이 참조합니다. 바꾸기 전에 반드시 알리세요.
 
+### 프론트엔드 구조 원칙
+
+- `frontend/app/`은 App Router 페이지와 페이지 전용 클라이언트 컴포넌트를 둡니다.
+- `frontend/src/components/`에는 실제로 여러 화면에서 재사용하는 UI만 둡니다.
+- API 호출은 `frontend/src/lib/api.ts`를 거치며, 현재 FastAPI와의 계약 차이는 `legacyApiAdapter.ts`에서만 변환합니다.
+- 서버 컴포넌트에서 기존 FastAPI를 직접 호출할 때는 `legacyMappers.ts`의 동일 변환 함수를 재사용합니다.
+- 고정 폭·색상·간격은 `frontend/src/styles/tokens.css`의 토큰으로 관리합니다.
+- 새 백엔드 계약이 Codex UI 계약과 일치하면 호환 변환을 제거하고 직접 연결합니다.
 ## 6. 문서화 규칙
 
 - 문서는 전부 `docs/` 아래 마크다운으로.
@@ -120,6 +129,6 @@ docs: MVP 범위에서 다크모드 제외 명시
 
 ## 8. 환경변수
 
-- `.env`는 **절대 커밋하지 않습니다.** (`.gitignore`에 포함되어 있음)
-- 새 환경변수를 추가하면 `.env.example`에 **키 이름만** 추가하고 Discord에 공유.
+- `frontend/.env`는 **절대 커밋하지 않습니다.** (`.gitignore`에 포함되어 있음)
+- 새 프런트엔드 환경변수를 추가하면 `frontend/.env.example`에 **키 이름만** 추가하고 Discord에 공유.
 - 카카오 키가 커밋된 걸 발견하면 즉시 Discord에 알리고 **키를 재발급**합니다.

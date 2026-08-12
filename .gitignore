@@ -2,17 +2,34 @@
 node_modules/
 .pnp
 .pnp.js
+.venv/
 
 # 빌드 결과물
 dist/
 dist-ssr/
 build/
 *.local
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
 
 # 환경변수 (카카오 API 키 절대 커밋 금지)
 .env
 .env.*
 !.env.example
+certs/
+deploy/*.env
+!deploy/*.env.example
+deploy/**/*.env
+!deploy/**/*.env.example
+
+# 로컬에 저장되는 업로드 미디어 (오브젝트 스토리지 미연동 상태)
+backend/media/
+
+# Oracle 동기화 스크립트가 기록하는 로컬 런타임 상태(docs/DB-FAILOVER.md §8.6)
+backend/var/
 
 # 에디터 / 툴
 .claude/
@@ -27,3 +44,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# 기타
+tmp
+.txt

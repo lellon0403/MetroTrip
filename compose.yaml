@@ -1,0 +1,75 @@
+# Docker Compose로 Caddy, 프론트엔드, 백엔드를 함께 배포한다.
+name: metrotrip
+
+services:
+  api:
+    image: jeonseho00/metrotrip-backend:main
+    env_file:
+      - ${BACKEND_ENV_FILE:-./deploy/docker/backend.env}
+    expose:
+      - "8000"
+    volumes:
+      - ./backend/certs:/run/certs:ro
+      - backend_media:/app/media
+      - backend_var:/app/var
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - internal
+
+  frontend:
+    image: jeonseho00/metrotrip-frontend:main
+    expose:
+      - "5173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:5173').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  backend_media:
+  backend_var:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,25 @@
+# metrotrip.kro.kr HTTPS 요청을 Traefik을 통해 프론트엔드로 전달한다.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: metrotrip
+  namespace: metrotrip
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - metrotrip.kro.kr
+      secretName: metrotrip-tls
+  rules:
+    - host: metrotrip.kro.kr
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 5173
