@@ -1,5 +1,3 @@
-# 원본: https://github.com/SunMoonUniv/ModuPick/blob/develop/.github/workflows/ci-backend.yml
-#
 # MetroTrip에 맞게 바꾼 점:
 #   - Python 버전을 backend/Dockerfile(python:3.10-slim)과 동일하게 3.10으로 맞췄다.
 #   - requirements-dev.txt가 없다. 대신 backend/pyproject.toml의
