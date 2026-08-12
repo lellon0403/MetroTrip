@@ -19,6 +19,7 @@ from app.schemas.transit import (
     LineListResponse,
     LineStationListResponse,
     LineSuggestionResponse,
+    PlaceAdminListResponse,
     PlaceAdminResponse,
     PlaceCategory,
     PlaceListResponse,
@@ -38,6 +39,27 @@ admin_router = APIRouter(
 )
 DatabaseSession = Annotated[Session, Depends(get_db)]
 ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
+
+
+@admin_router.get(
+    "",
+    response_model=PlaceAdminListResponse,
+    summary="관리자용 역별 장소 목록 조회",
+    responses=ERROR_RESPONSES,
+)
+def list_admin_places(
+    db: ReadDatabaseSession,
+    station_id: Annotated[int, Query(gt=0)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> PlaceAdminListResponse:
+    """선택한 역에 등록된 장소의 수정용 전체 정보를 반환한다."""
+    return transit_service.list_admin_places_by_station(
+        db,
+        station_id,
+        page=page,
+        size=size,
+    )
 
 
 @router.get(

@@ -204,3 +204,9 @@ class PlaceAdminResponse(PlaceResponse):
     created_by: int | None
     created_at: datetime
     updated_at: datetime
+
+
+class PlaceAdminListResponse(Pagination):
+    """관리자용 역별 장소 목록 응답."""
+
+    items: list[PlaceAdminResponse]

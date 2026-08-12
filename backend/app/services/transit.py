@@ -16,6 +16,7 @@ from app.schemas.transit import (
     LineStationListResponse,
     LineStationResponse,
     LineSuggestionResponse,
+    PlaceAdminListResponse,
     PlaceAdminResponse,
     PlaceCategory,
     PlaceImageResponse,
@@ -330,6 +331,31 @@ def list_station_places(
             )
             for place in places
         ],
+        page=page,
+        size=size,
+        total_elements=total,
+        total_pages=math.ceil(total / size) if total else 0,
+    )
+
+
+def list_admin_places_by_station(
+    db: Session,
+    station_id: int,
+    *,
+    page: int,
+    size: int,
+) -> PlaceAdminListResponse:
+    """관리자가 선택한 역에 연결된 장소와 수정용 전체 정보를 조회한다."""
+    repository = TransitRepository(db)
+    _find_station(repository, station_id)
+    places, total = repository.list_places_by_station_id(
+        station_id=station_id,
+        category=None,
+        page=page,
+        size=size,
+    )
+    return PlaceAdminListResponse(
+        items=[_build_place_admin_response(repository, place) for place in places],
         page=page,
         size=size,
         total_elements=total,

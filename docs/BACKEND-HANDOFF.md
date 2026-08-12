@@ -217,6 +217,7 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | PATCH | `/api/v1/admin/notices/{notice_id}` | 공지사항 수정 |
 | DELETE | `/api/v1/admin/notices/{notice_id}` | 공지사항 삭제 |
 | POST | `/api/v1/admin/places` | 장소 추가 |
+| GET | `/api/v1/admin/places?station_id={station_id}` | 관리자용 역별 장소 목록 및 수정 정보 조회 |
 | PATCH | `/api/v1/admin/places/{place_id}` | 장소 수정 |
 | DELETE | `/api/v1/admin/places/{place_id}` | 장소 삭제 |
 | DELETE | `/api/v1/admin/reviews/{review_id}` | 관리자 후기 삭제 |

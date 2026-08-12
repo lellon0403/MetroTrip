@@ -13,6 +13,7 @@ import { dateInSeoul } from "@/lib/date";
 import { useSession } from "@/lib/session";
 
 type Station = components["schemas"]["StationSummary"];
+type ReviewLine = { id: string; name: string; stations: Station[] };
 type Plan = components["schemas"]["PlanSummary"];
 type PlanView = components["schemas"]["PlanView"];
 type UploadedImage = { id: string; url: string; altText: string };
@@ -60,7 +61,9 @@ function ReviewComposerPage() {
   const costDialogRef = useRef<HTMLDialogElement>(null);
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
   const storyEditorRef = useRef<HTMLElement>(null);
-  const [stations, setStations] = useState<Station[]>([]);
+  const [reviewLines, setReviewLines] = useState<ReviewLine[]>([]);
+  const [originLineId, setOriginLineId] = useState("");
+  const [destinationLineId, setDestinationLineId] = useState("");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<PlanView | null>(null);
   const [title, setTitle] = useState("");
@@ -99,12 +102,17 @@ function ReviewComposerPage() {
 
 
   useEffect(() => {
-    void Promise.all([
-      api.GET("/api/v1/stations", { params: { query: { limit: 100, cursor: "1" } } }),
-      api.GET("/api/v1/stations", { params: { query: { limit: 100, cursor: "2" } } }),
-    ]).then((results) => {
-      const byId = new Map(results.flatMap(({ data }) => data?.items ?? []).map((station) => [station.id, station]));
-      setStations([...byId.values()]);
+    void api.GET("/api/v1/lines").then(async ({ data }) => {
+      const lines = data ?? [];
+      const groups = await Promise.all(lines.map(async (line) => {
+        const response = await fetch(`/api/v1/stations?line_id=${encodeURIComponent(line.id)}&size=100`, { cache: "no-store" });
+        const result = await response.json().catch(() => ({ items: [] }));
+        const stations = (result.items ?? []).map((station: { stationId: number; stationName: string; latitude: number; longitude: number }) => ({
+          id: String(station.stationId), lineId: line.id, name: station.stationName, code: String(station.stationId), sequence: station.stationId, latitude: station.latitude, longitude: station.longitude,
+        })).sort((left: Station, right: Station) => left.name.localeCompare(right.name, "ko"));
+        return { id: line.id, name: line.name, stations };
+      }));
+      setReviewLines(groups);
     });
   }, []);
   useEffect(() => {
@@ -140,6 +148,8 @@ function ReviewComposerPage() {
   }, [editor, editingReview]);
 
   const planPlaces = useMemo(() => selectedPlan?.days.flatMap((day) => day.items).filter((item) => item.placeId) ?? [], [selectedPlan]);
+  const selectedOriginLineId = originLineId || reviewLines.find((line) => line.stations.some((station) => station.id === originId))?.id || "";
+  const selectedDestinationLineId = destinationLineId || reviewLines.find((line) => line.stations.some((station) => station.id === destinationId))?.id || "";
 
   useEffect(() => {
     const root = storyEditorRef.current;
@@ -316,7 +326,7 @@ function ReviewComposerPage() {
   return <main className="reviewComposer contentShell"><header><p className="eyebrow">{editingReview ? "EDIT YOUR STORY" : "WRITE YOUR STORY"}</p><h1>{editingReview ? "후기 수정" : "후기 작성"}</h1><p>{editingReview ? "공개된 경로와 경험을 최신 내용으로 고쳐보세요." : "일정을 연결하고, 지도에서 다녀온 장소와 이야기를 한 편의 여행 기록으로 남겨보세요."}</p></header>
     <form onSubmit={submit}><label><span>제목 <em className="requiredMark">*</em></span><ClearableInput required minLength={2} value={title} onChange={(event) => setTitle(event.target.value)} aria-invalid={title.length > 100} />{title.length > 100 ? <small className="titleLimitWarning" role="alert">제목은 100자 이내로 입력해 주세요. ({title.length}/100)</small> : null}</label>
       <section className="planConnect"><div><span>연결할 내 일정</span><strong>{selectedPlan?.title ?? "아직 선택하지 않았어요"}</strong><small>{selectedPlan ? `${selectedPlan.startDate} – ${selectedPlan.endDate} · 역과 장소를 자동으로 불러왔어요.` : "선택하면 출발·도착 역과 장소별 평점을 연결합니다."}</small></div><button type="button" className="outlineButton" onClick={() => planDialogRef.current?.showModal()}><CalendarDays size={16} aria-hidden /> 일정 선택</button></section>
-      <div className="composerRoute"><label><span>방문한 역 <em className="requiredMark">*</em></span><select required value={originId} onChange={(event) => setOriginId(event.target.value)}><option value="" disabled>역 선택</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label><label>이동한 역 (선택)<select value={destinationId} onChange={(event) => setDestinationId(event.target.value)}><option value="">한 역만 방문했어요</option>{stations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label></div>
+      <div className="composerRoute stationRoutePicker"><fieldset><legend>방문한 역 <em className="requiredMark">*</em></legend><label>노선<select required value={selectedOriginLineId} onChange={(event) => { setOriginLineId(event.target.value); setOriginId(""); }}><option value="" disabled>노선 선택</option>{reviewLines.map((line) => <option key={line.id} value={line.id}>{line.name} · {line.stations.length}개 역</option>)}</select></label><label>역<select required disabled={!selectedOriginLineId} value={originId} onChange={(event) => setOriginId(event.target.value)}><option value="" disabled>역 선택</option>{reviewLines.find((line) => line.id === selectedOriginLineId)?.stations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label></fieldset><fieldset><legend>이동한 역 (선택)</legend><label>노선<select value={selectedDestinationLineId} onChange={(event) => { setDestinationLineId(event.target.value); setDestinationId(""); }}><option value="">선택하지 않음</option>{reviewLines.map((line) => <option key={line.id} value={line.id}>{line.name} · {line.stations.length}개 역</option>)}</select></label><label>역<select disabled={!selectedDestinationLineId} value={destinationId} onChange={(event) => setDestinationId(event.target.value)}><option value="">한 역만 방문했어요</option>{reviewLines.find((line) => line.id === selectedDestinationLineId)?.stations.map((station) => <option key={station.id} value={station.id}>{station.name}</option>)}</select></label></fieldset></div>
       <div className="composerMeta"><label><span>여행일 <em className="requiredMark">*</em></span><input type="date" required value={travelDate} onChange={(event) => setTravelDate(event.target.value)} /></label><label>여행 경비<button type="button" className="costInputButton" onClick={() => costDialogRef.current?.showModal()}>{cost ? `${cost}원` : "여행 경비 입력"}</button></label><fieldset className="starField"><legend>평점</legend><div>{[1, 2, 3, 4, 5].map((value) => <button type="button" key={value} aria-label={`${value}점`} aria-pressed={rating === value} onClick={() => setRating(value)}><Star size={22} fill={rating >= value ? "currentColor" : "none"} aria-hidden /></button>)}</div></fieldset></div>
       {planPlaces.length ? <section className="placeRatingSection"><h2>장소별 평점 <small>선택 사항</small></h2>{planPlaces.map((item) => <PlaceRating key={item.id} name={placeNames[item.placeId as string] ?? "장소 정보 불러오는 중"} rating={placeRatings[item.placeId as string] ?? 0} onChange={(value) => setPlaceRatings((current) => ({ ...current, [item.placeId as string]: value }))} />)}</section> : null}
       <section ref={storyEditorRef} className="storyEditor" onMouseLeave={() => setHoveredImage(null)} onMouseMove={(event) => { if (!(event.target instanceof Element) || (!event.target.closest("img") && !event.target.closest(".editorImageControls"))) setHoveredImage(null); }}><header><span>여행 이야기</span><div><button type="button" onClick={() => editor?.chain().focus().toggleBold().run()} aria-label="굵게">B</button><button type="button" onClick={() => inputRef.current?.click()} aria-label="이미지 추가"><ImagePlus size={17} aria-hidden /></button></div></header><EditorContent editor={editor} />{coverImagePosition ? <span className="editorImagePersistentBadge" style={{ top: coverImagePosition.top, left: coverImagePosition.left }}>썸네일</span> : null}{hoveredImage ? <div className="editorImageControls" style={{ top: hoveredImage.top, left: hoveredImage.left, width: hoveredImage.width, height: hoveredImage.height }}><button type="button" className="editorImageRemove" onClick={() => removeImage(hoveredImage.id)} aria-label="사진 삭제"><X size={15} aria-hidden /></button></div> : null}<input ref={inputRef} className="srOnly" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.currentTarget.value = ""; }} /><p>이미지 버튼을 누르거나 이 영역에 이미지를 끌어 놓으세요. 본문 안에서 이미지를 드래그해 순서를 바꿀 수 있습니다.</p></section>

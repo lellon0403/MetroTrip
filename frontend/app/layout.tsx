@@ -15,6 +15,7 @@ const navigation = [
   ["내 일정", "/plans"],
   ["후기", "/reviews"],
   ["모집", "/recruitments"],
+  ["공지", "/notices"],
 ] as const;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

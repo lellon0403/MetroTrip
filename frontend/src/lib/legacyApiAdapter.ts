@@ -16,6 +16,7 @@ import {
   normalizeMediaUrl,
   toLegacyCategory,
 } from "./legacyMappers";
+import { dateInSeoul } from "./date";
 
 type Json = Record<string, any>;
 type ForwardResult = { response: Response; data: any };
@@ -26,6 +27,17 @@ const PLAN_METADATA_KEY = "metrotrip.planMetadata";
 const stationCache = new Map<string, Json>();
 const placeCache = new Map<string, Json>();
 const mediaClaims = new Map<string, { uploadUrl: string; mediaUrl: string; mimeType: string }>();
+
+function timetableClockToIso(serviceDate: string, value: unknown): string {
+  const [hourText = "0", minuteText = "0", secondText = "0"] = String(value ?? "00:00:00").split(":");
+  const totalMilliseconds = (
+    Number(hourText) * 60 * 60
+    + Number(minuteText) * 60
+    + Number(secondText)
+  ) * 1_000;
+  const serviceStart = new Date(`${serviceDate}T00:00:00+09:00`).getTime();
+  return new Date(serviceStart + totalMilliseconds).toISOString();
+}
 
 function storageGet(key: string): string | null {
   try { return typeof window === "undefined" ? null : window.localStorage.getItem(key); }
@@ -199,15 +211,15 @@ async function handleStations(path: string, url: URL, request: Request): Promise
     const day = new Date().getDay();
     const dayType = day === 0 || day === 6 ? "WEEKEND" : "WEEKDAY";
     const results = await Promise.all(["UP", "DOWN"].map((direction) => forward(`/api/v1/stations/${departures[1]}/timetables${encodeQuery({ line_id: lineId, day_type: dayType, direction })}`, request)));
-    const serviceDate = new Date().toISOString().slice(0, 10);
-    const items = results.flatMap((result, directionIndex) => (result.data?.items ?? []).slice(0, 8).map((item: Json, index: number) => ({
+    const serviceDate = dateInSeoul();
+    const items = results.flatMap((result, directionIndex) => (result.data?.items ?? []).map((item: Json, index: number) => ({
       tripId: `${departures[1]}-${directionIndex}-${index}`,
       headsign: String(item.destinationStationName ?? item.destination ?? ""),
       direction: directionIndex,
       serviceDate,
-      scheduledAt: `${serviceDate}T${String(item.departureTime ?? item.time ?? "00:00:00")}+09:00`,
+      scheduledAt: timetableClockToIso(serviceDate, item.departureTime ?? item.time),
       dataBasis: "FIXTURE",
-    })));
+    }))).sort((left, right) => String(left.scheduledAt).localeCompare(String(right.scheduledAt)));
     return json({ stationId: departures[1], items, lastImportedAt: null, realtime: false });
   }  return null;
 }

@@ -56,6 +56,8 @@ export type LineMapData = {
   edges: LineMapEdge[];
 };
 
+let lineMapPromise: Promise<LineMapData> | null = null;
+
 function apiBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
   return configured.replace(/\/api\/v1\/?$/, "");
@@ -106,7 +108,7 @@ function addEdges(edges: LineMapEdge[], stations: ApiLineStation[], line: RealLi
  *
  * 2호선은 순환선이라 마지막 역에서 첫 역으로 돌아가는 edge를 하나 더 넣는다.
  */
-export async function loadSubwayLineMap(): Promise<LineMapData> {
+async function fetchSubwayLineMap(): Promise<LineMapData> {
   const [line1, line2, line3, line4, line5, line6] = await Promise.all(
     [1, 2, 3, 4, 5, 6].map(fetchLineStations),
   );
@@ -135,4 +137,18 @@ export async function loadSubwayLineMap(): Promise<LineMapData> {
   }
 
   return { stations, edges };
+}
+
+/**
+ * 노선 데이터는 앱 실행 중 한 번만 조회한다.
+ * 지도/지하철 화면을 오갈 때 동일한 6개 노선 API를 다시 호출하지 않는다.
+ */
+export function loadSubwayLineMap(): Promise<LineMapData> {
+  if (!lineMapPromise) {
+    lineMapPromise = fetchSubwayLineMap().catch((error: unknown) => {
+      lineMapPromise = null;
+      throw error;
+    });
+  }
+  return lineMapPromise;
 }

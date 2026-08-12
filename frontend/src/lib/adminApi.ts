@@ -4,6 +4,9 @@ export type NoticeAdmin = { noticeId: number; title: string; content: string; no
 export type ReviewAdmin = { reviewId: number; title: string; authorNickname: string; startStationName: string; endStationName: string; createdAt: string };
 export type PostAdmin = { postId: number; title: string; author: { nickname: string }; recruitment: { recruitStatus: string }; createdAt: string };
 export type PlaceAdminInput = { placeName: string; category: string; description: string | null; address: string; latitude: number; longitude: number; phone: string | null; stationIds: number[]; imageUrls: string[] };
+export type PlaceAdmin = PlaceAdminInput & { placeId: number; images: { imageUrl: string; sortOrder: number }[]; createdBy: number | null; createdAt: string; updatedAt: string };
+export type TransitLine = { lineId: number; lineName: string };
+export type TransitStation = { stationId: number; stationName: string };
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
@@ -29,4 +32,7 @@ export const adminApi = {
   createPlace: (body: PlaceAdminInput) => request("/api/v1/admin/places", { method: "POST", body: JSON.stringify(body) }),
   updatePlace: (id: number, body: PlaceAdminInput) => request(`/api/v1/admin/places/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deletePlace: (id: number) => request<void>(`/api/v1/admin/places/${id}`, { method: "DELETE" }),
+  listPlacesByStation: (stationId: number) => request<{ items: PlaceAdmin[] }>(`/api/v1/admin/places?station_id=${stationId}&size=100`),
+  listLines: () => request<{ items: TransitLine[] }>("/api/v1/lines"),
+  listStationsByLine: (lineId: number) => request<{ items: TransitStation[] }>(`/api/v1/stations?line_id=${lineId}&size=100`),
 };

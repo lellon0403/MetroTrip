@@ -29,6 +29,30 @@ type PlanWriteRequest = components["schemas"]["PlanWriteRequest"];
 type PlanItem = components["schemas"]["PlanItemView"];
 type PlanPlace = components["schemas"]["PlaceDetail"];
 
+type DepartureGroup = { key: string; label: string };
+
+function departureGroups(lineId: string | undefined): DepartureGroup[] {
+  if (lineId === "3") return [
+    { key: "up", label: "상행 · 진접 방면" },
+    { key: "down", label: "하행 · 오이도 방면" },
+  ];
+  if (["4", "5", "6"].includes(lineId ?? "")) return [
+    { key: "up", label: "내선순환" },
+    { key: "down", label: "외선순환" },
+  ];
+  return [
+    { key: "north", label: "상행 · 연천·소요산 방면" },
+    { key: "incheon", label: "하행 · 인천 방면" },
+    { key: "south", label: "하행 · 천안·신창 방면" },
+  ];
+}
+
+function departureGroupKey(lineId: string | undefined, departure: Departure): string {
+  if (lineId === "3" || ["4", "5", "6"].includes(lineId ?? "")) return departure.direction === 0 ? "up" : "down";
+  if (departure.direction === 0) return "north";
+  return departure.headsign.includes("인천") ? "incheon" : "south";
+}
+
 type TimelineItemProps = {
   item: PlanItem;
   index: number;
@@ -113,14 +137,17 @@ export default function DiscoverPage() {
   const [stations, setStations] = useState<Station[]>([]);
   const [stationSuggestions, setStationSuggestions] = useState<Station[]>([]);
   const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+  const [stationFocusRequestKey, setStationFocusRequestKey] = useState(0);
   const [, setStationDetail] = useState<StationDetail | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const [sourceMode, setSourceMode] = useState("MOCKED");
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [placeDetail, setPlaceDetail] = useState<PlaceDetail | null>(null);
   const [departures, setDepartures] = useState<Departure[]>([]);
+  const [expandedDepartureGroups, setExpandedDepartureGroups] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<Category[]>(["FOOD", "CAFE"]);
   const [radiusMeters, setRadiusMeters] = useState(1000);
+  const [radiusMenuOpen, setRadiusMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchCenter, setSearchCenter] = useState<{ latitude: number; longitude: number; south: number; west: number; north: number; east: number } | null>(null);
   const [pendingViewport, setPendingViewport] = useState<typeof searchCenter>(null);
@@ -136,6 +163,7 @@ export default function DiscoverPage() {
   const [viewMode, setViewMode] = useState<"map" | "subway">("map");
   const [subwayRouteStationIds, setSubwayRouteStationIds] = useState<string[]>([]);
   const [subwayDepartureTime, setSubwayDepartureTime] = useState("");
+  const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [subwaySchedule, setSubwaySchedule] = useState<SubwayRouteSchedule | null>(null);
   const [subwayScheduleStatus, setSubwayScheduleStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [subwayScheduleError, setSubwayScheduleError] = useState<string | null>(null);
@@ -152,6 +180,7 @@ export default function DiscoverPage() {
   const [timeEditingItemId, setTimeEditingItemId] = useState<string | null>(null);
   const initialPlaceHandled = useRef(false);
   const initialPlannerHandled = useRef(false);
+  const initialSubwayStationHandled = useRef(false);
   const initialRecruitmentPlannerHandled = useRef(false);
   const plannerPlanRef = useRef<PlanView | null>(null);
   const plannerReadOnlyRef = useRef(false);
@@ -162,8 +191,15 @@ export default function DiscoverPage() {
   }, [plannerPlan, plannerReadOnly]);
 
   useEffect(() => {
+    if (!notice) return;
+    const task = window.setTimeout(() => setNotice(null), 5_000);
+    return () => window.clearTimeout(task);
+  }, [notice]);
+
+  useEffect(() => {
     const syncClock = () => {
       const currentTime = localClock();
+      setCurrentTimeMs(Date.now());
       if (currentTime === subwayDepartureTime) return;
       setSubwayDepartureTime(currentTime);
       setSubwaySchedule(null);
@@ -182,6 +218,30 @@ export default function DiscoverPage() {
     () => stations.find((station) => station.id === selectedStationId) ?? null,
     [stations, selectedStationId],
   );
+
+  const timetableDepartures = useMemo(() => {
+    const now = currentTimeMs;
+    const threeHours = 3 * 60 * 60 * 1_000;
+    const sorted = departures
+      .map((departure) => ({ departure, timestamp: new Date(departure.scheduledAt).getTime() }))
+      .filter((entry) => Number.isFinite(entry.timestamp))
+      .sort((left, right) => left.timestamp - right.timestamp);
+    const groups = departureGroups(selectedStation?.lineId);
+    const groupedDepartures = groups.map((group) => ({
+      ...group,
+      past: sorted
+        .filter((entry) => entry.timestamp < now && entry.timestamp >= now - threeHours && departureGroupKey(selectedStation?.lineId, entry.departure) === group.key)
+        .slice(-3),
+      future: sorted
+        .filter((entry) => entry.timestamp >= now && entry.timestamp <= now + threeHours && departureGroupKey(selectedStation?.lineId, entry.departure) === group.key)
+        .slice(0, 10),
+    })).filter((group) => group.past.length > 0 || group.future.length > 0);
+    return {
+      groups: groupedDepartures,
+      firstKey: sorted[0] ? `${sorted[0].departure.tripId}-${sorted[0].departure.scheduledAt}` : null,
+      lastKey: sorted.at(-1) ? `${sorted.at(-1)!.departure.tripId}-${sorted.at(-1)!.departure.scheduledAt}` : null,
+    };
+  }, [currentTimeMs, departures, selectedStation?.lineId]);
 
   const subwayRouteStations = useMemo(
     () => subwayRouteStationIds
@@ -208,11 +268,12 @@ export default function DiscoverPage() {
       setStations([]);
       setError(readError(apiError));
     } else {
-      setStations(data.items);
+      setStations((current) => [
+        ...data.items,
+        ...current.filter((station) => !data.items.some((item) => item.id === station.id)),
+      ]);
       setSelectedStationId((current) =>
-        data.items.some((item) => item.id === current)
-          ? current
-          : data.items.find((item) => item.name === "천안")?.id ?? data.items[0]?.id ?? null,
+        current ?? data.items.find((item) => item.name === "천안")?.id ?? data.items[0]?.id ?? null,
       );
     }
     setLoadingStations(false);
@@ -315,7 +376,7 @@ export default function DiscoverPage() {
     void Promise.all([
       api.GET("/api/v1/stations/{station_id}", { params: { path: { station_id: selectedStationId } } }),
       api.GET("/api/v1/stations/{station_id}/departures", {
-        params: { path: { station_id: selectedStationId }, query: { limit: 8 } },
+        params: { path: { station_id: selectedStationId }, query: { limit: 100 } },
       }),
     ]).then(([detail, schedule]) => {
       setStationDetail(detail.data ?? null);
@@ -419,28 +480,6 @@ export default function DiscoverPage() {
         if (!active) return;
         setSubwaySchedule(schedule);
         setSubwayScheduleStatus("success");
-        const currentPlan = plannerPlanRef.current;
-        if (!currentPlan || plannerReadOnlyRef.current) return;
-        const times = new Map(schedule.stops.map((stop) => [stop.id, `${stop.time}:00`]));
-        let changed = false;
-        const nextPlan: PlanView = {
-          ...currentPlan,
-          days: currentPlan.days.map((day) => ({
-            ...day,
-            items: day.items.map((item) => {
-              if (item.itemType !== "STATION" || !item.stationId) return item;
-              const scheduledTime = times.get(item.stationId);
-              if (!scheduledTime || item.scheduledTime === scheduledTime) return item;
-              changed = true;
-              return { ...item, scheduledTime };
-            }),
-          })),
-        };
-        if (changed) {
-          plannerPlanRef.current = nextPlan;
-          setPlannerPlan(nextPlan);
-          setPlannerDirty(true);
-        }
       })
       .catch((scheduleFailure: unknown) => {
         if (!active) return;
@@ -450,6 +489,38 @@ export default function DiscoverPage() {
       });
     return () => { active = false; };
   }, [subwayDepartureTime, subwayRouteStations]);
+
+  // 시간표 계산과 일정 생성은 각각 비동기로 끝난다. 어느 쪽이 먼저 끝나더라도
+  // 두 결과가 모두 준비된 시점에 역별 도착 시각을 일정에 반영한다.
+  useEffect(() => {
+    if (!subwaySchedule || !plannerPlan || plannerReadOnly) return;
+    const times = new Map(
+      subwaySchedule.stops
+        .filter((stop) => Boolean(stop.time))
+        .map((stop) => [stop.id, `${stop.time}:00`]),
+    );
+    let changed = false;
+    const nextPlan: PlanView = {
+      ...plannerPlan,
+      days: plannerPlan.days.map((day) => ({
+        ...day,
+        items: day.items.map((item) => {
+          if (item.itemType !== "STATION" || !item.stationId) return item;
+          const scheduledTime = times.get(item.stationId);
+          if (!scheduledTime || item.scheduledTime === scheduledTime) return item;
+          changed = true;
+          return { ...item, scheduledTime };
+        }),
+      })),
+    };
+    if (!changed) return;
+    const task = window.setTimeout(() => {
+      plannerPlanRef.current = nextPlan;
+      setPlannerPlan(nextPlan);
+      setPlannerDirty(true);
+    }, 0);
+    return () => window.clearTimeout(task);
+  }, [plannerPlan, plannerReadOnly, subwaySchedule]);
 
   const persistPlan = useCallback(async (plan: PlanView) => {
     setPlannerPending(true);
@@ -481,10 +552,26 @@ export default function DiscoverPage() {
 
   function selectStation(stationId: string) {
     setSelectedStationId(stationId);
+    setStationFocusRequestKey((key) => key + 1);
     setSearchCenter(null);
     setPendingViewport(null);
-    setInspectorMode("place");
+    setInspectorMode("timetable");
+    setTimeTargetItemId(null);
+    setExpandedDepartureGroups(new Set());
     setRoute(null);
+  }
+
+  async function openSubwayView() {
+    setViewMode("subway");
+    if (initialSubwayStationHandled.current) return;
+    initialSubwayStationHandled.current = true;
+    let tangjeong = stations.find((station) => station.name.replace(/역$/, "") === "탕정");
+    if (!tangjeong) {
+      const { data } = await api.GET("/api/v1/stations", { params: { query: { query: "탕정", limit: 6 } } });
+      tangjeong = data?.items.find((station) => station.name.replace(/역$/, "") === "탕정") ?? data?.items[0];
+      if (tangjeong) setStations((current) => current.some((station) => station.id === tangjeong!.id) ? current : [...current, tangjeong!]);
+    }
+    if (tangjeong) selectStation(tangjeong.id);
   }
 
   function toggleCategory(category: Category) {
@@ -541,6 +628,14 @@ export default function DiscoverPage() {
     setSubwaySchedule(null);
     setSubwayScheduleError(null);
     setSubwayScheduleStatus(stationIds.length >= 2 ? "loading" : "idle");
+  }
+
+  function syncSubwayRouteWithPlan(plan: PlanView, appendedStationId?: string) {
+    const stationIds = stationIdsFromPlan(plan);
+    if (appendedStationId && !stationIds.includes(appendedStationId)) stationIds.push(appendedStationId);
+    const isSameRoute = stationIds.length === subwayRouteStationIds.length
+      && stationIds.every((stationId, index) => stationId === subwayRouteStationIds[index]);
+    if (!isSameRoute) replaceSubwayRoute(stationIds);
   }
 
   async function openPlanner() {
@@ -649,7 +744,10 @@ export default function DiscoverPage() {
       return;
     }
     const day = plannerPlan.days[0];
-    if (!day || day.items.some((item) => item.itemType === "STATION" && item.stationId === selectedStation.id)) return;
+    if (!day) return;
+    // 일정에 이미 있는 역이어도 지하철 경로 배열이 누락됐을 수 있으므로 먼저 동기화한다.
+    syncSubwayRouteWithPlan(plannerPlan, selectedStation.id);
+    if (day.items.some((item) => item.itemType === "STATION" && item.stationId === selectedStation.id)) return;
     const stationItem: PlanItem = {
       id: crypto.randomUUID(), itemType: "STATION", stationId: selectedStation.id, placeId: null,
       routeSnapshot: null, note: null, scheduledTime: null, durationMinutes: null, position: day.items.length + 1,
@@ -849,7 +947,12 @@ export default function DiscoverPage() {
           <div className="categoryTabs multi" aria-label="장소 카테고리">
             {categoryOptions.map((item) => <button type="button" key={item.value} aria-pressed={categories.includes(item.value)} onClick={() => toggleCategory(item.value)}>{item.label}</button>)}
           </div>
-          <label className="radiusControl">검색 반경<select value={radiusMeters} onChange={(event) => setRadiusMeters(Number(event.target.value))}><option value={500}>500m</option><option value={1000}>1km</option><option value={2000}>2km</option><option value={5000}>5km</option></select></label>
+          <div className="radiusControl"><span>검색 반경</span><div className={`radiusDropdown ${radiusMenuOpen ? "open" : ""}`}>
+            <button type="button" className="radiusDropdownTrigger" aria-haspopup="listbox" aria-expanded={radiusMenuOpen} onClick={() => setRadiusMenuOpen((open) => !open)}>{radiusMeters >= 1000 ? `${radiusMeters / 1000}km` : `${radiusMeters}m`}<ChevronRight size={14} aria-hidden /></button>
+            <div className="radiusDropdownMenu" role="listbox" aria-label="검색 반경">
+              {[500, 1000, 2000, 5000].map((radius) => <button type="button" role="option" aria-selected={radiusMeters === radius} key={radius} onClick={() => { setRadiusMeters(radius); setRadiusMenuOpen(false); }}>{radius >= 1000 ? `${radius / 1000}km` : `${radius}m`}</button>)}
+            </div>
+          </div></div>
           <p className="resultScope">선택 카테고리별 가까운 장소를 최대 45개까지 조회하며, 같은 조건은 24시간 캐시합니다.</p>
           {error ? <div className="inlineError" role="alert"><p>{error}</p><button type="button" onClick={() => void loadPlaces()}>다시 시도</button></div> : null}
           {loadingPlaces ? <div className="placeSkeletons" aria-label="장소를 불러오는 중">{[1, 2, 3].map((item) => <span key={item} />)}</div> : places.length === 0 ? <div className="emptyState"><strong>조건에 맞는 장소가 없어요</strong><p>카테고리나 검색 반경을 바꿔보세요.</p></div> : (
@@ -864,12 +967,27 @@ export default function DiscoverPage() {
             <div className="inspectorTop"><p className="eyebrow">TIMETABLE</p><button type="button" className="iconButton neutral" aria-label="시간표 닫기" onClick={() => setInspectorMode("place")}><X size={18} aria-hidden /></button></div>
             <h2>{selectedStation?.name}역 시간표</h2>
             {timeTargetItemId ? <p className="timePickerNotice">아래 출발 시각을 선택하면 일정의 역 시각으로 적용됩니다.</p> : <p className="providerCaption">출발 시각을 선택하면 일정에서 역 아래 장소의 시간 순서를 확인할 수 있어요.</p>}
-            <div className="departureList inspectorDepartures">{departures.length ? departures.map((departure) => {
-              const scheduledTime = new Date(departure.scheduledAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
-              const displayTime = new Date(departure.scheduledAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
-              return <button type="button" key={`${departure.tripId}-${departure.scheduledAt}`} onClick={() => timeTargetItemId ? applyDepartureTime(scheduledTime) : undefined}><time>{displayTime}</time><span>{departure.headsign} 방면</span></button>;
-            }) : <p>예정된 열차가 없습니다.</p>}</div>
-            <small>fixture 시간표 · 실시간 정보가 아닙니다.</small>
+            <p className="departureRangeCaption">방면별 최근 열차 3편과 앞으로 3시간 이내 열차를 표시합니다. 예정 열차는 펼치면 방면별 최대 10편까지 볼 수 있습니다.</p>
+            <div className="departureDirectionGroups">{timetableDepartures.groups.map((group) => (
+              <section className="departureDirection" key={group.key} aria-label={group.label}>
+                <strong>{group.label}</strong>
+                <div className="departureList inspectorDepartures directionCombinedList">
+                {group.past.map(({ departure }) => {
+                  const key = `${departure.tripId}-${departure.scheduledAt}`;
+                  const displayTime = new Date(departure.scheduledAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+                  return <div className="pastDeparture" key={key}><time>{displayTime}</time><span>{key === timetableDepartures.firstKey ? <b title="첫차">☀️</b> : null}{departure.headsign} 방면</span></div>;
+                })}
+                {group.future.length ? group.future.slice(0, expandedDepartureGroups.has(group.key) ? 10 : 3).map(({ departure }, futureIndex) => {
+                  const key = `${departure.tripId}-${departure.scheduledAt}`;
+                  const scheduledTime = new Date(departure.scheduledAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+                  const displayTime = new Date(departure.scheduledAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+                  return <button type="button" className={futureIndex < 3 ? "nearestDeparture" : undefined} key={key} onClick={() => timeTargetItemId ? applyDepartureTime(scheduledTime) : undefined}><time>{displayTime}</time><span>{key === timetableDepartures.firstKey ? <b title="첫차">☀️</b> : null}{key === timetableDepartures.lastKey ? <b title="막차">🌙</b> : null}{departure.headsign} 방면</span></button>;
+                }) : null}
+                </div>
+                {group.future.length > 3 ? <button type="button" className="departureExpandButton" aria-expanded={expandedDepartureGroups.has(group.key)} onClick={() => setExpandedDepartureGroups((current) => { const next = new Set(current); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next; })}>{expandedDepartureGroups.has(group.key) ? "접기" : `더 보기 (${group.future.length - 3}편)`}</button> : null}
+              </section>
+            ))}</div>
+            <small>DB 공식 시간표를 기준으로 표시합니다. 지연·운휴 등 실제 운행 상황에 따라 시각이 달라질 수 있습니다.</small>
           </> : selectedPlace ? <>
             <div className="inspectorTop"><p className="eyebrow">PLACE DETAIL</p><div><button type="button" className="favoriteIcon" aria-label={favoritePlaceIds.has(selectedPlace.id) ? "즐겨찾기 해제" : "즐겨찾기"} aria-pressed={favoritePlaceIds.has(selectedPlace.id)} onClick={() => void toggleFavoritePlace()}><Star size={18} fill={favoritePlaceIds.has(selectedPlace.id) ? "currentColor" : "none"} aria-hidden /></button><button type="button" className="iconButton neutral" aria-label="장소 상세 닫기" onClick={() => setSelectedPlace(null)}><X size={18} aria-hidden /></button></div></div>
             <h2>{selectedPlace.name}</h2>
@@ -886,33 +1004,54 @@ export default function DiscoverPage() {
           <div className={`viewModeSwitch ${viewMode}`} role="group" aria-label="탐색 화면 전환">
             <span className="viewModeThumb" aria-hidden />
             <button type="button" aria-pressed={viewMode === "map"} onClick={() => setViewMode("map")}><MapIcon size={15} aria-hidden /> 지도</button>
-            <button type="button" aria-pressed={viewMode === "subway"} onClick={() => setViewMode("subway")}><TrainFront size={15} aria-hidden /> 지하철</button>
+            <button type="button" aria-pressed={viewMode === "subway"} onClick={() => void openSubwayView()}><TrainFront size={15} aria-hidden /> 지하철</button>
           </div>
-          {viewMode === "map" ? <>
-            <KakaoMap station={selectedStation} places={mapPlaces} selectedPlaceId={selectedPlace?.id ?? null} radiusMeters={radiusMeters} favoritePlaceIds={favoritePlaceIds} routePath={mapPath} focusPlaceIds={focusPlaceIds} focusMode={focusMode} onSelectPlace={selectPlace} onViewportChange={setPendingViewport} />
+          <div className={`mapModeSurface ${viewMode === "map" ? "active" : "inactive"}`} aria-hidden={viewMode !== "map"}>
+            <KakaoMap active={viewMode === "map"} station={selectedStation} stationFocusRequestKey={stationFocusRequestKey} places={mapPlaces} selectedPlaceId={selectedPlace?.id ?? null} radiusMeters={radiusMeters} favoritePlaceIds={favoritePlaceIds} routePath={mapPath} focusPlaceIds={focusPlaceIds} focusMode={focusMode} onSelectPlace={selectPlace} onViewportChange={setPendingViewport} />
             {pendingViewport && (!searchCenter || Math.abs(pendingViewport.latitude - searchCenter.latitude) > 0.0005 || Math.abs(pendingViewport.longitude - searchCenter.longitude) > 0.0005) ? <button className="searchThisArea" type="button" onClick={() => setSearchCenter(pendingViewport)}>이 영역 검색</button> : null}
             {focusMode ? <div className="focusModeBanner"><strong>일정 순서 보기</strong><span>다른 장소 마커를 숨겼습니다.</span><button type="button" onClick={() => setFocusMode(false)}>종료</button></div> : null}
-          </> : <SubwayRouteBoard
-            stations={stations}
-            selectedStationId={selectedStationId}
-            routeStationIds={subwayRouteStationIds}
-            departureTime={subwayDepartureTime}
-            schedule={subwaySchedule}
-            scheduleStatus={subwayScheduleStatus}
-            scheduleError={subwayScheduleError}
-            onSelectStation={selectStation}
-            onRemoveRouteStation={removeSubwayStation}
-            onResetRoute={resetSubwayRoute}
-            stationsLoading={loadingStations}
-            onRetryStations={() => void loadStations()}
-          />}
-          <button type="button" className={`plannerFab ${viewMode === "subway" ? "subwayAddFab" : ""}`} aria-label={viewMode === "subway" ? "선택한 역을 경로에 추가" : "일정 열기"} onClick={() => viewMode === "subway" ? void addSelectedSubwayStation() : void openPlanner()}>{viewMode === "subway" ? <CalendarPlus size={22} aria-hidden /> : <CalendarClock size={22} aria-hidden />}</button>
+          </div>
+          <div className={`subwayModeSurface ${viewMode === "subway" ? "active" : "inactive"}`} aria-hidden={viewMode !== "subway"}>
+            <SubwayRouteBoard
+              active={viewMode === "subway"}
+              stations={stations}
+              selectedStationId={selectedStationId}
+              stationFocusRequestKey={stationFocusRequestKey}
+              routeStationIds={subwayRouteStationIds}
+              departureTime={subwayDepartureTime}
+              schedule={subwaySchedule}
+              scheduleStatus={subwayScheduleStatus}
+              scheduleError={subwayScheduleError}
+              onSelectStation={selectStation}
+              onRemoveRouteStation={removeSubwayStation}
+              onResetRoute={resetSubwayRoute}
+              stationsLoading={loadingStations}
+              onRetryStations={() => void loadStations()}
+            />
+          </div>
+          <div className="plannerFabGroup">
+            <button type="button" className="subwayQuickAdd" aria-label={viewMode === "subway" ? "선택한 역을 경로에 추가" : "현재 역을 일정에 추가"} onClick={() => viewMode === "subway" ? void addSelectedSubwayStation() : void addSelectedStationToPlan()}><Plus size={22} aria-hidden /></button>
+            <button type="button" className="plannerFab" aria-label="일정 목록 열기" onClick={() => void openPlanner()}><CalendarClock size={22} aria-hidden /></button>
+          </div>
+          {notice ? <div key={notice} className="floatingNotice" role="status">{notice}<button type="button" aria-label="알림 닫기" onClick={() => setNotice(null)}><X size={16} aria-hidden /></button></div> : null}
         </div>
 
         {rightPanel === "planner" ? <aside className="rightDrawer plannerDrawer"><header><div><p className="eyebrow">MAP PLANNER</p><h2>내 일정</h2></div><div className="plannerHeaderActions">{plannerPlan && !plannerReadOnly ? <button type="button" aria-label="일정 삭제" onClick={() => void deleteCurrentPlan()}><Trash2 size={18} aria-hidden /></button> : null}<button type="button" onClick={() => setRightPanel(null)} aria-label="일정 닫기"><X size={20} aria-hidden /></button></div></header>
           {!plannerPlan ? <div className="plannerStart"><p>새 일정은 현재 선택한 역을 시작점으로 만듭니다.</p><button type="button" className="primaryButton" onClick={() => void createPlanWithSelectedPlace()} disabled={plannerPending}><Plus size={16} aria-hidden /> 새 일정 만들기</button></div> : <>
             <div className="plannerTitle"><ClearableInput value={plannerPlan.title} aria-label="일정 제목" disabled={plannerReadOnly} onChange={(event) => { setPlannerPlan({ ...plannerPlan, title: event.target.value }); setPlannerDirty(true); }} /><span>{plannerReadOnly ? "모집 참여자 조회용 일정" : plannerPending ? "저장 중…" : plannerDirty ? "변경됨" : "자동 저장됨"}</span></div>
             <div className="plannerToolbar"><button type="button" aria-pressed={focusMode} onClick={() => setFocusMode((value) => !value)}><MapPinned size={14} aria-hidden /> 일정 순서 보기</button>{!plannerReadOnly ? <><button type="button" onClick={() => void addSelectedStationToPlan()}><Plus size={14} aria-hidden /> 현재 역 추가</button>{selectedPlace ? <button type="button" onClick={() => void addSelectedPlaceToPlan()}><Plus size={14} aria-hidden /> {selectedPlace.name}</button> : null}</> : null}</div>
+            {subwayScheduleStatus === "loading" ? <div className="plannerTransitSummary loading"><TrainFront size={16} aria-hidden /><span>실제 시간표로 이동 시간을 계산하는 중…</span></div> : null}
+            {subwayScheduleStatus === "success" && subwaySchedule ? <div className="plannerTransitSummary">
+              <TrainFront size={16} aria-hidden />
+              {subwaySchedule.isFullyTimed ? <>
+                <span><strong>{subwaySchedule.departureTime}</strong> 출발</span>
+                <i />
+                <span><strong>{subwaySchedule.arrivalTime}</strong> 도착</span>
+                <b>{subwaySchedule.durationMinutes}분</b>
+                <small>DB 실제 시간표 · {subwaySchedule.legs.map((leg) => leg.trainNo).filter(Boolean).join(" → ")}</small>
+              </> : <><span>경로는 확인했지만 일부 구간의 시간표가 없습니다.</span><small>{subwaySchedule.stops.map((stop) => stop.name).join(" → ")}</small></>}
+            </div> : null}
+            {subwayScheduleStatus === "error" && subwayScheduleError ? <div className="plannerTransitSummary error"><TrainFront size={16} aria-hidden /><span>{subwayScheduleError}</span></div> : null}
             <DndContext collisionDetection={closestCenter} onDragEnd={reorderPlanItems}><SortableContext items={plannerPlan.days[0]?.items.map((item) => item.id) ?? []} strategy={verticalListSortingStrategy}><ol className="mapTimeline">{plannerPlan.days[0]?.items.map((item, index, items) => {
               const station = item.stationId ? stations.find((candidate) => candidate.id === item.stationId) : null;
               const label = item.itemType === "STATION" ? `${station?.name ?? "저장한 역"}역` : item.itemType === "PLACE" && item.placeId ? placeNames[item.placeId] ?? "저장한 장소" : item.note ?? "메모";
@@ -924,7 +1063,6 @@ export default function DiscoverPage() {
           </>}
         </aside> : null}
       </div>
-      {notice ? <div className="floatingNotice" role="status">{notice}<button type="button" aria-label="알림 닫기" onClick={() => setNotice(null)}><X size={16} aria-hidden /></button></div> : null}
     </main>
   );
 }

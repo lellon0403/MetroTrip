@@ -73,7 +73,7 @@ export interface KakaoMaps {
     strokeStyle: string;
   }) => KakaoPolyline;
   event: {
-    addListener(target: KakaoMapInstance, event: string, callback: () => void): void;
+    addListener(target: KakaoMapInstance | KakaoPolyline, event: string, callback: () => void): void;
   };
 }
 
@@ -154,7 +154,9 @@ function stationMarkerContent(station: Station) {
 }
 
 export function KakaoMap({
+  active,
   station,
+  stationFocusRequestKey,
   places,
   selectedPlaceId,
   radiusMeters,
@@ -165,7 +167,9 @@ export function KakaoMap({
   onSelectPlace,
   onViewportChange,
 }: {
+  active: boolean;
   station: Station | null;
+  stationFocusRequestKey: number;
   places: Place[];
   selectedPlaceId: string | null;
   radiusMeters: number;
@@ -187,11 +191,18 @@ export function KakaoMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<KakaoMapInstance | null>(null);
   const stationRef = useRef<string | null>(null);
+  const stationFocusRequestRef = useRef(-1);
   const overlaysRef = useRef<KakaoOverlay[]>([]);
   const viewportCallbackRef = useRef(onViewportChange);
   const skipNextIdleRef = useRef(true);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(appKey ? "loading" : "error");
   const [message, setMessage] = useState(appKey ? "Kakao 지도를 불러오는 중…" : "NEXT_PUBLIC_KAKAO_JS_KEY 설정이 필요합니다.");
+
+  useEffect(() => {
+    if (!active || !mapRef.current) return;
+    const task = window.setTimeout(() => mapRef.current?.relayout(), 0);
+    return () => window.clearTimeout(task);
+  }, [active]);
 
   useEffect(() => {
     viewportCallbackRef.current = onViewportChange;
@@ -208,10 +219,11 @@ export function KakaoMap({
         const map = mapRef.current ?? new maps.Map(containerRef.current, { center: stationCenter, level: 4 });
         mapRef.current = map;
         map.relayout();
-        if (stationRef.current !== station.id) {
+        if (stationRef.current !== station.id || stationFocusRequestRef.current !== stationFocusRequestKey) {
           skipNextIdleRef.current = true;
           map.setCenter(stationCenter);
           stationRef.current = station.id;
+          stationFocusRequestRef.current = stationFocusRequestKey;
         }
         if (isNewMap) {
           maps.event.addListener(map, "idle", () => {
@@ -300,7 +312,7 @@ export function KakaoMap({
         setMessage(error instanceof Error ? error.message : "Kakao 지도를 표시하지 못했습니다.");
       });
     return () => { active = false; };
-  }, [appKey, favoritePlaceIds, focusMode, focusPlaceIds, onSelectPlace, places, radiusMeters, routePath, selectedPlaceId, station]);
+  }, [appKey, favoritePlaceIds, focusMode, focusPlaceIds, onSelectPlace, places, radiusMeters, routePath, selectedPlaceId, station, stationFocusRequestKey]);
 
   return (
     <section className="kakaoMap" aria-label="Kakao 장소 지도">

@@ -73,7 +73,7 @@ export default async function HomePage() {
         <aside className="homeHeroNotice" aria-label="공지사항">
           <header><span className="iconBadge"><Bell size={18} aria-hidden /></span><div><p className="eyebrow">NOTICE</p><h2>공지사항</h2></div></header>
           {notices.length ? <div className="heroNoticeList">{notices.slice(0, 4).map((notice) => (
-            <article key={notice.id}><strong>{notice.title}</strong><time>{notice.publishedAt ? new Date(notice.publishedAt).toLocaleDateString("ko-KR") : "새 소식"}</time></article>
+            <Link href={`/notices/${notice.id}`} key={notice.id}><strong>{notice.title}</strong><time>{notice.publishedAt ? new Date(notice.publishedAt).toLocaleDateString("ko-KR") : "새 소식"}</time></Link>
           ))}</div> : <p className="heroNoticeEmpty">새로운 공지사항이 없습니다.</p>}
           {events.slice(0, 1).map((event) => <div className="heroEvent" key={event.id}><CalendarDays size={16} aria-hidden /><span><b>{event.title}</b><small>{event.endsAt ? `${new Date(event.endsAt).toLocaleDateString("ko-KR")}까지` : "진행 중"}</small></span></div>)}
         </aside>
@@ -146,7 +146,7 @@ export default async function HomePage() {
           ))}
           <div className="homeNotices">
             {notices.map((notice) => (
-              <article key={notice.id}><span>공지</span><strong>{notice.title}</strong><time>{notice.publishedAt ? new Date(notice.publishedAt).toLocaleDateString("ko-KR") : ""}</time></article>
+              <Link href={`/notices/${notice.id}`} key={notice.id}><span>공지</span><strong>{notice.title}</strong><time>{notice.publishedAt ? new Date(notice.publishedAt).toLocaleDateString("ko-KR") : ""}</time></Link>
             ))}
           </div>
           {!events.length && !notices.length ? <div className="homeEmpty">등록된 이벤트와 공지가 없습니다.</div> : null}

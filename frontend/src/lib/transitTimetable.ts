@@ -46,6 +46,9 @@ export type SubwayRouteScheduleLeg = {
   direction: TimetableDirection | null;
   departureTime: string | null;
   arrivalTime: string | null;
+  /** 자정을 넘는 운행도 정확히 계산하기 위한 서비스일 기준 누적 분. */
+  departureMinute: number | null;
+  arrivalMinute: number | null;
 };
 
 export type SubwayRouteSchedule = {
@@ -267,6 +270,8 @@ async function tryTransferVia(
         direction: firstTrain.direction,
         departureTime: formatClock(firstTrain.departureMinute),
         arrivalTime: formatClock(firstTrain.arrivalMinute),
+        departureMinute: firstTrain.departureMinute,
+        arrivalMinute: firstTrain.arrivalMinute,
       },
       {
         fromStationId: transfer.stationId,
@@ -276,6 +281,8 @@ async function tryTransferVia(
         direction: secondTrain.direction,
         departureTime: formatClock(secondTrain.departureMinute),
         arrivalTime: formatClock(secondTrain.arrivalMinute),
+        departureMinute: secondTrain.departureMinute,
+        arrivalMinute: secondTrain.arrivalMinute,
       },
     ],
     stops: [
@@ -343,6 +350,8 @@ function buildPathOnlyHop(pathEdges: PathEdge[], toName: string, lineMap: LineMa
     direction: null,
     departureTime: null,
     arrivalTime: null,
+    departureMinute: null,
+    arrivalMinute: null,
   }));
 
   const stops: SubwayRouteScheduleStop[] = [];
@@ -400,6 +409,8 @@ async function resolveHop(
           direction: direct.direction,
           departureTime: formatClock(direct.departureMinute),
           arrivalTime: formatClock(direct.arrivalMinute),
+          departureMinute: direct.departureMinute,
+          arrivalMinute: direct.arrivalMinute,
         }],
         stops: [{ id: toId, name: toName, lineId: "", time: formatClock(direct.arrivalMinute), minute: direct.arrivalMinute }],
         arrivalMinute: direct.arrivalMinute,
@@ -465,7 +476,14 @@ export async function calculateSubwayRouteSchedule(
     if (hop.timed) earliestMinute = hop.arrivalMinute;
   }
 
-  const actualDeparture = scheduledStops[0].minute ?? departureMinute;
+  // 검색 기준 시각은 "이 시각 이후 가장 빠른 열차"를 찾기 위한 값일 뿐 실제 출발시각이 아니다.
+  // 열차 번호로 양 끝 역 시간표를 매칭한 첫 구간의 실제 출발시각을 경로와 일정의 출발로 사용한다.
+  const actualDeparture = legs.find((leg) => leg.departureMinute !== null)?.departureMinute ?? departureMinute;
+  scheduledStops[0] = {
+    ...scheduledStops[0],
+    time: formatClock(actualDeparture),
+    minute: actualDeparture,
+  };
   const lastMinute = scheduledStops.at(-1)?.minute ?? null;
   const actualArrival = fullyTimed ? lastMinute : null;
   return {
@@ -473,7 +491,7 @@ export async function calculateSubwayRouteSchedule(
     legs,
     departureTime: formatClock(actualDeparture),
     arrivalTime: actualArrival !== null ? formatClock(actualArrival) : null,
-    durationMinutes: actualArrival !== null ? actualArrival - departureMinute : null,
+    durationMinutes: actualArrival !== null ? actualArrival - actualDeparture : null,
     dayType,
     isFullyTimed: fullyTimed,
   };

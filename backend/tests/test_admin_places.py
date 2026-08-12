@@ -135,6 +135,26 @@ def test_place_update_request_rejects_invalid_partial_changes() -> None:
         PlaceUpdateRequest(station_ids=[])
 
 
+def test_list_admin_places_by_station_returns_editable_fields(db: Session) -> None:
+    """관리자 역별 목록은 수정 폼에 필요한 연결 역과 이미지를 함께 반환한다."""
+    created = transit_service.create_place(db, 1, _create_request())
+
+    result = transit_service.list_admin_places_by_station(
+        db,
+        1,
+        page=1,
+        size=100,
+    )
+
+    assert result.total_elements == 1
+    assert result.items[0].place_id == created.place_id
+    assert result.items[0].station_ids == [1, 2]
+    assert [image.image_url for image in result.items[0].images] == [
+        "first.jpg",
+        "second.jpg",
+    ]
+
+
 def test_create_and_update_place_replaces_children(db: Session) -> None:
     """장소 생성과 수정이 역 중복을 제거하고 이미지·역 목록을 교체한다."""
     created = transit_service.create_place(db, 1, _create_request())

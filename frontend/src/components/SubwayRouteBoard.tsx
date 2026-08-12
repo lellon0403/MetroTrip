@@ -22,8 +22,10 @@ import {
 type Station = components["schemas"]["StationSummary"];
 
 type SubwayRouteBoardProps = {
+  active: boolean;
   stations: Station[];
   selectedStationId: string | null;
+  stationFocusRequestKey: number;
   routeStationIds: string[];
   departureTime: string;
   schedule: SubwayRouteSchedule | null;
@@ -49,7 +51,7 @@ const DEFAULT_CENTER = { lat: 37.5665, lng: 126.978 };
 const FIXED_LEVEL = 7;
 const DIMMED_OPACITY = 0.15;
 
-type PolylineRecord = { overlay: KakaoPolyline; line: RealLineId };
+type PolylineRecord = { overlay: KakaoPolyline; line: RealLineId; hitArea: boolean };
 type StationRecord = {
   overlay: KakaoOverlay;
   station: LineMapStation;
@@ -103,8 +105,10 @@ function stationDotContent(
 }
 
 export function SubwayRouteBoard({
+  active,
   stations,
   selectedStationId,
+  stationFocusRequestKey,
   routeStationIds,
   departureTime,
   schedule,
@@ -134,7 +138,8 @@ export function SubwayRouteBoard({
   // 이벤트 핸들러에서 직접 DOM/폴리라인 속성을 바꾼다 — 193역·244선 전체를
   // 리렌더마다 다시 그리면 느리고 깜빡인다.
   function applyLineHover(line: RealLineId | null) {
-    for (const { overlay, line: polylineLine } of polylinesRef.current) {
+    for (const { overlay, line: polylineLine, hitArea } of polylinesRef.current) {
+      if (hitArea) continue;
       overlay.setOptions({ strokeOpacity: !line || line === polylineLine ? 0.85 : DIMMED_OPACITY });
     }
     for (const { station, wrapper, label } of stationRecordsRef.current) {
@@ -156,6 +161,12 @@ export function SubwayRouteBoard({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!active || !mapRef.current) return;
+    const task = window.setTimeout(() => mapRef.current?.relayout(), 0);
+    return () => window.clearTimeout(task);
+  }, [active]);
 
   const routeIndexByStation = useMemo(() => {
     const map = new Map<string, number>();
@@ -246,7 +257,21 @@ export function SubwayRouteBoard({
             strokeStyle: "solid",
           });
           polyline.setMap(map);
-          polylines.push({ overlay: polyline, line: edge.line });
+          polylines.push({ overlay: polyline, line: edge.line, hitArea: false });
+
+          // 화면에 보이는 선은 그대로 두고, 마우스 판정 범위만 넓힌 투명 선을 겹친다.
+          // 사용자가 가는 선을 정밀하게 조준하지 않아도 노선 강조가 동작한다.
+          const hitPolyline = new maps.Polyline({
+            path: [new maps.LatLng(from.latitude, from.longitude), new maps.LatLng(to.latitude, to.longitude)],
+            strokeWeight: 22,
+            strokeColor: REAL_LINE_META[edge.line].color,
+            strokeOpacity: 0.01,
+            strokeStyle: "solid",
+          });
+          hitPolyline.setMap(map);
+          maps.event.addListener(hitPolyline, "mouseover", () => applyLineHover(edge.line));
+          maps.event.addListener(hitPolyline, "mouseout", () => applyLineHover(null));
+          polylines.push({ overlay: hitPolyline, line: edge.line, hitArea: true });
         }
 
         for (const station of lineMap.stations.values()) {
@@ -298,8 +323,9 @@ export function SubwayRouteBoard({
     if (!centeredOnceRef.current || !mapRef.current || !mapsRef.current || !lineMap || !selectedStationId) return;
     const target = lineMap.stations.get(selectedStationId);
     if (!target) return;
+    mapRef.current.setLevel(FIXED_LEVEL);
     mapRef.current.panTo(new mapsRef.current.LatLng(target.latitude, target.longitude));
-  }, [selectedStationId, lineMap]);
+  }, [selectedStationId, stationFocusRequestKey, lineMap]);
 
   return <section className="subwayRouteBoard" aria-label="지하철 경로 선택">
     <header className="subwayBoardHeader">
@@ -360,18 +386,5 @@ export function SubwayRouteBoard({
       </>}
     </div>
 
-    <footer className="subwayBoardFooter">
-      {(["line1", "line2", "line4"] as const).map((line) => (
-        <span
-          key={line}
-          className="subwayLineLegend"
-          onMouseEnter={() => applyLineHover(line)}
-          onMouseLeave={() => applyLineHover(null)}
-        >
-          <i style={{ background: REAL_LINE_META[line].color }} /> {REAL_LINE_META[line].label}
-        </span>
-      ))}
-      <span>시간표가 없는 구간은 임의로 추정하지 않습니다.</span>
-    </footer>
   </section>;
 }
