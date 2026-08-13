@@ -56,7 +56,7 @@ class PlanRepository:
             .where(TravelPlanItem.plan_id.in_(plan_ids))
             .order_by(
                 TravelPlanItem.plan_id.asc(),
-                TravelPlanItem.visit_time.asc(),
+                TravelPlanItem.position.asc(),
                 TravelPlanItem.plan_item_id.asc(),
             )
         ).all()
@@ -179,16 +179,20 @@ class PlanRepository:
         self,
         *,
         plan_id: int,
-        place_id: int,
+        item_type: str,
+        place_id: int | None,
         station_id: int | None,
-        visit_time: time,
+        position: int,
+        visit_time: time | None,
         memo: str | None,
     ) -> TravelPlanItem:
         """여행 계획에 새 일정 항목을 추가한다."""
         item = TravelPlanItem(
             plan_id=plan_id,
+            item_type=item_type,
             place_id=place_id,
             station_id=station_id,
+            position=position,
             visit_time=visit_time,
             memo=memo,
         )

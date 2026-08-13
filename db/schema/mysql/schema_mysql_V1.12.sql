@@ -2,9 +2,9 @@
 -- 지하철 노선 기반 관광 추천 서비스 (MetroTrip)
 -- 테이블 생성 스크립트
 --
--- 근거 문서 : 데이터베이스 명세서 V1.11
+-- 근거 문서 : 데이터베이스 명세서 V1.12
 -- 대상 DBMS : MySQL 8.0
--- 구성      : 23개 테이블 / PK 23 / UNIQUE 11 / FK 35 / CHECK 22 / 인덱스 3
+-- 구성      : 23개 테이블 / 148컬럼 / PK 23 / UNIQUE 11 / FK 35 / CHECK 24 / 인덱스 3
 --
 -- 비고 : 테이블은 FK 의존 순서대로 정렬되어 있으므로 위에서부터
 --        그대로 실행하면 참조 오류가 발생하지 않는다.
@@ -280,16 +280,34 @@ CREATE TABLE travel_plans (
 -- =====================================================================
 -- 15. travel_plan_items : 여행 계획 상세
 -- 근거 요구사항 : MB-008, MB-015
--- 동선 순서는 visit_time 오름차순. 조회 시 ORDER BY visit_time, plan_item_id
+--
+-- item_type 으로 역(STATION)과 장소(PLACE)를 구분한다. 역 자체를 항목으로
+-- 담을 수 있어 "천안역 → 역전시장 → 달식당 → 온양온천역" 같은 동선을 표현한다.
+--
+-- 동선 순서는 position 오름차순. 조회 시 ORDER BY `position`, plan_item_id
+--   POSITION 은 MySQL 내장 함수명이라 워크벤치 편집기가 문법 오류로 표시한다.
+--   실행에는 문제가 없으나 쿼리에서는 백틱으로 감싸는 편이 좋다.
+--
+-- visit_time 은 선택 항목이다. 순서를 position 이 결정하므로 시각 없이도
+-- 동선을 짤 수 있고, 드래그로 재배치할 때 시각을 건드리지 않아도 된다.
+--
+-- station_id 의 FK 는 RESTRICT 다(FK 21번). STATION 항목의 필수값이므로
+-- 역이 삭제되어 NULL 이 되면 ck_tpi_item_reference 를 위반하기 때문이다.
+-- MySQL 은 ON DELETE SET NULL 인 컬럼을 CHECK 에 쓰지 못하게 막는다(Error 3823).
 -- =====================================================================
 CREATE TABLE travel_plan_items (
   plan_item_id  BIGINT       NOT NULL AUTO_INCREMENT COMMENT '식별자',
   plan_id       BIGINT       NOT NULL                COMMENT 'travel_plans.plan_id',
-  place_id      BIGINT       NOT NULL                COMMENT 'places.place_id. MB-015 방문 장소',
-  station_id    BIGINT       NULL                    COMMENT 'stations.station_id. 장소 접근 역',
-  visit_time    TIME         NOT NULL                COMMENT '방문 시간. 동선 순서는 본 컬럼 오름차순으로 결정',
+  item_type     VARCHAR(10)  NOT NULL DEFAULT 'PLACE' COMMENT 'STATION(역) / PLACE(장소)',
+  place_id      BIGINT       NULL                    COMMENT 'PLACE 항목의 places.place_id',
+  station_id    BIGINT       NULL                    COMMENT 'STATION 항목의 stations.station_id',
+  `position`    INT          NOT NULL                COMMENT '일정 내 표시 순서. 1부터 부여',
+  visit_time    TIME         NULL                    COMMENT '선택한 방문·도착 시간',
   memo          VARCHAR(255) NULL                    COMMENT '사용자 메모',
-  CONSTRAINT pk_travel_plan_items PRIMARY KEY (plan_item_id)
+  CONSTRAINT pk_travel_plan_items   PRIMARY KEY (plan_item_id),
+  CONSTRAINT ck_tpi_item_type       CHECK (item_type IN ('STATION', 'PLACE')),
+  CONSTRAINT ck_tpi_item_reference  CHECK ((item_type = 'STATION' AND station_id IS NOT NULL AND place_id IS NULL)
+                                        OR (item_type = 'PLACE'   AND place_id   IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='여행 계획 상세';
 
 
@@ -461,7 +479,7 @@ CREATE TABLE travel_plan_share_links (
 
 -- =====================================================================
 -- 외래키 제약 (35건)
--- CASCADE 16 / RESTRICT 12 / SET NULL 7
+-- CASCADE 16 / RESTRICT 13 / SET NULL 6
 -- 번호는 데이터베이스 명세서 '관계 정의(FK)' 시트와 일치한다.
 -- =====================================================================
 
@@ -527,7 +545,7 @@ ALTER TABLE travel_plan_items ADD CONSTRAINT fk_travel_plan_items_place_id
   FOREIGN KEY (place_id) REFERENCES places (place_id) ON DELETE RESTRICT;          -- 회원 계획이 참조 중인 장소
 -- 21
 ALTER TABLE travel_plan_items ADD CONSTRAINT fk_travel_plan_items_station_id
-  FOREIGN KEY (station_id) REFERENCES stations (station_id) ON DELETE SET NULL;    -- 경유역은 부가 정보이므로 NULL 허용
+  FOREIGN KEY (station_id) REFERENCES stations (station_id);                       -- STATION 항목의 필수값이므로 참조 중인 역은 삭제 불가
 -- 22
 ALTER TABLE reviews ADD CONSTRAINT fk_reviews_user_id
   FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE;              -- 회원 1명은 여러 후기를 작성

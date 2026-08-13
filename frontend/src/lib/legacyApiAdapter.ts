@@ -408,17 +408,26 @@ function legacyPlanWrite(body: Json) {
   const placeItems = allItems.filter((item: Json) => item.itemType === "PLACE" && item.placeId);
   const startStationId = numeric(stationItems[0]?.stationId ?? placeItems[0]?.stationId);
   const endStationId = numeric(stationItems.at(-1)?.stationId ?? placeItems.at(-1)?.stationId ?? startStationId);
+  let currentStationId = startStationId;
+  const items = allItems.flatMap((item: Json, index: number) => {
+    if (item.itemType === "STATION" && item.stationId) currentStationId = numeric(item.stationId);
+    if (item.itemType !== "STATION" && item.itemType !== "PLACE") return [];
+    const persistedId = Number(item.id);
+    return [{
+      ...(Number.isInteger(persistedId) && persistedId > 0 ? { planItemId: persistedId } : {}),
+      itemType: item.itemType,
+      placeId: item.itemType === "PLACE" ? numeric(item.placeId) : null,
+      stationId: item.itemType === "STATION" ? numeric(item.stationId) : currentStationId || null,
+      position: index + 1,
+      visitTime: item.scheduledTime ?? (item.itemType === "PLACE" ? `${String(10 + index).padStart(2, "0")}:00:00` : null),
+      memo: item.note ?? null,
+    }];
+  });
   return {
     planTitle: body.title,
     startStationId,
     endStationId: endStationId || startStationId,
-    items: placeItems.map((item: Json, index: number) => ({
-      ...(item.id && !String(item.id).startsWith("temp-") ? { planItemId: numeric(item.id) } : {}),
-      placeId: numeric(item.placeId),
-      stationId: item.stationId ? numeric(item.stationId) : startStationId,
-      visitTime: item.scheduledTime ?? `${String(10 + index).padStart(2, "0")}:00:00`,
-      memo: item.note ?? null,
-    })),
+    items,
   };
 }
 

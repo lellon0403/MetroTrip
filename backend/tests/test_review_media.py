@@ -65,9 +65,9 @@ def test_create_media_upload_returns_urls() -> None:
     response = _run(call())
     assert response.status_code == 201, response.text
     body = response.json()
+    assert body["uploadUrl"].startswith("/api/v1/review-media/")
     assert body["uploadUrl"].endswith(".jpg")
-    assert "/api/v1/review-media/" in body["uploadUrl"]
-    assert "/api/v1/media/reviews/" in body["mediaUrl"]
+    assert body["mediaUrl"].startswith("/api/v1/media/reviews/")
     assert body["mediaUrl"].endswith(".jpg")
     assert body["expiresIn"] > 0
 

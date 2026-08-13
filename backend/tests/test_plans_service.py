@@ -189,6 +189,38 @@ def test_create_plan_returns_names_and_ordered_items(db: Session) -> None:
     assert created.items[0].plan_item_id < created.items[1].plan_item_id
 
 
+def test_create_plan_persists_station_items_in_requested_order(db: Session) -> None:
+    """중간 역을 장소와 함께 DB에 저장하고 조회 시 같은 순서로 복원한다."""
+    created = plan_service.create_plan(
+        db,
+        1,
+        _create_request(
+            items=[
+                {"item_type": "STATION", "station_id": 1, "position": 1},
+                {
+                    "item_type": "PLACE",
+                    "place_id": 10,
+                    "station_id": 1,
+                    "position": 2,
+                    "visit_time": dt.time(10, 30),
+                },
+                {"item_type": "STATION", "station_id": 3, "position": 3},
+            ]
+        ),
+    )
+
+    loaded = plan_service.get_plan(db, created.plan_id, 1)
+
+    assert [item.item_type for item in loaded.items] == [
+        "STATION",
+        "PLACE",
+        "STATION",
+    ]
+    assert [item.position for item in loaded.items] == [1, 2, 3]
+    assert loaded.items[0].place_id is None
+    assert loaded.items[2].station_id == 3
+
+
 @pytest.mark.parametrize(
     ("plan_request", "error_code"),
     [

@@ -1553,6 +1553,8 @@ export interface components {
             /** Distancemeters */
             distanceMeters?: number | null;
             dataStatus: components["schemas"]["PlaceDataStatus"];
+            /** Imageurl */
+            imageUrl?: string | null;
             /**
              * Favoritecount
              * @default 0
@@ -1602,6 +1604,8 @@ export interface components {
             /** Distancemeters */
             distanceMeters?: number | null;
             dataStatus: components["schemas"]["PlaceDataStatus"];
+            /** Imageurl */
+            imageUrl?: string | null;
             /**
              * Favoritecount
              * @default 0

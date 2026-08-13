@@ -78,7 +78,7 @@ def _require_references(
             400,
         )
 
-    place_ids = {item.place_id for item in items}
+    place_ids = {item.place_id for item in items if item.place_id is not None}
     missing_places = place_ids - repository.existing_place_ids(place_ids)
     if missing_places:
         raise _error(
@@ -90,7 +90,9 @@ def _require_references(
     requested_pairs = {
         (item.place_id, item.station_id)
         for item in items
-        if item.station_id is not None
+        if item.item_type == "PLACE"
+        and item.place_id is not None
+        and item.station_id is not None
     }
     missing_pairs = requested_pairs - repository.existing_place_station_pairs(
         requested_pairs
@@ -126,14 +128,20 @@ def _to_response(
         items=[
             PlanItemResponse(
                 plan_item_id=item.plan_item_id,
+                item_type=item.item_type,
                 place_id=item.place_id,
-                place_name=place_names.get(item.place_id, ""),
+                place_name=(
+                    place_names.get(item.place_id, "")
+                    if item.place_id is not None
+                    else None
+                ),
                 station_id=item.station_id,
                 station_name=(
                     station_names.get(item.station_id)
                     if item.station_id is not None
                     else None
                 ),
+                position=item.position,
                 visit_time=item.visit_time,
                 memo=item.memo,
             )
@@ -164,7 +172,7 @@ def _build_responses(
     } | {
         item.station_id for item in all_items if item.station_id is not None
     }
-    place_ids = {item.place_id for item in all_items}
+    place_ids = {item.place_id for item in all_items if item.place_id is not None}
     station_names = repository.get_station_names(station_ids)
     place_names = repository.get_place_names(place_ids)
 
@@ -212,20 +220,25 @@ def _sync_plan_items(
             400,
         )
 
-    for requested in requested_items:
+    for index, requested in enumerate(requested_items, start=1):
+        position = requested.position or index
         if requested.plan_item_id is None:
             repository.add_plan_item(
                 plan_id=plan_id,
+                item_type=requested.item_type,
                 place_id=requested.place_id,
                 station_id=requested.station_id,
+                position=position,
                 visit_time=requested.visit_time,
                 memo=requested.memo,
             )
             continue
 
         existing = existing_by_id[requested.plan_item_id]
+        existing.item_type = requested.item_type
         existing.place_id = requested.place_id
         existing.station_id = requested.station_id
+        existing.position = position
         existing.visit_time = requested.visit_time
         existing.memo = requested.memo
 
@@ -274,11 +287,13 @@ def create_plan(
         start_station_id=request.start_station_id,
         end_station_id=request.end_station_id,
     )
-    for item in request.items:
+    for index, item in enumerate(request.items, start=1):
         repository.add_plan_item(
             plan_id=plan.plan_id,
+            item_type=item.item_type,
             place_id=item.place_id,
             station_id=item.station_id,
+            position=item.position or index,
             visit_time=item.visit_time,
             memo=item.memo,
         )

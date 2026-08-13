@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import "@/styles/tokens.css";
 import { AccountAction } from "@/components/AccountAction";
@@ -25,8 +26,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <AppProviders>
           <header className="siteHeader">
             <Link className="brand" href="/" aria-label="MetroTrip 홈">
-              <span className="brandMark">M</span>
-              <span>MetroTrip</span>
+              <Image
+                className="brandLogo"
+                src="/logo-transparent.png"
+                alt="MetroTrip"
+                width={160}
+                height={80}
+                priority
+              />
             </Link>
             <nav aria-label="주요 메뉴">
               {navigation.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}

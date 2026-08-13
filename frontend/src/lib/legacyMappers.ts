@@ -20,6 +20,9 @@ export function toNumber(value: unknown, fallback = 0) {
 export function normalizeMediaUrl(value: unknown) {
   const raw = String(value ?? "");
   if (!raw) return raw;
+  if (/^http:\/\/tong\.visitkorea\.or\.kr\//i.test(raw)) {
+    return raw.replace(/^http:\/\//i, "https://");
+  }
   try {
     const url = new URL(raw);
     if (!/^localhost$|^127(?:\.\d{1,3}){3}$/.test(url.hostname)) return raw;
@@ -86,6 +89,8 @@ export function toLegacyCategory(category: string) {
 }
 
 export function mapLegacyPlace(place: LegacyJson, distanceMeters?: number | null) {
+  const firstImage = Array.isArray(place.images) ? place.images[0] : null;
+  const imageUrl = normalizeMediaUrl(place.imageUrl ?? firstImage?.imageUrl);
   return {
     id: toId(place.placeId),
     name: String(place.placeName ?? ""),
@@ -96,6 +101,7 @@ export function mapLegacyPlace(place: LegacyJson, distanceMeters?: number | null
     distanceMeters: distanceMeters ?? null,
     dataStatus: "VERIFIED",
     favoriteCount: 0,
+    imageUrl: imageUrl || null,
   };
 }
 
@@ -270,8 +276,10 @@ export function mapLegacyPlan(plan: LegacyJson, metadata: PlanMetadata = {}) {
   const dayDate = metadata.startDate ?? dateOnly(createdAt);
   const startId = toId(plan.startStationId);
   const endId = toId(plan.endStationId);
-  const responsePlaceItems = Array.isArray(plan.items) ? plan.items : [];
-  const placeItems = responsePlaceItems
+  const responseItems = Array.isArray(plan.items) ? plan.items : [];
+  const serverHasOrderedItems = responseItems.some((item: LegacyJson) => item.itemType || item.item_type);
+  const placeItems = responseItems
+    .filter((item: LegacyJson) => !item.itemType || item.itemType === "PLACE")
     .map((item: LegacyJson, index: number) => ({
         id: toId(item.planItemId),
         itemType: "PLACE",
@@ -284,9 +292,24 @@ export function mapLegacyPlan(plan: LegacyJson, metadata: PlanMetadata = {}) {
         position: index + 2,
       }));
   let items: LegacyJson[];
-  if (metadata.items?.length) {
+  if (serverHasOrderedItems) {
+    items = responseItems.map((item: LegacyJson, index: number) => {
+      const itemType = String(item.itemType ?? item.item_type ?? "PLACE");
+      return {
+        id: toId(item.planItemId),
+        itemType,
+        stationId: item.stationId == null ? null : toId(item.stationId),
+        placeId: item.placeId == null ? null : toId(item.placeId),
+        routeSnapshot: null,
+        note: item.memo == null ? null : String(item.memo),
+        scheduledTime: item.visitTime == null ? null : String(item.visitTime),
+        durationMinutes: null,
+        position: toNumber(item.position, index + 1),
+      };
+    });
+  } else if (metadata.items?.length) {
     const placeQueues = new Map<string, LegacyJson[]>();
-    for (const item of responsePlaceItems) {
+    for (const item of responseItems) {
       const placeId = toId(item.placeId);
       placeQueues.set(placeId, [...(placeQueues.get(placeId) ?? []), item]);
     }

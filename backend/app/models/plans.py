@@ -68,16 +68,17 @@ class TravelPlanItem(Base):
         ForeignKey("travel_plans.plan_id", ondelete="CASCADE"),
         nullable=False,
     )
-    place_id: Mapped[int] = mapped_column(
+    item_type: Mapped[str] = mapped_column(String(10), nullable=False, default="PLACE")
+    place_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("places.place_id", ondelete="RESTRICT"),
-        nullable=False,
     )
     station_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("stations.station_id", ondelete="SET NULL"),
     )
-    visit_time: Mapped[time] = mapped_column(Time, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    visit_time: Mapped[time | None] = mapped_column(Time)
     memo: Mapped[str | None] = mapped_column(String(255))
 
 

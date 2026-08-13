@@ -1,6 +1,7 @@
 """여행 계획과 읽기 전용 공유 API 계약 모델."""
 
 from datetime import datetime, time
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -10,10 +11,21 @@ from app.schemas.common import ApiSchema, Pagination
 class PlanItemCreateInput(ApiSchema):
     """새 여행 일정 항목 입력값."""
 
-    place_id: int
+    item_type: Literal["STATION", "PLACE"] = "PLACE"
+    place_id: int | None = None
     station_id: int | None = None
-    visit_time: time
+    position: int | None = Field(default=None, ge=1)
+    visit_time: time | None = None
     memo: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def validate_item_reference(self) -> "PlanItemCreateInput":
+        if self.item_type == "STATION":
+            if self.station_id is None or self.place_id is not None:
+                raise ValueError("역 항목은 stationId만 전달해야 합니다.")
+        elif self.place_id is None:
+            raise ValueError("장소 항목은 placeId가 필요합니다.")
+        return self
 
 
 class PlanItemUpdateInput(PlanItemCreateInput):
@@ -58,7 +70,8 @@ class PlanItemResponse(PlanItemCreateInput):
     """장소와 접근역 이름을 포함한 일정 항목 응답."""
 
     plan_item_id: int
-    place_name: str
+    position: int
+    place_name: str | None
     station_name: str | None
 
 

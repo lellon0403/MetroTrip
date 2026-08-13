@@ -1,5 +1,14 @@
 # 백엔드 연동 인수인계 문서
 
+## 2026-08-12 일정 역 경로 저장 계약
+
+- `travel_plan_items`는 장소뿐 아니라 일정에 추가한 역도 저장한다.
+- 일정 항목은 `itemType`(`STATION` 또는 `PLACE`)과 `position`을 가지며 조회 시 `position`, `planItemId` 순으로 반환한다.
+- `STATION` 항목은 `stationId`가 필수이고 `placeId`는 `null`이다.
+- `PLACE` 항목은 `placeId`가 필수이며 `stationId`는 해당 장소의 접근 역일 때만 허용한다.
+- 기존 데이터는 `PLACE` 항목으로 간주하고, 배포 DB에는 V1.12 일정 항목 마이그레이션을 먼저 적용한다.
+- 프론트엔드는 역 순서를 브라우저 저장소에만 보관하지 않고 `POST/PATCH /api/v1/plans`의 `items` 배열로 모두 전달한다.
+
 초기 MVP의 지도 기능은 아직 프론트 정적 데이터를 사용하지만, 인증·회원·후기·모집 게시판은 백엔드와 연결되어 있습니다. 공개 노선·역·시간표·주변 장소 조회 백엔드도 구현되어 있어 이 문서를 기준으로 transit 프론트 연동을 진행합니다.
 
 > 대상: 백엔드(윤홍규), DB(김유진), 프론트(우진, 황지성)
@@ -201,7 +210,7 @@ DB 시드가 갱신되면 이 스크립트를 다시 돌리면 됩니다.
 | GET | `/api/v1/reviews/{review_id}` | 후기 상세 |
 | PATCH | `/api/v1/reviews/{review_id}` | 후기 수정 |
 | DELETE | `/api/v1/reviews/{review_id}` | 후기 삭제 |
-| POST | `/api/v1/review-media` | 후기 미디어 업로드 URL 발급 |
+| POST | `/api/v1/review-media` | 후기 미디어 동일 출처 상대 업로드 URL 발급 |
 | GET | `/api/v1/notices` | 공지사항 목록 |
 | GET | `/api/v1/notices/{notice_id}` | 공지사항 상세 |
 | GET | `/api/v1/posts` | 일반·모집 게시글 목록 |

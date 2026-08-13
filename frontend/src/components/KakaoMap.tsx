@@ -291,6 +291,12 @@ export function KakaoMap({
           );
         }
 
+        const selectedPlace = visiblePlaces.find((place) => place.id === selectedPlaceId);
+        if (selectedPlace) {
+          skipNextIdleRef.current = true;
+          map.panTo(new maps.LatLng(selectedPlace.latitude, selectedPlace.longitude));
+        }
+
         if (routePath.length > 1) {
           const polyline = new maps.Polyline({
             path: routePath.map((point) => new maps.LatLng(point.latitude, point.longitude)),

@@ -106,6 +106,19 @@ export default function PlansPage() {
     }
   }, [places, selected]);
 
+  useEffect(() => {
+    if (!selected) return;
+    const knownIds = new Set(stations.map((station) => station.id));
+    const missingIds = [...new Set(selected.days.flatMap((day) => day.items)
+      .filter((item) => item.itemType === "STATION" && item.stationId)
+      .map((item) => item.stationId as string))].filter((id) => !knownIds.has(id));
+    for (const id of missingIds) {
+      void api.GET("/api/v1/stations/{station_id}", { params: { path: { station_id: id } } }).then(({ data }) => {
+        if (data) setStations((current) => current.some((station) => station.id === data.id) ? current : [...current, data]);
+      });
+    }
+  }, [selected, stations]);
+
   const stationNames = useMemo(() => new Map(stations.map((station) => [station.id, station.name])), [stations]);
   const itemCount = selected?.days.reduce((sum, day) => sum + day.items.length, 0) ?? 0;
 
@@ -132,7 +145,8 @@ export default function PlansPage() {
             <header className="planReaderTitle"><div><p className="eyebrow">{selected.status === "ACTIVE" ? "IN PROGRESS" : "SAVED PLAN"}</p><h2>{selected.title}</h2><p>{selected.startDate} – {selected.endDate} · {itemCount}개 항목</p></div><div className="planReaderTitleActions"><button className="outlineButton" type="button" onClick={() => void sharePlan(selected)}>{sharedPlanId === selected.id ? <Check size={16} aria-hidden /> : <Share2 size={16} aria-hidden />}{sharedPlanId === selected.id ? "공유됨" : "공유"}</button><Link className="primaryButton" href={`/discover?planner=${selected.id}`}><Pencil size={16} aria-hidden /> 일정 수정</Link></div></header>
             {selected.description ? <p className="planReaderDescription">{selected.description}</p> : null}
             <div className="planReaderDays">{selected.days.map((day, dayIndex) => <article key={day.id} className="planReaderDay"><header><span>DAY {dayIndex + 1}</span><div><strong>{day.title || `${dayIndex + 1}일차`}</strong><time>{day.dayDate}</time></div></header><ol>{day.items.map((item, itemIndex) => {
-              const name = item.itemType === "STATION" ? `${stationNames.get(item.stationId ?? "") ?? "저장된 역"}역` : item.itemType === "PLACE" ? places[item.placeId ?? ""]?.name ?? savedPlaceName(item) ?? "저장된 장소" : item.note || "메모";
+              const stationName = stationNames.get(item.stationId ?? "");
+              const name = item.itemType === "STATION" ? stationName ? `${stationName}역` : "저장된 역" : item.itemType === "PLACE" ? places[item.placeId ?? ""]?.name ?? "장소 정보 불러오는 중" : item.note || "메모";
               return <li key={item.id}><span className="planReaderPosition">{itemIndex + 1}</span><div><small>{itemTypeLabel(item.itemType)}</small><strong>{name}</strong>{item.note && item.itemType !== "NOTE" ? <p>{item.note}</p> : null}</div>{item.scheduledTime ? <time>{item.scheduledTime.slice(0, 5)}</time> : null}</li>;
             })}</ol></article>)}</div>
           </>}

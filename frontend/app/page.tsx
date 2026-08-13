@@ -1,9 +1,11 @@
 import type { components } from "@metrotrip/contracts";
 import { ArrowRight, Bell, CalendarDays } from "lucide-react";
 import Link from "next/link";
+import { HomePlaceVisual } from "@/components/HomePlaceVisual";
 import { mapLegacyNotice, mapLegacyPlace, mapLegacyRecruitment } from "@/lib/legacyMappers";
 
 type HomeResponse = components["schemas"]["HomeResponse"];
+type HomeData = HomeResponse & { recommendationStationId?: string };
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ function apiBase() {
   return configured.replace(/\/api\/v1\/?$/, "").replace(/\/$/, "");
 }
 
-async function loadHome(): Promise<HomeResponse | null> {
+async function loadHome(): Promise<HomeData | null> {
   try {
     const [noticeResponse, recruitmentResponse, stationResponse] = await Promise.all([
       fetch(new URL("/api/v1/notices?size=10", apiBase()), { cache: "no-store" }),
@@ -34,6 +36,7 @@ async function loadHome(): Promise<HomeResponse | null> {
     const recruitments = (recruitmentData.items ?? []).map((item: Record<string, unknown>) => mapLegacyRecruitment(item));
     const allNotices = (noticeData.items ?? []).map((item: Record<string, unknown>) => mapLegacyNotice(item));
     return {
+      recommendationStationId: station?.stationId == null ? undefined : String(station.stationId),
       recommendedPlaces: places.slice(0, 6),
       popularPlaces: places.slice(0, 6),
       latestRecruitments: recruitments,
@@ -55,13 +58,22 @@ export default async function HomePage() {
   const popularRecruitments = home?.popularRecruitments ?? [];
   const events = home?.activeEvents ?? [];
   const notices = home?.notices ?? [];
+  const placeHref = (placeId: string, category: string) => {
+    const params = new URLSearchParams({ place: placeId, category });
+    if (home?.recommendationStationId) params.set("station", home.recommendationStationId);
+    return `/discover?${params.toString()}`;
+  };
 
   return (
     <main className="homePage">
       <section className="homeHero contentShell">
         <div className="homeHeroCopy">
           <p className="eyebrow">CHEONAN · ASAN METRO JOURNEY</p>
-          <h1>역에서 시작하는<br /><em>나만의 하루.</em></h1>
+          <h1>
+            역에서<br />
+            시작하는<br />
+            <em>나만의 하루.</em>
+          </h1>
           <p className="lead">
             맛집과 카페를 발견하고, 지도 위에서 순서를 정해 여행을 완성해 보세요.
           </p>
@@ -87,10 +99,12 @@ export default async function HomePage() {
         {places.length ? (
           <div className="homePlaceGrid">
             {places.slice(0, 6).map((place) => (
-              <Link key={place.id} href={`/discover?place=${place.id}`} className="homePlaceCard">
-                <span className={`homePlaceVisual ${place.category.toLowerCase()}`}>
-                  <b>{place.category === "FOOD" ? "맛집" : place.category === "CAFE" ? "카페" : "장소"}</b>
-                </span>
+              <Link key={place.id} href={placeHref(place.id, place.category)} className="homePlaceCard">
+                <HomePlaceVisual
+                  category={place.category}
+                  imageUrl={place.imageUrl}
+                  label={place.category === "FOOD" ? "맛집" : place.category === "CAFE" ? "카페" : "장소"}
+                />
                 <strong>{place.name}</strong>
                 <small>{place.address}</small>
               </Link>
@@ -106,7 +120,7 @@ export default async function HomePage() {
           </header>
           <div className="popularPlaceRail">
             {popularPlaces.slice(0, 6).map((place, index) => (
-              <Link key={place.id} href={`/discover?place=${place.id}`} className="popularPlaceItem">
+              <Link key={place.id} href={placeHref(place.id, place.category)} className="popularPlaceItem">
                 <b>{String(index + 1).padStart(2, "0")}</b>
                 <span><strong>{place.name}</strong><small>저장 {place.favoriteCount} · {place.address}</small></span>
               </Link>
