@@ -426,8 +426,22 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     if (!stations.length || initialPlaceHandled.current) return;
-    const placeId = new URLSearchParams(window.location.search).get("place");
+    const params = new URLSearchParams(window.location.search);
+    const placeId = params.get("place");
     if (!placeId) return;
+    const stationId = params.get("station");
+    const requestedCategory = params.get("category");
+    const category = categoryOptions.find((item) => item.value === requestedCategory)?.value;
+    if (stationId) {
+      const needsStation = selectedStationId !== stationId;
+      const needsCategory = Boolean(category && !categories.includes(category));
+      if (!needsStation && !needsCategory) return;
+      const task = window.setTimeout(() => {
+        if (needsStation) setSelectedStationId(stationId);
+        if (category) setCategories((current) => current.includes(category) ? current : [...current, category]);
+      }, 0);
+      return () => window.clearTimeout(task);
+    }
     let active = true;
     void api.GET("/api/v1/places/{place_id}", {
       params: { path: { place_id: placeId } },
@@ -452,7 +466,7 @@ export default function DiscoverPage() {
       });
     });
     return () => { active = false; };
-  }, [stations]);
+  }, [categories, selectedStationId, stations]);
 
 
   useEffect(() => {
