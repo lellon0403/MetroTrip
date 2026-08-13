@@ -1,6 +1,7 @@
 import type { components } from "@metrotrip/contracts";
 import { ArrowRight, Bell, CalendarDays } from "lucide-react";
 import Link from "next/link";
+import { HomePlaceVisual } from "@/components/HomePlaceVisual";
 import { mapLegacyNotice, mapLegacyPlace, mapLegacyRecruitment } from "@/lib/legacyMappers";
 
 type HomeResponse = components["schemas"]["HomeResponse"];
@@ -99,9 +100,11 @@ export default async function HomePage() {
           <div className="homePlaceGrid">
             {places.slice(0, 6).map((place) => (
               <Link key={place.id} href={placeHref(place.id, place.category)} className="homePlaceCard">
-                <span className={`homePlaceVisual ${place.category.toLowerCase()}`}>
-                  <b>{place.category === "FOOD" ? "맛집" : place.category === "CAFE" ? "카페" : "장소"}</b>
-                </span>
+                <HomePlaceVisual
+                  category={place.category}
+                  imageUrl={place.imageUrl}
+                  label={place.category === "FOOD" ? "맛집" : place.category === "CAFE" ? "카페" : "장소"}
+                />
                 <strong>{place.name}</strong>
                 <small>{place.address}</small>
               </Link>

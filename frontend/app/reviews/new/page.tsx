@@ -211,24 +211,29 @@ function ReviewComposerPage() {
       return;
     }
     setPending(true); setError(null);
-    let dimensions: { width?: number; height?: number } = {};
-    try { const bitmap = await createImageBitmap(file); dimensions = { width: bitmap.width, height: bitmap.height }; bitmap.close(); } catch { /* 이미지 크기 없이도 업로드할 수 있습니다. */ }
-    const { data: claim, error: claimError } = await api.POST("/api/v1/media/claims", { body: { filename: file.name, mimeType: file.type, sizeBytes: file.size, ...dimensions } });
-    if (!claim) { setError((claimError as { error?: { message?: string } } | undefined)?.error?.message ?? "이미지 업로드를 시작하지 못했습니다."); setPending(false); return; }
-    const uploadHeaders = new Headers(claim.uploadHeaders);
-    const accessToken = getAccessToken();
-    if (accessToken) uploadHeaders.set("Authorization", `Bearer ${accessToken}`);
-    const uploaded = await fetch(claim.uploadUrl, { method: "PUT", headers: uploadHeaders, body: file });
-    if (!uploaded.ok) { setError("이미지 저장소 업로드에 실패했습니다."); setPending(false); return; }
-    const { data: complete } = await api.POST("/api/v1/media/claims/{media_id}/complete", { params: { path: { media_id: claim.id } } });
-    if (!complete) { setError("이미지 검사를 완료하지 못했습니다."); setPending(false); return; }
-    const image = { id: complete.id, url: complete.publicUrl, altText: file.name };
-    const isCover = !coverId || images.length === 0;
-    setImages((current) => [...current, image]);
-    setCoverId((current) => current ?? image.id);
-    const node = { type: "image", attrs: { src: image.url, alt: image.altText, "data-cover": isCover ? "true" : "false" } };
-    editor.commands.insertContentAt(position ?? editor.state.doc.content.size, node);
-    setPending(false);
+    try {
+      let dimensions: { width?: number; height?: number } = {};
+      try { const bitmap = await createImageBitmap(file); dimensions = { width: bitmap.width, height: bitmap.height }; bitmap.close(); } catch { /* 이미지 크기 없이도 업로드할 수 있습니다. */ }
+      const { data: claim, error: claimError } = await api.POST("/api/v1/media/claims", { body: { filename: file.name, mimeType: file.type, sizeBytes: file.size, ...dimensions } });
+      if (!claim) { setError((claimError as { error?: { message?: string } } | undefined)?.error?.message ?? "이미지 업로드를 시작하지 못했습니다."); return; }
+      const uploadHeaders = new Headers(claim.uploadHeaders);
+      const accessToken = getAccessToken();
+      if (accessToken) uploadHeaders.set("Authorization", `Bearer ${accessToken}`);
+      const uploaded = await fetch(claim.uploadUrl, { method: "PUT", headers: uploadHeaders, body: file });
+      if (!uploaded.ok) { setError("이미지 저장소 업로드에 실패했습니다."); return; }
+      const { data: complete } = await api.POST("/api/v1/media/claims/{media_id}/complete", { params: { path: { media_id: claim.id } } });
+      if (!complete) { setError("이미지 검사를 완료하지 못했습니다."); return; }
+      const image = { id: complete.id, url: complete.publicUrl, altText: file.name };
+      const isCover = !coverId || images.length === 0;
+      setImages((current) => [...current, image]);
+      setCoverId((current) => current ?? image.id);
+      const node = { type: "image", attrs: { src: image.url, alt: image.altText, "data-cover": isCover ? "true" : "false" } };
+      editor.commands.insertContentAt(position ?? editor.state.doc.content.size, node);
+    } catch {
+      setError("이미지 업로드 중 네트워크 오류가 발생했습니다.");
+    } finally {
+      setPending(false);
+    }
   }
 
   async function choosePlan(id: string) {

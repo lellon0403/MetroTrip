@@ -11,6 +11,16 @@ function apiOrigin() {
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "tong.visitkorea.or.kr",
+        port: "",
+        pathname: "/cms/resource/**",
+      },
+    ],
+  },
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.0.108"],
   env: {
     NEXT_PUBLIC_KAKAO_JS_KEY:
@@ -35,7 +45,7 @@ const nextConfig: NextConfig = {
         { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=()" },
         {
           key: "Content-Security-Policy",
-          value: `default-src 'self'; img-src 'self' data: blob: http://127.0.0.1:8000 http://localhost:8000 http://192.168.0.108:8000 https://*.daumcdn.net https://*.kakaocdn.net http://*.daumcdn.net http://*.kakaocdn.net; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://192.168.0.108:8000 https://dapi.kakao.com https://*.daumcdn.net https://*.kakaocdn.net http://dapi.kakao.com http://*.daumcdn.net http://*.kakaocdn.net; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://dapi.kakao.com https://*.daumcdn.net https://*.kakaocdn.net http://dapi.kakao.com http://*.daumcdn.net http://*.kakaocdn.net${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`,
+          value: `default-src 'self'; img-src 'self' data: blob: http://127.0.0.1:8000 http://localhost:8000 http://192.168.0.108:8000 https://tong.visitkorea.or.kr https://*.daumcdn.net https://*.kakaocdn.net http://*.daumcdn.net http://*.kakaocdn.net; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://192.168.0.108:8000 https://dapi.kakao.com https://*.daumcdn.net https://*.kakaocdn.net http://dapi.kakao.com http://*.daumcdn.net http://*.kakaocdn.net; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://dapi.kakao.com https://*.daumcdn.net https://*.kakaocdn.net http://dapi.kakao.com http://*.daumcdn.net http://*.kakaocdn.net${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`,
         },
       ],
     }];

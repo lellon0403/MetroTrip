@@ -314,16 +314,6 @@ nginx/Caddy 리버스 프록시가 종단한다(이 저장소가 관리하는 �
   안 됐다 — 등록 안 하면 로컬/테스트 PC에서 잘 뜨던 지도가 실제 배포 도메인에서는 그냥
   안 뜬다(과거 GitHub Pages 배포 때도 이 등록을 빠뜨려서 겪은 적 있음, `docs/HANDOFF.md`
   5장 참고). 8장 체크리스트에 추가함.
-- **업로드 미디어 URL이 깨질 위험 (미확인, 아직 안 고침).** `backend/app/services/reviews.py`의
-  `create_media_upload`가 `request.url_for(...)`로 절대 URL을 만드는데, `backend/Dockerfile`의
-  uvicorn 실행에 `--proxy-headers`가 없고 `main.py`에도 `ProxyHeadersMiddleware`가 없다.
-  리버스 프록시가 `X-Forwarded-Proto`/`Host`를 보내줘도 uvicorn이 신뢰하지 않으면, 후기
-  이미지 업로드 URL이 `https://metrotrip.kro.kr/...`가 아니라 프록시→컨테이너 사이의 내부
-  연결 정보(예: `http://127.0.0.1:8000/...`)로 만들어져 외부에서 접근이 안 될 수 있다.
-  실제로 후기 사진을 올려서 그 URL이 `metrotrip.kro.kr`로 나오는지 확인 필요 — 깨져 있으면
-  `backend/Dockerfile`의 `CMD`에 `--proxy-headers`를 추가하는 게 표준적인 해결책이다
-  (리버스 프록시가 보낸 포워딩 헤더를 우분투 서버 내부망에서만 신뢰하도록
-  `--forwarded-allow-ips`도 함께 좁히는 걸 권장). 8장 체크리스트에 추가함.
 
 **이미지를 pull해서 컨테이너를 (재)기동하는 절차는 아직 이 저장소 어디에도 자동화돼 있지
 않다.** 아래 중 하나를 서버 쪽에서 구성해야 한다.
@@ -399,9 +389,8 @@ docker image prune -f   # 옛날 이미지 계속 쌓이는 것 방지 (디스�
       플랫폼 → 사이트 도메인]에 등록했는지 아직 확인이 안 됐다. 등록 안 하면 카카오맵이
       그 도메인에서만 안 뜬다 — 로컬/테스트 PC에서 멀쩡히 뜨던 것과 다른 증상이라
       헷갈리기 쉽다.
-- [ ] **업로드 미디어 URL이 `metrotrip.kro.kr`로 제대로 나오는지 확인 (7.3절).** 후기 사진을
-      실제로 올려서 응답의 `mediaUrl`이 `https://metrotrip.kro.kr/...`인지 확인한다. 내부
-      연결 정보로 깨져 있으면 `backend/Dockerfile`의 uvicorn `CMD`에 `--proxy-headers`
-      (+ `--forwarded-allow-ips`)를 추가해야 한다 — 아직 코드에 반영 안 함.
+- [ ] **배포 도메인에서 후기 미디어 왕복 업로드 확인 (7.3절).** 응답의 `uploadUrl`과
+      `mediaUrl`이 `/api/v1/...` 상대 경로인지 확인하고, 실제 PUT 저장과 이미지 조회까지
+      검증한다. 내부 연결 정보(`api:8000`)는 응답에 포함되지 않아야 한다.
 - [ ] **Oracle 지갑 볼륨 마운트 추가.** 실물 지갑 파일이 아직 없다. 준비되면 `certs`와 같은
       방식으로 `docker-compose.yml`에 볼륨 마운트를 추가한다 (5장).
