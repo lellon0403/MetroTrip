@@ -25,8 +25,7 @@
 4. **GitHub Pages는 쓰지 않는다.** 프론트가 Vite SPA에서 Next.js(App Router) SSR로 바뀌면서
    방향의 문제가 아니라 기술적으로 불가능해졌다 — `next.config.ts`가 `/api/v1/*`를 서버에서
    프록시하고, 여러 페이지가 `force-dynamic`으로 매 요청마다 서버에서 fetch한다. 정적 파일만
-   올리는 GitHub Pages로는 애초에 못 돌린다. `.github/workflows/deploy.yml`은 push 트리거가
-   없지만 수동 실행 경로와 존재하지 않는 `frontend/dist` 업로드 설정이 남은 레거시 파일이다.
+   올리는 GitHub Pages로는 애초에 못 돌리므로 구형 배포 워크플로도 제거했다.
 
 ## 2. 구조 — 파일 한눈에 보기
 
@@ -35,7 +34,6 @@
 | `.github/workflows/ci-backend.yml` | ruff 린트 + pytest | `develop` push, `main`/`develop` 대상 PR |
 | `.github/workflows/ci-frontend.yml` | eslint + 타입체크 + `next build` | `develop` push, `main`/`develop` 대상 PR |
 | `.github/workflows/cd-main.yml` (워크플로 이름: `Test and publish Docker images`) | 자체 테스트(lint·typecheck·pytest) 통과 후 backend·frontend Docker 이미지를 빌드해 Docker Hub에 push | `main` push |
-| `.github/workflows/deploy.yml` | GitHub Pages 배포 (예전 방식, 현재 사용 금지) | 수동 트리거만 남음 |
 | `backend/Dockerfile` | FastAPI 프로덕션 이미지 | — |
 | `frontend/Dockerfile` | Next.js standalone 빌드 → `node server.js` 3단계 이미지 | — |
 | `compose.yaml` (루트) | 배포 서버가 `api`+`frontend`+`caddy` 이미지를 pull해서 띄우는 구성 | — |

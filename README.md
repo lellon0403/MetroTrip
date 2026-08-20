@@ -357,8 +357,6 @@ ruff check .
 
 `main` 배포는 `.github/workflows/cd-main.yml`에서 Linux AMD64 이미지를 Docker Hub에 게시합니다. NCP 서버는 [Docker Compose 수동 배포 안내](deploy/docker/README.md)에 따라 이미지를 pull하고 Caddy가 80/443과 TLS를 담당합니다. Kubernetes 매니페스트는 [Kubernetes 배포 안내](deploy/k8s/README.md)를 참고합니다.
 
-`.github/workflows/deploy.yml`은 이전 Vite 정적 사이트용 수동 GitHub Pages 워크플로이므로 현재 Next.js 배포 경로로 사용하지 않습니다.
-
 `cd-main.yml`은 `API_INTERNAL_BASE_URL`과 `NEXT_PUBLIC_KAKAO_JS_KEY`를 프론트 이미지 빌드에 전달하고, 백엔드 CORS·공개 URL·DB 비밀값은 서버의 `deploy/docker/backend.env`에서 주입합니다.
 
 ## 문서 안내
