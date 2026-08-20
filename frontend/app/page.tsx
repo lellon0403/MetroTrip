@@ -5,7 +5,10 @@ import { HomePlaceVisual } from "@/components/HomePlaceVisual";
 import { mapLegacyNotice, mapLegacyPlace, mapLegacyRecruitment } from "@/lib/legacyMappers";
 
 type HomeResponse = components["schemas"]["HomeResponse"];
-type HomeData = HomeResponse & { recommendationStationId?: string };
+type HomeData = Pick<
+  HomeResponse,
+  "recommendedPlaces" | "latestRecruitments" | "popularRecruitments" | "activeEvents" | "notices"
+> & { recommendationStationId?: string };
 
 export const dynamic = "force-dynamic";
 
@@ -38,12 +41,11 @@ async function loadHome(): Promise<HomeData | null> {
     return {
       recommendationStationId: station?.stationId == null ? undefined : String(station.stationId),
       recommendedPlaces: places.slice(0, 6),
-      popularPlaces: places.slice(0, 6),
       latestRecruitments: recruitments,
       popularRecruitments: recruitments,
       activeEvents: allNotices.filter((item: { kind: string }) => item.kind === "EVENT"),
       notices: allNotices.filter((item: { kind: string }) => item.kind === "NOTICE"),
-    } as HomeResponse;
+    } as HomeData;
   } catch {
     return null;
   }
@@ -53,7 +55,6 @@ async function loadHome(): Promise<HomeData | null> {
 export default async function HomePage() {
   const home = await loadHome();
   const places = home?.recommendedPlaces ?? [];
-  const popularPlaces = home?.popularPlaces ?? [];
   const recruitments = home?.latestRecruitments ?? [];
   const popularRecruitments = home?.popularRecruitments ?? [];
   const events = home?.activeEvents ?? [];
@@ -111,23 +112,6 @@ export default async function HomePage() {
             ))}
           </div>
         ) : <div className="homeEmpty">맵에서 장소를 한 번 불러오면 추천이 채워집니다.</div>}
-      </section>
-
-      <section className="homeSection homeTint">
-        <div className="contentShell">
-          <header className="homeSectionHeader">
-            <div><p className="eyebrow">TRENDING NOW</p><h2>지금 많이 저장한 장소</h2></div>
-          </header>
-          <div className="popularPlaceRail">
-            {popularPlaces.slice(0, 6).map((place, index) => (
-              <Link key={place.id} href={placeHref(place.id, place.category)} className="popularPlaceItem">
-                <b>{String(index + 1).padStart(2, "0")}</b>
-                <span><strong>{place.name}</strong><small>저장 {place.favoriteCount} · {place.address}</small></span>
-              </Link>
-            ))}
-            {!popularPlaces.length ? <div className="homeEmpty">아직 저장된 장소가 없습니다.</div> : null}
-          </div>
-        </div>
       </section>
 
       <section className="homeSection contentShell homeCommunity">

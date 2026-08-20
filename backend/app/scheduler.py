@@ -45,9 +45,7 @@ def _run_sync_job() -> None:
         if violations:
             logger.error("빈 문자열 위반으로 Oracle 동기화를 건너뜁니다: %s", violations)
             return
-        tables = sync_tables(
-            include_timetables=False, exclude=settings.sync_exclude_tables
-        )
+        tables = sync_tables()
         counts = run_sync(mysql_engine, oracle_engine, tables)
         write_sync_state(counts)
         logger.info("Oracle 동기화 완료: 테이블 %d개, 총 %d행", len(counts), sum(counts.values()))

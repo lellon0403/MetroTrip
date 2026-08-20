@@ -1,30 +1,34 @@
 # 프론트엔드 API 연동 현황
 
-최종 갱신: 2026-08-11
-작업 브랜치: `feat/fe-timetable-route`
+최종 갱신: 2026-08-20
 
 ## 구조
 
-`experiment/codex-implementation`의 Next.js UI를 루트 `frontend/`로 이식했다. 새 UI가 기대하는 계약과 현재 FastAPI 계약이 다르므로 다음 두 파일에서 연결한다.
+Next.js UI가 기대하는 계약과 현재 FastAPI 계약이 다르므로 다음 파일에서 연결한다.
 
 - `frontend/src/lib/api.ts`: OpenAPI 클라이언트, Access Token 헤더
 - `frontend/src/lib/legacyApiAdapter.ts`: 경로·요청·응답 변환
 - `frontend/src/lib/legacyMappers.ts`: 역·장소·후기·모집·일정 등의 응답 모델 변환
+- `frontend/src/lib/adminApi.ts`: 현재 FastAPI 관리자 계약을 직접 호출
 - `frontend/src/contracts/schema.d.ts`: Codex UI가 사용하는 화면 계약
 
 Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 직접 호출한 뒤 `legacyMappers.ts`로 변환한다.
+시간표·노선도 보조 조회와 미디어 업로드도 각각의 전용 요청 흐름을 사용하므로 모든 요청이 레거시 어댑터를 거치는 구조는 아니다.
 
 ## 현재 FastAPI에 연결된 기능
 
 - 인증: 이메일 인증 회원가입, 로그인, Refresh Token 회전, 로그아웃, 비밀번호 재설정
 - 회원: 프로필 조회, 현재 비밀번호 재인증 후 닉네임 수정·회원 탈퇴
 - 역/노선: 목록, 검색, 상세, 시간표
-- 장소: 역 기준 반경 1km 장소 목록과 캐시된 장소 상세 표시
+- 장소: 역에 연결된 장소 목록을 받고 프론트엔드 계산 거리로 최대 1km까지 표시
 - 일정: 목록, 상세, 작성, 수정, 삭제
 - 모집: 목록, 상세, 작성, 수정, 삭제, 신청·취소·승인·거절·마감
 - 후기: 목록, 상세, 작성, 수정, 삭제, 로컬 미디어 업로드
 - 홈: 공지, 이벤트, 진행 중 모집, 천안역 주변 장소를 기존 API에서 조합
-- 공유 일정: 읽기 전용 조회
+- 공유 일정: 일정 항목의 역·장소 구분과 이름·시각을 보존한 읽기 전용 조회. 현재 백엔드에 일정 날짜 필드가 없어 날짜 정보 없음으로 표시
+
+모집 목록 정렬은 어댑터가 최대 100건을 조회한 뒤 최신순·인기순·마감임박순으로 정렬하고 화면 요청 개수만 반환한다.
+`/discover`의 지도·지하철 화면은 처음 탕정역을 조회해 선택하고, 탕정역 조회에 실패하면 기본 역 목록의 첫 항목을 사용한다.
 
 ### 지하철 일정 경로
 
@@ -40,14 +44,13 @@ Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 
 |---|---|---|
 | 좌표/지도 경계 장소 검색 | 가장 가까운 역을 골라 역 기준 API 사용, 최대 1km | 좌표·bounds·복수 카테고리 검색 API |
 | 장소 단건 상세 | 같은 세션에서 불러온 장소 캐시 사용 | `GET /places/{id}` |
-| 장소 즐겨찾기 | 브라우저 `localStorage` 전용 | 사용자별 장소 즐겨찾기 CRUD |
+| 장소 즐겨찾기 | 현재 범위에서 제외. UI·브라우저 저장·어댑터 계약 제거 | 향후 필요 시 사용자별 장소 즐겨찾기 CRUD |
 | 도보 경로 | 직선거리와 분당 67m 로컬 추정 | 보행 경로 제공자 연동 API |
 | 일정 날짜/설명/상태 | 브라우저 메타데이터 보조 저장 | 일정 스키마 확장 |
-| 일정의 중간 경유역 | 출발·도착은 공식 API, 전체 역 순서는 브라우저 메타데이터 보조 저장 | 계획 항목의 중간 역 정식 저장 계약 |
-| 삭제 일정 복원 | 501 미지원 | soft delete·복원 API |
+| 일정의 중간 경유역 | V1.12 `STATION` 일정 항목으로 공식 저장 | 추가 백엔드 없음 |
+| 삭제 일정 복원 | 현재 범위에서 제외. 복원 화면·어댑터 계약 제거 | 향후 필요 시 soft delete·복원 API |
 | 후기 좋아요·신고 | 501 미지원 | 좋아요·신고 API |
 | 모집 질문 댓글·신고 | 501 미지원 | 댓글·신고 API |
-| 모집 연결 일정 조회 | 501 미지원 | 공개 가능한 일정 스냅샷 API |
 | 공유 일정 복제 | 501 미지원 | 복제 API |
 | 관리자 신고·감사·동기화 | 빈 목록 또는 501 | 관리자 운영 API |
 
@@ -58,7 +61,7 @@ Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 
 권장 이름:
 
 ```text
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 NEXT_PUBLIC_KAKAO_JS_KEY=카카오_JavaScript_키
 ```
 
@@ -66,8 +69,7 @@ NEXT_PUBLIC_KAKAO_JS_KEY=카카오_JavaScript_키
 
 ## 검증 기록
 
-- `npm.cmd run typecheck`: 통과
-- `npm.cmd run lint`: 통과
-- `npm.cmd run build`: 통과
-- 브라우저: 홈, `/discover`, `/reviews` 서버 렌더링과 오류 상태 확인
-- 실제 DB API 통합: Codex 샌드박스가 `backend/.env`를 읽지 못해 일반 PowerShell에서 백엔드를 실행한 뒤 추가 확인 필요
+- `npm run typecheck`, `npm run lint`, `npm run build`: 통과
+- 프론트엔드 Docker 이미지 빌드와 mock API 브라우저 검증: 통과
+- 백엔드 `pytest` 148개와 `ruff check .`: 통과
+- 실제 Aiven MySQL·OCI Oracle 최신 재검증 상태는 [DB 장애 전환 문서](DB-FAILOVER.md)를 참고

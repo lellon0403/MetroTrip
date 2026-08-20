@@ -6,7 +6,7 @@
 -- 대상 테이블 : place_stations
 -- 건수 : 331건
 --
--- 선행 조건 : 03_stations, 05_places
+-- 선행 조건 : seed_02_line1.sql, seed_03_line4.sql, seed_04_line2.sql, seed_05_places.sql
 -- =====================================================================
 
 USE metrotrip;

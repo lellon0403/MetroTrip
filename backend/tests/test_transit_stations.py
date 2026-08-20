@@ -305,6 +305,11 @@ def test_timetable_time_preserves_hours_after_midnight() -> None:
     assert _format_timetable_time(raw_value) == "24:01:00"
 
 
+def test_timetable_time_accepts_oracle_string() -> None:
+    """Oracle VARCHAR2 시간표 값은 변환 중 예외 없이 그대로 반환한다."""
+    assert _format_timetable_time("24:05:00") == "24:05:00"
+
+
 def test_timetable_returns_empty_list_for_valid_conditions(db: Session) -> None:
     """유효한 역–노선 조합에 시간표가 없으면 빈 목록을 반환한다."""
 

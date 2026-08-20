@@ -46,6 +46,12 @@ def test_run_sync_job_passes_wallet_and_ssl_connect_args(monkeypatch):
     assert len(captured) == 2
     (_, mysql_connect_args), (_, oracle_connect_args) = captured
     assert mysql_connect_args == {"ssl": {"ca": "/tmp/ca.pem"}}
+    assert settings.mysql_probe_connect_args() == {
+        "connect_timeout": 5,
+        "read_timeout": 5,
+        "write_timeout": 5,
+        "ssl": {"ca": "/tmp/ca.pem"},
+    }
     assert oracle_connect_args == {
         "config_dir": "/tmp/wallet",
         "wallet_location": "/tmp/wallet",

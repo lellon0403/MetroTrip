@@ -1,5 +1,7 @@
 # 요구사항 정리 및 단계 구분
 
+> **역사 자료:** 초기 3주 개발 단계 계획을 보존한 문서입니다. 현재 구현·실행 기준은 루트 [README](../README.md)와 [프론트 API 연동 현황](FRONTEND-API-INTEGRATION.md)을 확인하세요.
+
 원본 문서 (팀 공유용, 최신본 기준):
 
 - 요구사항정의서 (V1.0, 2026-07-16) — [Google Sheets](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit?gid=0#gid=0)

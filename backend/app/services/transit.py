@@ -88,10 +88,12 @@ def _require_stations(
         )
 
 
-def _format_timetable_time(value: time | timedelta | None) -> str | None:
+def _format_timetable_time(value: str | time | timedelta | None) -> str | None:
     """DB 시각을 24시 이후 값도 보존하는 HH:MM:SS 문자열로 변환한다."""
     if value is None:
         return None
+    if isinstance(value, str):
+        return value
     if isinstance(value, time):
         return value.strftime("%H:%M:%S")
 
@@ -132,11 +134,23 @@ def _build_place_admin_response(
     place: Place,
 ) -> PlaceAdminResponse:
     """장소와 이미지·접근역·등록 정보를 관리자 응답으로 조립한다."""
-    images = repository.list_place_images([place.place_id])
+    return _to_place_admin_response(
+        place,
+        repository.list_place_images([place.place_id]),
+        repository.list_place_station_ids(place.place_id),
+    )
+
+
+def _to_place_admin_response(
+    place: Place,
+    images: list[PlaceImage],
+    station_ids: list[int],
+) -> PlaceAdminResponse:
+    """미리 조회한 이미지와 접근역으로 관리자 장소 응답을 조립한다."""
     public_response = _build_place_response(place, images)
     return PlaceAdminResponse(
         **public_response.model_dump(),
-        station_ids=repository.list_place_station_ids(place.place_id),
+        station_ids=station_ids,
         created_by=place.created_by,
         created_at=place.created_at,
         updated_at=place.updated_at,
@@ -354,8 +368,22 @@ def list_admin_places_by_station(
         page=page,
         size=size,
     )
+    place_ids = [place.place_id for place in places]
+    images_by_place = {place_id: [] for place_id in place_ids}
+    for image in repository.list_place_images(place_ids):
+        images_by_place[image.place_id].append(image)
+    station_ids_by_place = repository.list_place_station_ids_by_place_ids(
+        place_ids
+    )
     return PlaceAdminListResponse(
-        items=[_build_place_admin_response(repository, place) for place in places],
+        items=[
+            _to_place_admin_response(
+                place,
+                images_by_place[place.place_id],
+                station_ids_by_place[place.place_id],
+            )
+            for place in places
+        ],
         page=page,
         size=size,
         total_elements=total,

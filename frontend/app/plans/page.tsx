@@ -16,11 +16,6 @@ function itemTypeLabel(value: string) {
   return { STATION: "역", PLACE: "장소", NOTE: "메모", ROUTE: "이동" }[value] ?? value;
 }
 
-function savedPlaceName(item: PlanView["days"][number]["items"][number]) {
-  const value = item.routeSnapshot?.placeName;
-  return typeof value === "string" ? value : null;
-}
-
 export default function PlansPage() {
   const { status } = useSession();
   const [plans, setPlans] = useState<PlanSummary[]>([]);
@@ -62,7 +57,7 @@ export default function PlansPage() {
   }, []);
 
   async function deletePlan(plan: PlanSummary) {
-    if (!window.confirm(`'${plan.title}' 일정을 삭제할까요? 3일 동안 삭제된 일정에서 복원할 수 있습니다.`)) return;
+    if (!window.confirm(`'${plan.title}' 일정을 삭제할까요?`)) return;
     setDeletingId(plan.id);
     const { response } = await api.DELETE("/api/v1/plans/{plan_id}", { params: { path: { plan_id: plan.id } } });
     if (response.ok) {
@@ -129,7 +124,7 @@ export default function PlansPage() {
     <main className="planReaderPage contentShell">
       <header className="sectionHeader planReaderHeader">
         <div><p className="eyebrow">MY TRAVEL PLANS</p><h1>내 일정</h1><p>일정은 여기서 확인하고, 수정은 지도에서 이어서 진행하세요.</p></div>
-        <div className="planReaderHeaderActions"><Link className="outlineButton" href="/plans/deleted"><Trash2 size={16} aria-hidden /> 삭제된 일정</Link><Link className="primaryButton" href="/discover?planner=create"><Plus size={17} aria-hidden /> 일정 만들기</Link></div>
+        <div className="planReaderHeaderActions"><Link className="primaryButton" href="/discover?planner=create"><Plus size={17} aria-hidden /> 일정 만들기</Link></div>
       </header>
 
       {error ? <div className="inlineError" role="alert"><p>{error}</p></div> : null}

@@ -3,6 +3,8 @@ reviews / community / notices 세 도메인을 Swagger UI(`/docs`)나 curl로 �
 검증할 때 쓰는 체크리스트입니다. 자동 테스트(`pytest`)와 겹치는 항목도 있지만,
 실제 HTTP 응답과 여러 계정 간 상호작용은 자동 테스트가 다루지 않아 직접 확인이 필요합니다.
 
+아래 `/reviews`, `/posts`, `/notices` 등의 경로는 모두 공통 prefix `/api/v1`을 생략한 표기입니다.
+
 ## 0. 준비
 ### 서버 실행
 **Windows (PowerShell)**
@@ -34,7 +36,7 @@ uvicorn app.main:app --reload
 
 
 ### Swagger에 로그인 상태로 호출하기
-Swagger 우측 상단 **Authorize** 버튼 → `Bearer <accessToken>` 입력.
+Swagger 우측 상단 **Authorize** 버튼 → Access Token 값만 입력.
 이후 인증이 필요한 API는 자동으로 헤더가 붙습니다.
 
 ### 공통 에러 형식
@@ -64,25 +66,6 @@ DB의 `stations` 테이블에서 아무 값이나 두 개 확인해두세요(예
 
 - **400 `STATION_NOT_FOUND` 테스트용**: `startStationId`를 `999999999`처럼 존재하지 않는 값으로 바꿔서 보내보세요.
 - **400 `PLAN_NOT_FOUND` 테스트용**: `planId`를 `999999`처럼 존재하지 않는 값으로 바꿔서 보내보세요.
-
-{
-    "pw" : stringst@#12
-    "userId": 21,
-    "email": "hon_12@gmail.com",
-    "nickname": "hon02"
-},
-{
-    "pw" : stringst@#123
-    "userId": 22,
-    "email": "hon_123@gmail.com",
-    "nickname": "hon123"
-},
-{
-    "pw" : stringst@#1234
-    "userId": 23,
-    "email": "hon_1234@gmail.com",
-    "nickname": "hon1234"
-}
 
 - [o] `POST /reviews` 정상 작성 → 201, 응답에 `startStationName`/`endStationName`/`authorNickname`이 채워짐
 - [o] 존재하지 않는 `startStationId`로 작성 → 400 `STATION_NOT_FOUND`

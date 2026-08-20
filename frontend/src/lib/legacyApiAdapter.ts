@@ -22,7 +22,6 @@ type Json = Record<string, any>;
 type ForwardResult = { response: Response; data: any };
 
 const REFRESH_KEY = "metrotrip.refreshToken";
-const PLACE_FAVORITES_KEY = "metrotrip.placeFavorites";
 const PLAN_METADATA_KEY = "metrotrip.planMetadata";
 const stationCache = new Map<string, Json>();
 const placeCache = new Map<string, Json>();
@@ -346,21 +345,12 @@ async function handleMe(path: string, request: Request, body: Json): Promise<Res
     const result = await forward("/api/v1/users/me/favorites", request);
     if (!result.response.ok) return passthrough(result);
     const stations = (result.data?.items ?? []).map((item: Json) => ({ id: String(item.stationId), name: String(item.stationName), createdAt: String(item.createdAt) }));
-    const ids = storageJson<string[]>(PLACE_FAVORITES_KEY, []);
-    const places = ids.map((id) => placeCache.get(id)).filter(Boolean).map((item) => mapLegacyPlace(item as Json));
-    return json({ stations, places });
+    return json({ stations });
   }
   const favoriteStation = path.match(/^\/api\/v1\/me\/favorites\/stations\/([^/]+)$/);
   if (favoriteStation && (request.method === "PUT" || request.method === "DELETE")) {
     const result = await forward(`/api/v1/users/me/favorites/${favoriteStation[1]}`, request, { method: request.method === "PUT" ? "POST" : "DELETE", ...(request.method === "PUT" ? { body: JSON.stringify({}) } : {}) });
     return result.response.ok ? json({ stationId: favoriteStation[1], favorite: request.method === "PUT" }) : passthrough(result);
-  }
-  const favoritePlace = path.match(/^\/api\/v1\/me\/favorites\/places\/([^/]+)$/);
-  if (favoritePlace && (request.method === "PUT" || request.method === "DELETE")) {
-    const ids = new Set(storageJson<string[]>(PLACE_FAVORITES_KEY, []));
-    if (request.method === "PUT") ids.add(favoritePlace[1]); else ids.delete(favoritePlace[1]);
-    storageSet(PLACE_FAVORITES_KEY, JSON.stringify([...ids]));
-    return json({ placeId: favoritePlace[1], favorite: request.method === "PUT", persistence: "LOCAL_BROWSER_ONLY" });
   }
   if (path === "/api/v1/me/reviews" && request.method === "GET") {
     const result = await forward("/api/v1/users/me/reviews?size=100", request);
@@ -444,9 +434,6 @@ async function handlePlans(path: string, url: URL, request: Request, body: Json)
     savePlanMetadata(metadata);
     return json(mapLegacyPlan(result.data, metadata[String(result.data.planId)]), 201);
   }
-  if (path === "/api/v1/plans/deleted" && request.method === "GET") return json(page([]));
-  const restore = path.match(/^\/api\/v1\/plans\/([^/]+)\/restore$/);
-  if (restore) return unsupported("삭제 일정 복원");
   const detail = path.match(/^\/api\/v1\/plans\/([^/]+)$/);
   if (detail && request.method === "GET") {
     const result = await forward(`/api/v1/plans/${detail[1]}`, request);
@@ -488,25 +475,56 @@ function legacyRecruitmentWrite(body: Json) {
   };
 }
 
+function sortRecruitments(items: Json[], sort: string | null): Json[] {
+  const latest = (left: Json, right: Json) => Date.parse(String(right.createdAt)) - Date.parse(String(left.createdAt));
+  return [...items].sort((left, right) => {
+    if (sort === "popular") {
+      return numeric(right.viewCount) - numeric(left.viewCount) || latest(left, right);
+    }
+    if (sort === "closing") {
+      const statusOrder = Number(left.status !== "OPEN") - Number(right.status !== "OPEN");
+      const leftDeadline = Date.parse(String(left.deadline));
+      const rightDeadline = Date.parse(String(right.deadline));
+      return statusOrder || leftDeadline - rightDeadline || latest(left, right);
+    }
+    return latest(left, right);
+  });
+}
+
 function mapPublicPlan(source: Json, key: string) {
-  const today = dateOnly(new Date());
   const startId = source.startStationId ? String(source.startStationId) : null;
   const endId = source.endStationId ? String(source.endStationId) : null;
-  const placeItems = (source.items ?? []).map((item: Json, index: number) => ({ id: String(item.planItemId), itemType: "PLACE", stationId: item.stationId ? String(item.stationId) : null, placeId: item.placeId ? String(item.placeId) : null, routeSnapshot: null, note: item.placeName ?? item.memo ?? null, scheduledTime: item.visitTime ?? null, durationMinutes: null, position: index + 2 }));
+  const sourceItems = (source.items ?? []).map((item: Json) => {
+    const itemType = item.itemType === "STATION" ? "STATION" : "PLACE";
+    return {
+      id: String(item.planItemId),
+      itemType,
+      stationId: item.stationId ? String(item.stationId) : null,
+      placeId: item.placeId ? String(item.placeId) : null,
+      routeSnapshot: null,
+      note: itemType === "STATION" ? item.stationName ?? item.memo ?? null : item.placeName ?? item.memo ?? null,
+      scheduledTime: item.visitTime ?? null,
+      durationMinutes: null,
+    };
+  });
+  const hasStart = startId && sourceItems.some((item: Json) => item.itemType === "STATION" && item.stationId === startId);
+  const hasEnd = endId && sourceItems.some((item: Json) => item.itemType === "STATION" && item.stationId === endId);
   const items = [
-    { id: `${key}-start`, itemType: "STATION", stationId: startId, placeId: null, routeSnapshot: null, note: source.startStationName, scheduledTime: null, durationMinutes: null, position: 1 },
-    ...placeItems,
-    ...(endId && endId !== startId ? [{ id: `${key}-end`, itemType: "STATION", stationId: endId, placeId: null, routeSnapshot: null, note: source.endStationName, scheduledTime: null, durationMinutes: null, position: placeItems.length + 2 }] : []),
-  ];
+    ...(!hasStart && startId ? [{ id: `${key}-start`, itemType: "STATION", stationId: startId, placeId: null, routeSnapshot: null, note: source.startStationName, scheduledTime: null, durationMinutes: null }] : []),
+    ...sourceItems,
+    ...(!hasEnd && endId && endId !== startId ? [{ id: `${key}-end`, itemType: "STATION", stationId: endId, placeId: null, routeSnapshot: null, note: source.endStationName, scheduledTime: null, durationMinutes: null }] : []),
+  ].map((item, index) => ({ ...item, position: index + 1 }));
   const now = new Date().toISOString();
-  return { id: key, ownerId: "", title: source.planTitle, description: null, startDate: today, endDate: today, visibility: "UNLISTED", status: "ACTIVE", version: 1, days: [{ id: `${key}-day-1`, dayDate: today, title: "1일차", position: 1, items }], createdAt: now, updatedAt: now, readOnly: true };
+  return { id: key, ownerId: "", title: source.planTitle, description: null, startDate: "", endDate: "", visibility: "UNLISTED", status: "ACTIVE", version: 1, days: [{ id: `${key}-day-1`, dayDate: "", title: "1일차", position: 1, items }], createdAt: now, updatedAt: now, readOnly: true };
 }
 
 async function handleRecruitments(path: string, url: URL, request: Request, body: Json): Promise<Response | null> {
   if (path === "/api/v1/recruitments" && request.method === "GET") {
     const status = url.searchParams.get("status");
-    const result = await forward(`/api/v1/posts${encodeQuery({ keyword: url.searchParams.get("query"), recruit_status: status === "OPEN" ? "RECRUITING" : status === "CLOSED" ? "CLOSED" : null, size: url.searchParams.get("limit") ?? 100 })}`, request);
-    return result.response.ok ? json(page((result.data?.items ?? []).map(mapLegacyRecruitment), result.data)) : passthrough(result);
+    const limit = Math.max(1, numeric(url.searchParams.get("limit"), 100));
+    const result = await forward(`/api/v1/posts${encodeQuery({ keyword: url.searchParams.get("query"), recruit_status: status === "OPEN" ? "RECRUITING" : status === "CLOSED" ? "CLOSED" : null, size: 100 })}`, request);
+    const items = sortRecruitments((result.data?.items ?? []).map(mapLegacyRecruitment), url.searchParams.get("sort")).slice(0, limit);
+    return result.response.ok ? json(page(items, result.data)) : passthrough(result);
   }
   if (path === "/api/v1/recruitments" && request.method === "POST") {
     const result = await forward("/api/v1/posts", request, { method: "POST", body: JSON.stringify(legacyRecruitmentWrite(body)) });
@@ -651,8 +669,15 @@ async function handleShared(path: string, request: Request): Promise<Response | 
   return null;
 }
 
-async function handleAdmin(path: string, request: Request): Promise<Response | null> {
-  if (path === "/api/v1/admin/reports" || path === "/api/v1/admin/audit-logs" || path === "/api/v1/admin/places") return json(page([]));
+async function handleAdmin(path: string, url: URL, request: Request, body: Json): Promise<Response | null> {
+  if (path === "/api/v1/admin/reports" || path === "/api/v1/admin/audit-logs") return json(page([]));
+  if (path === "/api/v1/admin/places" || /^\/api\/v1\/admin\/places\/[^/]+$/.test(path)) {
+    const result = await forward(`${path}${url.search}`, request, {
+      method: request.method,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : JSON.stringify(body),
+    });
+    return passthrough(result);
+  }
   if (path === "/api/v1/admin/notices" && request.method === "GET") {
     const result = await forward("/api/v1/notices?size=100", request);
     return result.response.ok ? json(page(result.data?.items ?? [], result.data)) : passthrough(result);
@@ -676,7 +701,7 @@ export async function legacyApiFetch(input: RequestInfo | URL, init?: RequestIni
     () => handleRecruitments(path, url, request, body),
     () => handleReviews(path, url, request, body),
     () => handleShared(path, request),
-    () => handleAdmin(path, request),
+    () => handleAdmin(path, url, request, body),
   ];
   for (const handler of handlers) {
     const response = await handler();

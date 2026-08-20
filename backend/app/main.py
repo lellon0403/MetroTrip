@@ -91,7 +91,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         summary="MetroTrip 프론트엔드 협업용 REST API 계약",
         description=(
-            "API 계약과 데이터베이스 명세서 V1.11을 기준으로 작성"
+            "API 계약과 데이터베이스 명세서 V1.12를 기준으로 작성"
         ),
         debug=settings.debug,
         version="0.1.0",
