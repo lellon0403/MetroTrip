@@ -2,16 +2,16 @@
 -- 지하철 노선 기반 관광 추천 서비스 (MetroTrip)
 -- 더미 데이터 : 여행 후기 · 인원 모집 게시판
 --
--- 근거 문서 : 데이터베이스 명세서 V1.11
+-- 근거 문서 : 데이터베이스 명세서 V1.12
 -- 대상 테이블 : reviews / review_tags / review_media
 --              board_posts / post_participants
 --
 -- 목적 : 화면 확인과 발표 시연에 쓸 데이터. 실제 사용 흐름에 가깝게 구성했다.
 --
 -- 선행 조건
---   회원 5명 (hon202 / hon_12 / hon_123 / hon_1234 / rladbwls)
---   seed_03_stations.sql    (천안·아산 구간 역)
---   seed_05_places.sql      (천안·아산 장소 33건)
+--   seed_01_users.sql       (회원 5명)
+--   seed_02_line1.sql       (천안·아산 구간 역)
+--   seed_05_places.sql      (게시글에서 참조하는 추천 장소)
 --
 -- 참고 : 회원·역·장소를 ID 가 아니라 이메일·역명·장소명으로 조회해 넣는다.
 --        AUTO_INCREMENT 값이 환경마다 달라도 그대로 실행된다.

@@ -2,7 +2,7 @@
 -- 지하철 노선 기반 관광 추천 서비스 (MetroTrip)
 -- 초기 데이터 : 수도권 전철 2호선
 --
--- 근거 문서 : 데이터베이스 명세서 V1.10
+-- 근거 문서 : 데이터베이스 명세서 V1.12
 -- 대상 테이블 : subway_lines / stations / line_stations
 -- 건수 : subway_lines 3건 / stations 46건 / line_stations 53건
 --
@@ -12,7 +12,7 @@
 --   좌표 : 전국도시철도역사정보 표준데이터
 --   순서 : 코레일 노선도 대조 확인
 --
--- 선행 조건 : seed_line1.sql, seed_line4.sql (공유역 5건의 station_id 를 참조한다)
+-- 선행 조건 : seed_02_line1.sql, seed_03_line4.sql (공유역 5건의 station_id 를 참조한다)
 -- =====================================================================
 
 USE metrotrip;

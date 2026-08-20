@@ -2,7 +2,7 @@
 -- 지하철 노선 기반 관광 추천 서비스 (MetroTrip)
 -- 초기 데이터 : 수도권 전철 1호선
 --
--- 근거 문서 : 데이터베이스 명세서 V1.10
+-- 근거 문서 : 데이터베이스 명세서 V1.12
 -- 대상 테이블 : subway_lines / stations / line_stations
 -- 건수 : subway_lines 2건 / stations 100건 / line_stations 145건
 --
