@@ -475,6 +475,22 @@ function legacyRecruitmentWrite(body: Json) {
   };
 }
 
+function sortRecruitments(items: Json[], sort: string | null): Json[] {
+  const latest = (left: Json, right: Json) => Date.parse(String(right.createdAt)) - Date.parse(String(left.createdAt));
+  return [...items].sort((left, right) => {
+    if (sort === "popular") {
+      return numeric(right.viewCount) - numeric(left.viewCount) || latest(left, right);
+    }
+    if (sort === "closing") {
+      const statusOrder = Number(left.status !== "OPEN") - Number(right.status !== "OPEN");
+      const leftDeadline = Date.parse(String(left.deadline));
+      const rightDeadline = Date.parse(String(right.deadline));
+      return statusOrder || leftDeadline - rightDeadline || latest(left, right);
+    }
+    return latest(left, right);
+  });
+}
+
 function mapPublicPlan(source: Json, key: string) {
   const today = dateOnly(new Date());
   const startId = source.startStationId ? String(source.startStationId) : null;
@@ -492,8 +508,10 @@ function mapPublicPlan(source: Json, key: string) {
 async function handleRecruitments(path: string, url: URL, request: Request, body: Json): Promise<Response | null> {
   if (path === "/api/v1/recruitments" && request.method === "GET") {
     const status = url.searchParams.get("status");
-    const result = await forward(`/api/v1/posts${encodeQuery({ keyword: url.searchParams.get("query"), recruit_status: status === "OPEN" ? "RECRUITING" : status === "CLOSED" ? "CLOSED" : null, size: url.searchParams.get("limit") ?? 100 })}`, request);
-    return result.response.ok ? json(page((result.data?.items ?? []).map(mapLegacyRecruitment), result.data)) : passthrough(result);
+    const limit = Math.max(1, numeric(url.searchParams.get("limit"), 100));
+    const result = await forward(`/api/v1/posts${encodeQuery({ keyword: url.searchParams.get("query"), recruit_status: status === "OPEN" ? "RECRUITING" : status === "CLOSED" ? "CLOSED" : null, size: 100 })}`, request);
+    const items = sortRecruitments((result.data?.items ?? []).map(mapLegacyRecruitment), url.searchParams.get("sort")).slice(0, limit);
+    return result.response.ok ? json(page(items, result.data)) : passthrough(result);
   }
   if (path === "/api/v1/recruitments" && request.method === "POST") {
     const result = await forward("/api/v1/posts", request, { method: "POST", body: JSON.stringify(legacyRecruitmentWrite(body)) });
