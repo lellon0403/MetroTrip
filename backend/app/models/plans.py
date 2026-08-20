@@ -61,6 +61,17 @@ class TravelPlanItem(Base):
     """여행 계획의 방문 장소와 시간을 travel_plan_items에 매핑한다."""
 
     __tablename__ = "travel_plan_items"
+    __table_args__ = (
+        CheckConstraint(
+            "item_type IN ('STATION', 'PLACE')",
+            name="ck_tpi_item_type",
+        ),
+        CheckConstraint(
+            "(item_type = 'STATION' AND station_id IS NOT NULL AND place_id IS NULL) "
+            "OR (item_type = 'PLACE' AND place_id IS NOT NULL)",
+            name="ck_tpi_item_reference",
+        ),
+    )
 
     plan_item_id: Mapped[int] = mapped_column(_PrimaryKeyId, primary_key=True)
     plan_id: Mapped[int] = mapped_column(
@@ -75,7 +86,7 @@ class TravelPlanItem(Base):
     )
     station_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey("stations.station_id", ondelete="SET NULL"),
+        ForeignKey("stations.station_id", ondelete="RESTRICT"),
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     visit_time: Mapped[time | None] = mapped_column(Time)
