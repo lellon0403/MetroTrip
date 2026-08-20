@@ -180,7 +180,6 @@ export default function DiscoverPage() {
   const [timeEditingItemId, setTimeEditingItemId] = useState<string | null>(null);
   const initialPlaceHandled = useRef(false);
   const initialPlannerHandled = useRef(false);
-  const initialSubwayStationHandled = useRef(false);
   const initialRecruitmentPlannerHandled = useRef(false);
   const plannerPlanRef = useRef<PlanView | null>(null);
   const plannerReadOnlyRef = useRef(false);
@@ -261,19 +260,27 @@ export default function DiscoverPage() {
   // 검색어와 무관한 역을 고른 상태에서 선택이 갑자기 풀린다.
   const loadStations = useCallback(async () => {
     setLoadingStations(true);
-    const { data, error: apiError } = await api.GET("/api/v1/stations", {
-      params: { query: { query: null, limit: 100 } },
-    });
+    const [stationResponse, tangjeongResponse] = await Promise.all([
+      api.GET("/api/v1/stations", { params: { query: { query: null, limit: 100 } } }),
+      api.GET("/api/v1/stations", { params: { query: { query: "탕정", limit: 6 } } }),
+    ]);
+    const { data, error: apiError } = stationResponse;
     if (!data) {
       setStations([]);
       setError(readError(apiError));
     } else {
+      const tangjeong = tangjeongResponse.data?.items.find(
+        (station) => station.name.replace(/역$/, "") === "탕정",
+      );
+      const items = tangjeong && !data.items.some((station) => station.id === tangjeong.id)
+        ? [...data.items, tangjeong]
+        : data.items;
       setStations((current) => [
-        ...data.items,
-        ...current.filter((station) => !data.items.some((item) => item.id === station.id)),
+        ...items,
+        ...current.filter((station) => !items.some((item) => item.id === station.id)),
       ]);
       setSelectedStationId((current) =>
-        current ?? data.items.find((item) => item.name === "천안")?.id ?? data.items[0]?.id ?? null,
+        current ?? tangjeong?.id ?? data.items[0]?.id ?? null,
       );
     }
     setLoadingStations(false);
@@ -573,19 +580,6 @@ export default function DiscoverPage() {
     setTimeTargetItemId(null);
     setExpandedDepartureGroups(new Set());
     setRoute(null);
-  }
-
-  async function openSubwayView() {
-    setViewMode("subway");
-    if (initialSubwayStationHandled.current) return;
-    initialSubwayStationHandled.current = true;
-    let tangjeong = stations.find((station) => station.name.replace(/역$/, "") === "탕정");
-    if (!tangjeong) {
-      const { data } = await api.GET("/api/v1/stations", { params: { query: { query: "탕정", limit: 6 } } });
-      tangjeong = data?.items.find((station) => station.name.replace(/역$/, "") === "탕정") ?? data?.items[0];
-      if (tangjeong) setStations((current) => current.some((station) => station.id === tangjeong!.id) ? current : [...current, tangjeong!]);
-    }
-    if (tangjeong) selectStation(tangjeong.id);
   }
 
   function toggleCategory(category: Category) {
@@ -1018,7 +1012,7 @@ export default function DiscoverPage() {
           <div className={`viewModeSwitch ${viewMode}`} role="group" aria-label="탐색 화면 전환">
             <span className="viewModeThumb" aria-hidden />
             <button type="button" aria-pressed={viewMode === "map"} onClick={() => setViewMode("map")}><MapIcon size={15} aria-hidden /> 지도</button>
-            <button type="button" aria-pressed={viewMode === "subway"} onClick={() => void openSubwayView()}><TrainFront size={15} aria-hidden /> 지하철</button>
+            <button type="button" aria-pressed={viewMode === "subway"} onClick={() => setViewMode("subway")}><TrainFront size={15} aria-hidden /> 지하철</button>
           </div>
           <div className={`mapModeSurface ${viewMode === "map" ? "active" : "inactive"}`} aria-hidden={viewMode !== "map"}>
             <KakaoMap active={viewMode === "map"} station={selectedStation} stationFocusRequestKey={stationFocusRequestKey} places={mapPlaces} selectedPlaceId={selectedPlace?.id ?? null} radiusMeters={radiusMeters} favoritePlaceIds={favoritePlaceIds} routePath={mapPath} focusPlaceIds={focusPlaceIds} focusMode={focusMode} onSelectPlace={selectPlace} onViewportChange={setPendingViewport} />
