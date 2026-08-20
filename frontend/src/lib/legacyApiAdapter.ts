@@ -22,7 +22,6 @@ type Json = Record<string, any>;
 type ForwardResult = { response: Response; data: any };
 
 const REFRESH_KEY = "metrotrip.refreshToken";
-const PLACE_FAVORITES_KEY = "metrotrip.placeFavorites";
 const PLAN_METADATA_KEY = "metrotrip.planMetadata";
 const stationCache = new Map<string, Json>();
 const placeCache = new Map<string, Json>();
@@ -346,21 +345,12 @@ async function handleMe(path: string, request: Request, body: Json): Promise<Res
     const result = await forward("/api/v1/users/me/favorites", request);
     if (!result.response.ok) return passthrough(result);
     const stations = (result.data?.items ?? []).map((item: Json) => ({ id: String(item.stationId), name: String(item.stationName), createdAt: String(item.createdAt) }));
-    const ids = storageJson<string[]>(PLACE_FAVORITES_KEY, []);
-    const places = ids.map((id) => placeCache.get(id)).filter(Boolean).map((item) => mapLegacyPlace(item as Json));
-    return json({ stations, places });
+    return json({ stations });
   }
   const favoriteStation = path.match(/^\/api\/v1\/me\/favorites\/stations\/([^/]+)$/);
   if (favoriteStation && (request.method === "PUT" || request.method === "DELETE")) {
     const result = await forward(`/api/v1/users/me/favorites/${favoriteStation[1]}`, request, { method: request.method === "PUT" ? "POST" : "DELETE", ...(request.method === "PUT" ? { body: JSON.stringify({}) } : {}) });
     return result.response.ok ? json({ stationId: favoriteStation[1], favorite: request.method === "PUT" }) : passthrough(result);
-  }
-  const favoritePlace = path.match(/^\/api\/v1\/me\/favorites\/places\/([^/]+)$/);
-  if (favoritePlace && (request.method === "PUT" || request.method === "DELETE")) {
-    const ids = new Set(storageJson<string[]>(PLACE_FAVORITES_KEY, []));
-    if (request.method === "PUT") ids.add(favoritePlace[1]); else ids.delete(favoritePlace[1]);
-    storageSet(PLACE_FAVORITES_KEY, JSON.stringify([...ids]));
-    return json({ placeId: favoritePlace[1], favorite: request.method === "PUT", persistence: "LOCAL_BROWSER_ONLY" });
   }
   if (path === "/api/v1/me/reviews" && request.method === "GET") {
     const result = await forward("/api/v1/users/me/reviews?size=100", request);

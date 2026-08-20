@@ -156,7 +156,6 @@ export default function DiscoverPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [route, setRoute] = useState<RouteComparison | null>(null);
-  const [favoritePlaceIds, setFavoritePlaceIds] = useState<Set<string>>(new Set());
   const [favoriteStationIds, setFavoriteStationIds] = useState<Set<string>>(new Set());
   const [authPrompt, setAuthPrompt] = useState(false);
   const [rightPanel, setRightPanel] = useState<"planner" | null>(null);
@@ -426,7 +425,6 @@ export default function DiscoverPage() {
   useEffect(() => {
     if (status !== "authenticated") return;
     void api.GET("/api/v1/me/favorites").then(({ data }) => {
-      setFavoritePlaceIds(new Set(data?.places.map((item) => item.id) ?? []));
       setFavoriteStationIds(new Set(data?.stations.map((item) => item.id) ?? []));
     });
   }, [status]);
@@ -595,24 +593,6 @@ export default function DiscoverPage() {
     if (status === "authenticated") return false;
     setAuthPrompt(true);
     return true;
-  }
-
-  async function toggleFavoritePlace() {
-    if (!selectedPlace || requireAccount()) return;
-    const isFavorite = favoritePlaceIds.has(selectedPlace.id);
-    const result = isFavorite
-      ? await api.DELETE("/api/v1/me/favorites/places/{place_id}", { params: { path: { place_id: selectedPlace.id } } })
-      : await api.PUT("/api/v1/me/favorites/places/{place_id}", { params: { path: { place_id: selectedPlace.id } } });
-    if (result.error) {
-      setError(readError(result.error));
-      return;
-    }
-    setFavoritePlaceIds((current) => {
-      const next = new Set(current);
-      if (isFavorite) next.delete(selectedPlace.id);
-      else next.add(selectedPlace.id);
-      return next;
-    });
   }
 
   async function toggleFavoriteStation() {
@@ -965,7 +945,7 @@ export default function DiscoverPage() {
           {error ? <div className="inlineError" role="alert"><p>{error}</p><button type="button" onClick={() => void loadPlaces()}>다시 시도</button></div> : null}
           {loadingPlaces ? <div className="placeSkeletons" aria-label="장소를 불러오는 중">{[1, 2, 3].map((item) => <span key={item} />)}</div> : places.length === 0 ? <div className="emptyState"><strong>조건에 맞는 장소가 없어요</strong><p>카테고리나 검색 반경을 바꿔보세요.</p></div> : (
             <div className="placeList">
-              {places.map((place) => <button type="button" key={place.id} className={place.id === selectedPlace?.id ? "selected" : ""} onClick={() => selectPlace(place)}><span className={`categoryDot ${place.category.toLowerCase()}`} /><span><strong>{place.name}</strong><small>{categoryOptions.find((item) => item.value === place.category)?.label ?? place.category} · {Math.round(place.distanceMeters ?? 0)}m</small></span>{favoritePlaceIds.has(place.id) ? <Star className="placeListFavorite" size={17} fill="currentColor" aria-label="즐겨찾는 장소" /> : <ChevronRight size={18} aria-hidden />}</button>)}
+              {places.map((place) => <button type="button" key={place.id} className={place.id === selectedPlace?.id ? "selected" : ""} onClick={() => selectPlace(place)}><span className={`categoryDot ${place.category.toLowerCase()}`} /><span><strong>{place.name}</strong><small>{categoryOptions.find((item) => item.value === place.category)?.label ?? place.category} · {Math.round(place.distanceMeters ?? 0)}m</small></span><ChevronRight size={18} aria-hidden /></button>)}
             </div>
           )}
         </aside>
@@ -997,7 +977,7 @@ export default function DiscoverPage() {
             ))}</div>
             <small>DB 공식 시간표를 기준으로 표시합니다. 지연·운휴 등 실제 운행 상황에 따라 시각이 달라질 수 있습니다.</small>
           </> : selectedPlace ? <>
-            <div className="inspectorTop"><p className="eyebrow">PLACE DETAIL</p><div><button type="button" className="favoriteIcon" aria-label={favoritePlaceIds.has(selectedPlace.id) ? "즐겨찾기 해제" : "즐겨찾기"} aria-pressed={favoritePlaceIds.has(selectedPlace.id)} onClick={() => void toggleFavoritePlace()}><Star size={18} fill={favoritePlaceIds.has(selectedPlace.id) ? "currentColor" : "none"} aria-hidden /></button><button type="button" className="iconButton neutral" aria-label="장소 상세 닫기" onClick={() => setSelectedPlace(null)}><X size={18} aria-hidden /></button></div></div>
+            <div className="inspectorTop"><p className="eyebrow">PLACE DETAIL</p><button type="button" className="iconButton neutral" aria-label="장소 상세 닫기" onClick={() => setSelectedPlace(null)}><X size={18} aria-hidden /></button></div>
             <h2>{selectedPlace.name}</h2>
             <span className="placeCategoryLabel">{placeDetail?.summary ?? selectedPlace.category}</span>
             <dl className="placeFacts"><div><dt>주소</dt><dd>{selectedPlace.address}</dd></div>{placeDetail?.phone ? <div><dt>전화</dt><dd>{placeDetail.phone}</dd></div> : null}<div><dt>거리</dt><dd>{Math.round(selectedPlace.distanceMeters ?? 0)}m</dd></div></dl>
@@ -1015,7 +995,7 @@ export default function DiscoverPage() {
             <button type="button" aria-pressed={viewMode === "subway"} onClick={() => setViewMode("subway")}><TrainFront size={15} aria-hidden /> 지하철</button>
           </div>
           <div className={`mapModeSurface ${viewMode === "map" ? "active" : "inactive"}`} aria-hidden={viewMode !== "map"}>
-            <KakaoMap active={viewMode === "map"} station={selectedStation} stationFocusRequestKey={stationFocusRequestKey} places={mapPlaces} selectedPlaceId={selectedPlace?.id ?? null} radiusMeters={radiusMeters} favoritePlaceIds={favoritePlaceIds} routePath={mapPath} focusPlaceIds={focusPlaceIds} focusMode={focusMode} onSelectPlace={selectPlace} onViewportChange={setPendingViewport} />
+            <KakaoMap active={viewMode === "map"} station={selectedStation} stationFocusRequestKey={stationFocusRequestKey} places={mapPlaces} selectedPlaceId={selectedPlace?.id ?? null} radiusMeters={radiusMeters} routePath={mapPath} focusPlaceIds={focusPlaceIds} focusMode={focusMode} onSelectPlace={selectPlace} onViewportChange={setPendingViewport} />
             {pendingViewport && (!searchCenter || Math.abs(pendingViewport.latitude - searchCenter.latitude) > 0.0005 || Math.abs(pendingViewport.longitude - searchCenter.longitude) > 0.0005) ? <button className="searchThisArea" type="button" onClick={() => setSearchCenter(pendingViewport)}>이 영역 검색</button> : null}
             {focusMode ? <div className="focusModeBanner"><strong>일정 순서 보기</strong><span>다른 장소 마커를 숨겼습니다.</span><button type="button" onClick={() => setFocusMode(false)}>종료</button></div> : null}
           </div>

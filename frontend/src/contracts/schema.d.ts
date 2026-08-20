@@ -279,24 +279,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/me/favorites/places/{place_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Favorite Place */
-        put: operations["favoritePlace"];
-        post?: never;
-        /** Unfavorite Place */
-        delete: operations["unfavoritePlace"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/routes/compare": {
         parameters: {
             query?: never;
@@ -1303,8 +1285,6 @@ export interface components {
         FavoriteCollection: {
             /** Stations */
             stations: components["schemas"]["StationSummary"][];
-            /** Places */
-            places: components["schemas"]["PlaceSummary"][];
         };
         /** FavoriteMutation */
         FavoriteMutation: {
@@ -3125,68 +3105,6 @@ export interface operations {
             header?: never;
             path: {
                 station_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FavoriteMutation"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    favoritePlace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                place_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FavoriteMutation"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    unfavoritePlace: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                place_id: string;
             };
             cookie?: never;
         };
