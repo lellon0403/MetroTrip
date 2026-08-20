@@ -125,7 +125,7 @@ export function loadKakaoMaps(appKey: string): Promise<KakaoMaps> {
 
 function placeMarkerContent(
   place: Place,
-  options: { selected: boolean; favorite: boolean; sequence?: number },
+  options: { selected: boolean; sequence?: number },
   onSelect: () => void,
 ) {
   const button = document.createElement("button");
@@ -133,14 +133,13 @@ function placeMarkerContent(
   button.className = [
     "kakaoPlaceMarker",
     options.selected ? "selected" : "",
-    options.favorite ? "favorite" : "",
     options.sequence ? "itinerary" : "",
   ].filter(Boolean).join(" ");
   button.setAttribute("aria-label", `${place.name} 선택`);
   button.title = place.name;
   button.addEventListener("click", onSelect);
   const dot = document.createElement("span");
-  dot.textContent = options.sequence ? String(options.sequence) : options.selected ? place.name : options.favorite ? "★" : "";
+  dot.textContent = options.sequence ? String(options.sequence) : options.selected ? place.name : "";
   button.appendChild(dot);
   return button;
 }
@@ -160,7 +159,6 @@ export function KakaoMap({
   places,
   selectedPlaceId,
   radiusMeters,
-  favoritePlaceIds,
   routePath,
   focusPlaceIds,
   focusMode,
@@ -173,7 +171,6 @@ export function KakaoMap({
   places: Place[];
   selectedPlaceId: string | null;
   radiusMeters: number;
-  favoritePlaceIds: Set<string>;
   routePath: RouteCoordinate[];
   focusPlaceIds: string[];
   focusMode: boolean;
@@ -281,12 +278,12 @@ export function KakaoMap({
               position: new maps.LatLng(place.latitude, place.longitude),
               content: placeMarkerContent(
                 place,
-                { selected, favorite: favoritePlaceIds.has(place.id), ...(sequence ? { sequence } : {}) },
+                { selected, ...(sequence ? { sequence } : {}) },
                 () => onSelectPlace(place),
               ),
               xAnchor: 0.5,
               yAnchor: 1,
-              zIndex: sequence || selected ? 8 : favoritePlaceIds.has(place.id) ? 5 : 3,
+              zIndex: sequence || selected ? 8 : 3,
             }),
           );
         }
@@ -318,7 +315,7 @@ export function KakaoMap({
         setMessage(error instanceof Error ? error.message : "Kakao 지도를 표시하지 못했습니다.");
       });
     return () => { active = false; };
-  }, [appKey, favoritePlaceIds, focusMode, focusPlaceIds, onSelectPlace, places, radiusMeters, routePath, selectedPlaceId, station, stationFocusRequestKey]);
+  }, [appKey, focusMode, focusPlaceIds, onSelectPlace, places, radiusMeters, routePath, selectedPlaceId, station, stationFocusRequestKey]);
 
   return (
     <section className="kakaoMap" aria-label="Kakao 장소 지도">

@@ -21,6 +21,7 @@ ENV PORT=5173
 ENV API_INTERNAL_BASE_URL=http://api:8000
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
 USER node
 EXPOSE 5173
 CMD ["node", "server.js"]

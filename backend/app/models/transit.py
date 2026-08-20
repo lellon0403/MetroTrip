@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -62,6 +63,7 @@ class Station(Base):
     """지하철 역 정보를 stations 테이블에 매핑한다."""
 
     __tablename__ = "stations"
+    __table_args__ = (Index("idx_stations_name", "station_name"),)
 
     station_id: Mapped[int] = mapped_column(_PrimaryKeyId, primary_key=True)
     station_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -112,6 +114,13 @@ class TrainTimetable(Base):
         CheckConstraint(
             "arrival_time IS NOT NULL OR departure_time IS NOT NULL",
             name="ck_train_timetables_time",
+        ),
+        Index(
+            "idx_timetables_lookup",
+            "station_id",
+            "day_type",
+            "direction",
+            "arrival_time",
         ),
     )
 
@@ -218,6 +227,9 @@ class LineViewLog(Base):
     """노선 조회 기록을 line_view_logs 테이블에 매핑한다."""
 
     __tablename__ = "line_view_logs"
+    __table_args__ = (
+        Index("idx_line_view_logs_time", "viewed_at", "line_id"),
+    )
 
     log_id: Mapped[int] = mapped_column(_PrimaryKeyId, primary_key=True)
     line_id: Mapped[int] = mapped_column(

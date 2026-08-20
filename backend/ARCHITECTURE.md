@@ -72,8 +72,8 @@ SQLAlchemy 데이터베이스 기반 설정을 관리한다.
 MySQL/Oracle 이중화(DB-FAILOVER.md)를 담당한다.
 
 - `database_oracle.py`: Oracle 읽기 전용(RO) 엔진과 세션 팩토리. flush/commit 시도를 즉시 예외로 막는다.
-- `db_failover.py`: MySQL 헬스체크(서킷브레이커)와 `get_db()`(쓰기, 장애 시 503), `get_read_db()`(조회, 장애 시 Oracle 폴백) 의존성.
-- `scheduler.py`: 앱 기동 시(lifespan) APScheduler로 `scripts/sync_to_oracle.py`의 동기화 로직을 주기 실행한다.
+- `db_failover.py`: 공유 프로브로 MySQL 상태를 판정하고 `get_db()`(쓰기, 장애 시 503), `get_read_db()`(조회, 장애 시 Oracle 폴백) 의존성을 제공한다. Oracle이 없으면 라우팅 상태는 `unavailable`이다.
+- `scheduler.py`: 앱 기동 시(lifespan) APScheduler로 V1.12의 23개 테이블을 Oracle에 주기 동기화한다.
 
 자세한 설계 근거는 [docs/DB-FAILOVER.md](../docs/DB-FAILOVER.md)를 참고한다.
 
@@ -105,7 +105,8 @@ HTTP 계층을 담당한다.
 | `notices.py` | 공지사항 조회와 관리 |
 | `community.py` | 일반·모집 게시글, 참여 신청과 관리자 모집 글 삭제 |
 
-라우터에는 SQLAlchemy 쿼리나 복잡한 상태 변경 규칙을 작성하지 않는다.
+비즈니스 라우터에는 SQLAlchemy 쿼리나 복잡한 상태 변경 규칙을 작성하지 않는다.
+공통 관리자 인증 의존성인 `contract.py`는 사용자 역할을 확인하기 위해 `User`를 직접 조회한다.
 
 ### `app/schemas/`
 
@@ -134,7 +135,8 @@ HTTP 계층을 담당한다.
 - 모집 정원, 마감 상태와 같은 도메인 규칙 처리
 - 외부 서비스와 데이터베이스 작업의 조합
 
-서비스는 FastAPI의 `Request`나 `JSONResponse`에 의존하지 않는다.
+서비스는 원칙적으로 FastAPI 응답 객체에 의존하지 않는다. 다만 후기 미디어 발급 서비스는
+동일 출처 URL을 만들기 위해 `Request.url_for()`를 사용한다.
 현재 인증, 회원, 여행 계획, 후기, 모집 게시판, 노선·역 도메인의 서비스가 구현되어 있다.
 `services/transit.py`는 노선 추천 집계, 조회 기록, 역·시간표·주변 장소 조회와 관리자
 장소 등록·수정·삭제의 트랜잭션을 담당한다. 장소 삭제 시 FK 제약을 피하기 위해 해당 장소를
@@ -154,7 +156,7 @@ HTTP 계층을 담당한다.
 - 행 잠금이 필요한 동시성 쿼리
 
 비즈니스 판단은 하지 않고, 서비스가 요청한 데이터를 읽거나 저장한다.
-`repositories/transit.py`는 DB V1.11 테이블을 기준으로 노선, 역, 시간표, 주변 장소를
+`repositories/transit.py`는 DB V1.12 테이블을 기준으로 노선, 역, 시간표, 주변 장소를
 조회하고 노선 조회 기록을 저장한다. 장소와 `place_stations`·`place_images`를 변경하고,
 장소 삭제 전 `travel_plan_items` 정리와 영향받은 계획 조회도 담당한다.
 `repositories/plans.py`는 계획·일정 조회와 저장, 장소-역 매핑 검증, 공유 링크 조회를
@@ -162,27 +164,25 @@ HTTP 계층을 담당한다.
 
 ### `app/models/`
 
-DB 명세 V1.11에 대응하는 SQLAlchemy 모델을 둔다.
+DB 명세 V1.12에 대응하는 SQLAlchemy 모델을 둔다.
 
 - 테이블과 컬럼
 - PK, FK와 관계
 - DB 수준의 제약조건과 인덱스
 
 API 요청·응답 형식은 `schemas/`에서 별도로 관리한다. DB 모델을 그대로 API 응답으로
-노출하지 않는다. 테이블과 컬럼이 애플리케이션의 기존 설계와 다르면 DB V1.11을
+노출하지 않는다. 테이블과 컬럼이 애플리케이션의 기존 설계와 다르면 DB V1.12를
 우선한다.
 
 ### `app/integrations/`
 
 애플리케이션 외부 시스템과의 통신을 담당한다.
 
-- OAuth 제공자
-- 이메일 발송
-- 파일·오브젝트 스토리지
-- 외부 지도 또는 장소 API
+- `email.py`: 콘솔 또는 SMTP 이메일 발송
+- `local_storage.py`: 후기 미디어의 로컬 파일 저장
+- `security.py`: 비밀번호·토큰 관련 보안 처리
 
-외부 SDK의 요청과 응답을 이 계층에서 변환하여 서비스가 특정 SDK에 직접 의존하지
-않도록 한다. 실제 연동을 추가할 때 필요한 파일만 생성한다.
+외부 시스템별 세부 구현을 이 계층에 두어 서비스의 직접 의존을 줄인다.
 
 ## `tests/`
 
@@ -198,6 +198,7 @@ API 요청·응답 형식은 `schemas/`에서 별도로 관리한다. DB 모델�
 | `test_admin_content.py` | 관리자 후기·모집 게시글 삭제와 권한·CASCADE 검증 |
 | `test_db_failover.py` | MySQL 헬스체크 판정, 읽기 Oracle 폴백, 쓰기 503 검증 |
 | `test_sync_to_oracle.py` | TIME 변환, FK 순서, 빈 문자열 점검, 전체 재적재 원자성 검증 |
+| `test_schema_metadata.py` | V1.12 일정 항목 FK·CHECK와 명시적 성능 인덱스 검증 |
 
 기능별 서비스와 HTTP 계약을 대상 파일명을 따라 함께 검증한다.
 
@@ -211,17 +212,9 @@ tests/test_community_service.py
 
 ## `scripts/`
 
-반복 실행할 가치가 있는 개발·운영 보조 명령을 둔다.
-
-- 초기 데이터 적재
-- 데이터 검증
-- OpenAPI 파일 내보내기
-- 운영 시 필요한 일회성 작업
-
-애플리케이션 실행에 필수인 로직은 `scripts/`에 두지 않는다.
-
-예외로 `scripts/sync_to_oracle.py`는 `python -m scripts.sync_to_oracle`로 수동 실행(백필·검증)도
-지원하지만, 주기 실행은 `app/scheduler.py`가 그 로직을 함수 단위로 호출한다.
+반복 실행할 가치가 있는 개발·운영 보조 명령을 둔다. 현재
+`scripts/sync_to_oracle.py`는 `python -m scripts.sync_to_oracle`로 수동 백필·검증을 지원하고,
+주기 실행은 `app/scheduler.py`가 같은 로직을 함수 단위로 호출한다.
 
 ## 루트 설정 파일
 
