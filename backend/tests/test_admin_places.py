@@ -155,6 +155,43 @@ def test_list_admin_places_by_station_returns_editable_fields(db: Session) -> No
     ]
 
 
+def test_list_admin_places_loads_children_in_batches(db: Session) -> None:
+    """장소 수가 늘어도 이미지와 연결 역 조회 횟수가 증가하지 않는다."""
+    for index in range(3):
+        transit_service.create_place(
+            db,
+            1,
+            _create_request(place_name=f"테스트 장소 {index}"),
+        )
+
+    statements: list[str] = []
+
+    def record_statement(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        statements.append(statement)
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", record_statement)
+    try:
+        result = transit_service.list_admin_places_by_station(
+            db,
+            1,
+            page=1,
+            size=100,
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", record_statement)
+
+    assert len(result.items) == 3
+    assert len(statements) <= 6
+
+
 def test_create_and_update_place_replaces_children(db: Session) -> None:
     """장소 생성과 수정이 역 중복을 제거하고 이미지·역 목록을 교체한다."""
     created = transit_service.create_place(db, 1, _create_request())

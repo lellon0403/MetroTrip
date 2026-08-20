@@ -669,8 +669,15 @@ async function handleShared(path: string, request: Request): Promise<Response | 
   return null;
 }
 
-async function handleAdmin(path: string, request: Request): Promise<Response | null> {
-  if (path === "/api/v1/admin/reports" || path === "/api/v1/admin/audit-logs" || path === "/api/v1/admin/places") return json(page([]));
+async function handleAdmin(path: string, url: URL, request: Request, body: Json): Promise<Response | null> {
+  if (path === "/api/v1/admin/reports" || path === "/api/v1/admin/audit-logs") return json(page([]));
+  if (path === "/api/v1/admin/places" || /^\/api\/v1\/admin\/places\/[^/]+$/.test(path)) {
+    const result = await forward(`${path}${url.search}`, request, {
+      method: request.method,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : JSON.stringify(body),
+    });
+    return passthrough(result);
+  }
   if (path === "/api/v1/admin/notices" && request.method === "GET") {
     const result = await forward("/api/v1/notices?size=100", request);
     return result.response.ok ? json(page(result.data?.items ?? [], result.data)) : passthrough(result);
@@ -694,7 +701,7 @@ export async function legacyApiFetch(input: RequestInfo | URL, init?: RequestIni
     () => handleRecruitments(path, url, request, body),
     () => handleReviews(path, url, request, body),
     () => handleShared(path, request),
-    () => handleAdmin(path, request),
+    () => handleAdmin(path, url, request, body),
   ];
   for (const handler of handlers) {
     const response = await handler();

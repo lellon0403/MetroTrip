@@ -9,9 +9,11 @@ Next.js UI가 기대하는 계약과 현재 FastAPI 계약이 다르므로 다�
 - `frontend/src/lib/api.ts`: OpenAPI 클라이언트, Access Token 헤더
 - `frontend/src/lib/legacyApiAdapter.ts`: 경로·요청·응답 변환
 - `frontend/src/lib/legacyMappers.ts`: 역·장소·후기·모집·일정 등의 응답 모델 변환
+- `frontend/src/lib/adminApi.ts`: 현재 FastAPI 관리자 계약을 직접 호출
 - `frontend/src/contracts/schema.d.ts`: Codex UI가 사용하는 화면 계약
 
 Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 직접 호출한 뒤 `legacyMappers.ts`로 변환한다.
+시간표·노선도 보조 조회와 미디어 업로드도 각각의 전용 요청 흐름을 사용하므로 모든 요청이 레거시 어댑터를 거치는 구조는 아니다.
 
 ## 현재 FastAPI에 연결된 기능
 

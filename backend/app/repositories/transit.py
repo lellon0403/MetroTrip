@@ -110,6 +110,24 @@ class TransitRepository:
         )
         return list(rows)
 
+    def list_place_station_ids_by_place_ids(
+        self,
+        place_ids: list[int],
+    ) -> dict[int, list[int]]:
+        """여러 장소의 연결 역 ID를 한 번에 조회한다."""
+        if not place_ids:
+            return {}
+        rows = self.session.execute(
+            select(PlaceStation.place_id, PlaceStation.station_id)
+            .where(PlaceStation.place_id.in_(place_ids))
+            .distinct()
+            .order_by(PlaceStation.place_id, PlaceStation.station_id)
+        )
+        station_ids_by_place = {place_id: [] for place_id in place_ids}
+        for place_id, station_id in rows:
+            station_ids_by_place[place_id].append(station_id)
+        return station_ids_by_place
+
     def replace_place_stations(
         self,
         place_id: int,
