@@ -112,7 +112,7 @@ MetroTrip/
 │  └─ erd/                    Mermaid ERD
 ├─ docs/                      요구사항·인수인계·협업·DB 이중화 문서
 ├─ deploy/                    Docker Compose/Caddy와 Kubernetes 배포 파일
-└─ .github/workflows/         CI, Docker 이미지 배포, 레거시 Pages 워크플로
+└─ .github/workflows/         CI와 Docker 이미지 게시 워크플로
 ```
 
 일반적인 요청 흐름은 다음과 같습니다.
@@ -329,7 +329,7 @@ pytest
 ruff check .
 ```
 
-백엔드 문서에 기록된 최신 자동화 테스트 기준은 147개입니다. 실제 동작 확인 없이 빌드나 타입 검사만으로 완료 처리하지 않습니다.
+백엔드 문서에 기록된 최신 자동화 테스트 기준은 148개입니다. 실제 동작 확인 없이 빌드나 타입 검사만으로 완료 처리하지 않습니다.
 
 ## 현재 제한 사항
 

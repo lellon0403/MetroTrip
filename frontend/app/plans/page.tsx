@@ -16,11 +16,6 @@ function itemTypeLabel(value: string) {
   return { STATION: "역", PLACE: "장소", NOTE: "메모", ROUTE: "이동" }[value] ?? value;
 }
 
-function savedPlaceName(item: PlanView["days"][number]["items"][number]) {
-  const value = item.routeSnapshot?.placeName;
-  return typeof value === "string" ? value : null;
-}
-
 export default function PlansPage() {
   const { status } = useSession();
   const [plans, setPlans] = useState<PlanSummary[]>([]);

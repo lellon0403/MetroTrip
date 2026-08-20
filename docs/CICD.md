@@ -50,7 +50,7 @@
 1. Python 3.10 설치 — `backend/Dockerfile`(`python:3.10-slim`)과 버전을 맞춤
 2. `pip install -e ".[dev]"` — `pyproject.toml`의 `dev` extra(pytest, ruff, httpx) 설치
 3. `ruff check .` — `pyproject.toml`의 `[tool.ruff]` 설정으로 린트
-4. `pytest` — `backend/tests/` 전체 실행 (147개)
+4. `pytest` — `backend/tests/` 전체 실행 (148개)
 
 **MySQL을 안 띄우는 이유:** DB를 사용하는 테스트는 SQLite 임시 DB를 사용하고, 나머지는 순수
 함수나 mock으로 검증한다. 실제 MySQL 서비스 컨테이너는 필요 없다.
@@ -64,7 +64,7 @@
 `oracle_ro_url`/`oracle_sync_url`/`oracle_wallet_dir` 등은 전부 `str | None = None`(Optional)이다.
 `oracledb`·`apscheduler`가 `pyproject.toml` 기본 의존성에 있지만, 실제 Oracle 접속을 시도하는
 코드는 요청이 들어와 MySQL 헬스체크가 실패할 때만 실행되므로 CI에서는 아무 값 없이 그냥
-통과한다. 이 상태로 147개 테스트 전부 통과를 확인했다.
+통과한다. 이 상태로 148개 테스트 전부 통과를 확인했다.
 
 **로컬에서 CI와 똑같이 확인하기:**
 ```bash

@@ -71,5 +71,5 @@ NEXT_PUBLIC_KAKAO_JS_KEY=카카오_JavaScript_키
 
 - `npm run typecheck`, `npm run lint`, `npm run build`: 통과
 - 프론트엔드 Docker 이미지 빌드와 mock API 브라우저 검증: 통과
-- 백엔드 `pytest` 147개와 `ruff check .`: 통과
+- 백엔드 `pytest` 148개와 `ruff check .`: 통과
 - 실제 Aiven MySQL·OCI Oracle 최신 재검증 상태는 [DB 장애 전환 문서](DB-FAILOVER.md)를 참고
