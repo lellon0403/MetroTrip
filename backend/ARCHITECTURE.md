@@ -72,8 +72,8 @@ SQLAlchemy 데이터베이스 기반 설정을 관리한다.
 MySQL/Oracle 이중화(DB-FAILOVER.md)를 담당한다.
 
 - `database_oracle.py`: Oracle 읽기 전용(RO) 엔진과 세션 팩토리. flush/commit 시도를 즉시 예외로 막는다.
-- `db_failover.py`: MySQL 헬스체크(서킷브레이커)와 `get_db()`(쓰기, 장애 시 503), `get_read_db()`(조회, 장애 시 Oracle 폴백) 의존성.
-- `scheduler.py`: 앱 기동 시(lifespan) APScheduler로 `scripts/sync_to_oracle.py`의 동기화 로직을 주기 실행한다.
+- `db_failover.py`: 공유 프로브로 MySQL 상태를 판정하고 `get_db()`(쓰기, 장애 시 503), `get_read_db()`(조회, 장애 시 Oracle 폴백) 의존성을 제공한다. Oracle이 없으면 라우팅 상태는 `unavailable`이다.
+- `scheduler.py`: 앱 기동 시(lifespan) APScheduler로 V1.12의 23개 테이블을 Oracle에 주기 동기화한다.
 
 자세한 설계 근거는 [docs/DB-FAILOVER.md](../docs/DB-FAILOVER.md)를 참고한다.
 
@@ -154,7 +154,7 @@ HTTP 계층을 담당한다.
 - 행 잠금이 필요한 동시성 쿼리
 
 비즈니스 판단은 하지 않고, 서비스가 요청한 데이터를 읽거나 저장한다.
-`repositories/transit.py`는 DB V1.11 테이블을 기준으로 노선, 역, 시간표, 주변 장소를
+`repositories/transit.py`는 DB V1.12 테이블을 기준으로 노선, 역, 시간표, 주변 장소를
 조회하고 노선 조회 기록을 저장한다. 장소와 `place_stations`·`place_images`를 변경하고,
 장소 삭제 전 `travel_plan_items` 정리와 영향받은 계획 조회도 담당한다.
 `repositories/plans.py`는 계획·일정 조회와 저장, 장소-역 매핑 검증, 공유 링크 조회를
@@ -162,14 +162,14 @@ HTTP 계층을 담당한다.
 
 ### `app/models/`
 
-DB 명세 V1.11에 대응하는 SQLAlchemy 모델을 둔다.
+DB 명세 V1.12에 대응하는 SQLAlchemy 모델을 둔다.
 
 - 테이블과 컬럼
 - PK, FK와 관계
 - DB 수준의 제약조건과 인덱스
 
 API 요청·응답 형식은 `schemas/`에서 별도로 관리한다. DB 모델을 그대로 API 응답으로
-노출하지 않는다. 테이블과 컬럼이 애플리케이션의 기존 설계와 다르면 DB V1.11을
+노출하지 않는다. 테이블과 컬럼이 애플리케이션의 기존 설계와 다르면 DB V1.12를
 우선한다.
 
 ### `app/integrations/`
@@ -198,6 +198,7 @@ API 요청·응답 형식은 `schemas/`에서 별도로 관리한다. DB 모델�
 | `test_admin_content.py` | 관리자 후기·모집 게시글 삭제와 권한·CASCADE 검증 |
 | `test_db_failover.py` | MySQL 헬스체크 판정, 읽기 Oracle 폴백, 쓰기 503 검증 |
 | `test_sync_to_oracle.py` | TIME 변환, FK 순서, 빈 문자열 점검, 전체 재적재 원자성 검증 |
+| `test_schema_metadata.py` | V1.12 일정 항목 FK·CHECK와 명시적 성능 인덱스 검증 |
 
 기능별 서비스와 HTTP 계약을 대상 파일명을 따라 함께 검증한다.
 

@@ -1,16 +1,18 @@
 # DB 이중화 — MySQL/Oracle 페일오버 (1단계)
 
 > 대상: 백엔드(윤홍규), DB(김유진)
-> 상태: **1단계 구현 완료 (코드 기준).** §7 결정 항목 5건 전부 확정. §9 Oracle 스키마 사전 확인 완료(V1.11 실물 대조). §3.1 세션 분리 방식은 `get_db()`/`get_read_db()` 구조로 백엔드 확인·구현 완료. 단, §9 항목 3·4·5(빈 문자열 실데이터 점검 / Oracle 버전 / 캐릭터셋)와 §10 장애 주입 검증은 **실제 Oracle 인스턴스가 있어야 확인 가능**하며 아직 미완료.
-> 근거 스키마: `db/schema/oracle/schema_oracle_V1.11.sql` (23테이블 / FK 35 / 인덱스 3)
-> 최종 수정: 2026-08-11
+> 상태: **1단계 구현 완료 (코드 기준).** V1.12의 23개 테이블을 한 트랜잭션으로 동기화하고, MySQL 장애 시 GET은 Oracle RO로 전환하며 DB 쓰기는 `503`으로 차단한다. 실제 Oracle 인스턴스를 사용한 최신 23개 테이블 전량 동기화·장애 주입 재검증은 남아 있다.
+> 근거 스키마: `db/schema/oracle/schema_oracle_V1.12.sql` (23테이블 / FK 35 / 인덱스 3)
+> 최종 수정: 2026-08-20
 > 구현 노트: 기존 백엔드가 동기(pymysql + SQLAlchemy `Session`) 구조라 §6 예시 코드와 달리 **동기**로 구현했다(ThreadPoolExecutor로 헬스체크에 타임아웃 부여). Oracle 드라이버의 PyPI 패키지명은 `python-oracledb`가 아니라 **`oracledb`**다(`pip install oracledb`).
+
+> **2026-08-20 현행 보정:** 이메일·닉네임 중복 조회도 Oracle 읽기 폴백을 사용한다. Oracle이 설정되지 않은 상태에서 MySQL까지 장애면 라우팅을 `unavailable`로 표시한다. Oracle의 `VARCHAR2(8)` 시간표 문자열을 응답에서 처리하며, 동시 요청은 하나의 MySQL 프로브 결과를 공유한다. 프로브 전용 연결에는 `METROTRIP_MYSQL_CONNECT_TIMEOUT_SECONDS`가 적용된다. 아래의 2026-08-11 UPSERT·시간표 제외 내용은 당시 장애 분석 기록이고 현재 구현은 시간표를 포함한 전체 재적재다.
 
 ---
 
 ## 1. 목표와 배경
 
-MySQL을 주(主) DB로, Oracle을 보조 DB로 이중화합니다. `schema_oracle_V1.11.sql`에 Oracle 스키마는 이미 준비돼 있지만("MySQL 운영 DB의 데이터를 Oracle로 옮겨 보관"), **실제로 두 DB를 연결·전환하는 코드는 아직 없습니다.** 이 문서가 그 설계의 단일 기준입니다.
+MySQL을 주(主) DB로, Oracle을 보조 DB로 이중화합니다. `schema_oracle_V1.12.sql`을 기준으로 두 DB의 동기화와 읽기 전환 코드가 구현되어 있습니다.
 
 목표는 세 가지입니다.
 
@@ -20,17 +22,17 @@ MySQL을 주(主) DB로, Oracle을 보조 DB로 이중화합니다. `schema_orac
 
 ### 대비 범위 — 명시적으로 좁힘
 
-§11에 따라 Oracle을 MySQL과 **같은 머신**에 두므로, 본 구성이 실제로 방어하는 범위는 다음과 같습니다.
+현재 검증에 사용한 Aiven MySQL과 OCI Oracle은 서로 분리되어 있습니다. 이 구성은 백엔드 애플리케이션과 Oracle이 정상인 상태에서 MySQL DB가 도달 불가능해지는 장애를 대상으로 합니다.
 
 | 장애 유형 | 대비됨 |
 |---|---|
 | MySQL 프로세스 다운·서비스 중지 | ✅ |
 | MySQL 설정 오류, 업그레이드 중 재기동 | ✅ |
 | InnoDB 손상, 마이그레이션 사고, 테이블 드롭 | ✅ |
-| 디스크·전원·메모리 등 하드웨어 고장 | ✅ |
-| OS 크래시, 정전 | ✅ |
+| MySQL 측 호스트·스토리지·서비스 장애 | ✅ |
+| 백엔드 애플리케이션 호스트·네트워크 장애 | ❌ |
 
-즉 본 구성은 **MySQL 인스턴스 수준의 장애**를 대비합니다. 머신 전체 장애는 범위 밖이며, 이는 외부 저장소로의 정기 백업(§11)으로 대응합니다. 실무에서 더 자주 발생하는 것은 위쪽 세 가지이므로 이 범위로도 실효가 있습니다.
+즉 본 구성은 **MySQL 인스턴스와 MySQL 측 인프라 장애**를 대비합니다. 백엔드 자체 장애와 두 클라우드에 동시에 영향을 주는 네트워크 장애는 범위 밖이며, 별도 애플리케이션 이중화와 백업이 필요합니다.
 
 ---
 
@@ -38,12 +40,12 @@ MySQL을 주(主) DB로, Oracle을 보조 DB로 이중화합니다. `schema_orac
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| **1단계 (이 문서)** | Oracle은 앱에 대해 항상 읽기 전용. MySQL 장애 중 쓰기 요청은 `503`으로 거부 | **확정, 구현 착수** |
+| **1단계 (이 문서)** | Oracle은 앱에 대해 항상 읽기 전용. MySQL 장애 중 DB 쓰기 요청은 `503`으로 거부 | **구현 완료, 실환경 재검증 필요** |
 | 2단계 | MySQL 장애 중 Oracle을 임시 승격해 쓰기를 받고, 복구 후 재생(replay) | **보류 — 요구가 실제로 확인될 때 별도 문서에서 설계** |
 
 **1단계 선택 근거**: 원래 요구사항(#3 "Oracle에서는 읽기만 가능, 삭제·수정 불가")을 문자 그대로 지키면서 구현·검증이 단순합니다. MySQL이 항상 유일한 진실(single source of truth)로 유지되므로 충돌·정합성 리스크가 원천적으로 없고, 복구 절차가 "MySQL을 다시 올린다"로 끝납니다. 2단계는 재생 충돌 처리 비용이 본체보다 커질 수 있어 선행하지 않습니다.
 
-**이 문서에서 다루지 않는 것** — Oracle 쓰기 승격, 역방향 동기화, 충돌 해소, 자동 페일백(1단계 복구는 MySQL 재기동만으로 완료), 세션/캐시 계층 이중화.
+**이 문서에서 다루지 않는 것** — Oracle 쓰기 승격, 역방향 동기화, 충돌 해소, 자동 페일백(1단계 복구는 MySQL 재기동만으로 완료), 세션/캐시 계층 이중화. DB 세션을 사용하지 않는 후기 미디어 파일 발급·업로드 경로의 장애 차단과 파일 운영 개선도 이번 작업에서는 보류합니다.
 
 ---
 
@@ -58,11 +60,13 @@ MySQL을 주(主) DB로, Oracle을 보조 DB로 이중화합니다. `schema_orac
 | `get_db()` | 쓰기(POST/PATCH/DELETE), 쓰기 직후 재조회 | MySQL 세션 | **즉시 `503`** (세션 미생성) |
 | `get_read_db()` | 순수 조회(GET) | MySQL 세션 | **Oracle 읽기 전용 세션** |
 
+Oracle RO URL이 설정되지 않은 환경에서는 MySQL 장애 시 `get_read_db()`도 `503`을 반환하고 상태 API는 `routing: unavailable`을 표시합니다.
+
 **초안(별도 가드 의존성 `ensure_primary_available()` 추가)에서 바꾼 이유는 실수의 방향입니다.** 가드 방식은 새 쓰기 엔드포인트에서 가드를 누락하면 장애 중 Oracle에 쓰기를 시도해 `500`이 납니다. 위 구조에서는 `get_read_db()` 적용을 누락해도 결과가 "그 GET만 폴백되지 않음"이므로 **안전한 방향으로 실패**합니다.
 
 부수 효과로 `get_read_db()`는 향후 MySQL read replica 도입 시 그대로 재사용됩니다.
 
-> **구현 완료(2026-08-11)**: `app/routers/*.py`의 모든 GET 엔드포인트가 `get_read_db()`를 사용하도록 교체됐습니다(`auth.py`는 GET이 없어 대상 아님). 관리자 라우터(`admin_router`)는 전부 쓰기(POST/PATCH/DELETE)라 `get_db()`를 그대로 씁니다. 관리자 권한 확인(`contract.py`의 `get_current_admin_id`)은 role 검사가 최신 데이터여야 하므로 의도적으로 `get_db()`를 유지했습니다 — MySQL 장애 중에는 관리자 전용 API 전체가 `503`이 됩니다.
+> **구현 완료(2026-08-20 확인)**: `app/routers/*.py`의 DB 조회 GET 엔드포인트는 이메일·닉네임 중복 조회를 포함해 `get_read_db()`를 사용합니다. 관리자 라우터(`admin_router`)는 전부 쓰기(POST/PATCH/DELETE)라 `get_db()`를 그대로 씁니다. 관리자 권한 확인(`contract.py`의 `get_current_admin_id`)은 role 검사가 최신 데이터여야 하므로 의도적으로 `get_db()`를 유지했습니다 — MySQL 장애 중에는 관리자 전용 API 전체가 `503`이 됩니다.
 >
 > `plans.py`/`notices.py`의 `501` 스텁을 전제로 한 아래 문단은 현재 코드 기준으로는 낡았습니다. 두 라우터 모두 이미 정식 구현되어 있어(#39, #40) 스텁이 존재하지 않습니다.
 
@@ -92,23 +96,23 @@ backend/scripts/sync_to_oracle.py  (독립 스크립트)
   ↑ 인앱 스케줄러(APScheduler)가 10분 주기로 이 로직을 호출
   └─ 대상 테이블 전체 재적재 (delete-all → insert-all), 단일 트랜잭션
      · 삭제는 FK 역순, 삽입은 FK 정순 (§8.1)
-     · train_timetables는 기본 제외 (--include-timetables로 수동 실행)
+     · train_timetables를 포함한 V1.12 전체 23개 테이블
      · 커밋 직전 테이블별 행 수 대조, 불일치 시 전체 롤백
 ```
 
-**증분(upsert)을 쓰지 않는 이유**: 본 스키마는 전 구간 하드 삭제 정책(CASCADE 16 / RESTRICT 12 / SET NULL 7)입니다. `updated_at` 기준 증분은 UPDATE된 행만 추적하므로 **MySQL에서 삭제된 행이 Oracle에 영구히 남습니다.** 장애 중 조회로 전환되면 삭제한 리뷰·게시글이 되살아나 보이는, 사용자 눈에 가장 이상한 형태의 버그가 됩니다. 게다가 23개 테이블 중 `updated_at`을 가진 것은 6개뿐이라 증분 대상 자체가 소수입니다.
+**증분(upsert)을 쓰지 않는 이유**: 본 스키마는 전 구간 하드 삭제 정책(CASCADE 16 / RESTRICT 13 / SET NULL 6)입니다. `updated_at` 기준 증분은 UPDATE된 행만 추적하므로 **MySQL에서 삭제된 행이 Oracle에 영구히 남습니다.** 장애 중 조회로 전환되면 삭제한 리뷰·게시글이 되살아나 보이는, 사용자 눈에 가장 이상한 형태의 버그가 됩니다. 게다가 23개 테이블 중 `updated_at`을 가진 것은 6개뿐이라 증분 대상 자체가 소수입니다.
 
 전체 재적재가 타당한 근거는 데이터 규모입니다.
 
 | 테이블 | 대략 행 수 |
 |---|---|
 | places | 33 |
-| stations | 147 |
-| line_stations | 196 |
+| stations | 100 |
+| line_stations | 145 |
 | users / reviews / board_posts 등 운영 데이터 | 수백 |
-| **train_timetables** | **약 94,946** |
+| **train_timetables** | **1,690** |
 
-타임테이블을 제외하면 전 테이블 합계가 1,000행 미만이라 전체 재적재가 수 초 내에 끝납니다. `train_timetables`는 마스터 데이터로 평시에 변경되지 않으므로 주기 동기화에서 제외하고, 시간표 갱신 시에만 수동 실행합니다. 이로써 `updated_at` 경계 처리(클럭 스큐, 트랜잭션 가시성, 경계 시각 중복/누락)가 통째로 사라집니다.
+V1.12 시드는 시간표까지 포함해 주기 동기화 가능한 규모입니다. 따라서 23개 테이블을 모두 재적재하며, `updated_at` 경계 처리(클럭 스큐, 트랜잭션 가시성, 경계 시각 중복/누락)를 두지 않습니다.
 
 ---
 
@@ -148,7 +152,7 @@ SELECT 'GRANT SELECT ON metrotrip_sync.' || table_name || ' TO metrotrip_ro;'
 |---|---|
 | `backend/app/database_oracle.py` | Oracle RO 엔진·세션 팩토리. 쓰기 시도 시 코드 레벨 차단(2차 방어) |
 | `backend/app/db_failover.py` | MySQL 헬스체크·서킷브레이커. `get_db()`(쓰기), `get_read_db()`(조회, Oracle 폴백) 제공 |
-| `backend/scripts/sync_to_oracle.py` | MySQL→Oracle 단방향 전체 재적재. `--verify`, `--include-timetables`, `--dry-run` 지원 |
+| `backend/scripts/sync_to_oracle.py` | MySQL→Oracle 단방향 전체 재적재. `--verify`, `--dry-run` 지원 |
 | `backend/app/scheduler.py` | APScheduler 기동. `startup` 이벤트에서 동기화 잡 등록 |
 | `backend/tests/test_db_failover.py` | 헬스체크 판단, 읽기 폴백, 쓰기 503 검증 |
 | `backend/tests/test_sync_to_oracle.py` | FK 순서, 롤백, 행 수 대조, TIME 변환 로직 검증 |
@@ -157,10 +161,10 @@ SELECT 'GRANT SELECT ON metrotrip_sync.' || table_name || ' TO metrotrip_ro;'
 
 | 파일 | 변경 |
 |---|---|
-| `backend/app/config.py` | `oracle_ro_url`, `oracle_sync_url`, `oracle_wallet_dir`, `oracle_wallet_password`, `failover_cache_seconds`, `failover_fail_threshold`, `failover_recover_threshold`, `sync_interval_minutes` 추가. `oracle_connect_args()`가 지갑 접속 파라미터(`config_dir`/`wallet_location`/`wallet_password`)를 만들어 `database_oracle.py`·`sync_to_oracle.py` 양쪽의 `create_engine(..., connect_args=...)`에 공유됨 |
-| `backend/.env.example` | `METROTRIP_ORACLE_RO_URL`, `METROTRIP_ORACLE_SYNC_URL`, `METROTRIP_ORACLE_WALLET_DIR`, `METROTRIP_ORACLE_WALLET_PASSWORD` 키 추가 |
+| `backend/app/config.py` | Oracle URL·wallet·장애 판정·동기화 주기와 `mysql_connect_timeout_seconds` 설정. Oracle wallet 인자와 MySQL 프로브 전용 네트워크 타임아웃을 생성 |
+| `backend/.env.example` | Oracle 연결·장애 판정·동기화 주기·MySQL 프로브 타임아웃 키 예시 |
 | `backend/pyproject.toml` | `oracledb`, `apscheduler` 의존성 추가 |
-| 라우터 전체 (`auth.py`, `users.py`, `reviews.py`, `community.py`, `transit.py`, `plans.py`, `notices.py`) | **GET 엔드포인트의 세션 의존성을 `get_read_db()`로 교체.** 쓰기 엔드포인트와 관리자 라우터는 기존 `get_db()` 유지(`auth.py`는 GET이 없어 대상 아님) |
+| 라우터 전체 (`auth.py`, `users.py`, `reviews.py`, `community.py`, `transit.py`, `plans.py`, `notices.py`) | **DB 조회 GET 엔드포인트의 세션 의존성을 `get_read_db()`로 교체.** 쓰기 엔드포인트와 관리자 라우터는 기존 `get_db()` 유지 |
 
 > PyPI 패키지명은 `python-oracledb`가 아니라 **`oracledb`**입니다(`pip install python-oracledb`는 실패합니다). Oracle 공식 문서·릴리스 이름이 "python-oracledb"라 혼동하기 쉽습니다.
 
@@ -187,20 +191,22 @@ SELECT 'GRANT SELECT ON metrotrip_sync.' || table_name || ' TO metrotrip_ro;'
 | 항목 | 값 |
 |---|---|
 | 프로브 쿼리 | `SELECT 1` |
-| 커넥션 타임아웃 | **2초** |
+| 프로브 결과 대기 | **2초** |
+| MySQL 프로브 연결·읽기·쓰기 타임아웃 | **기본 5초** (`METROTRIP_MYSQL_CONNECT_TIMEOUT_SECONDS`) |
 | 결과 캐시 | **5초** (캐시 유효 시 프로브 생략) |
 | 장애 판정 | **2회 연속 실패** |
 | 복구 판정 | **2회 연속 성공** |
 
 타임아웃을 반드시 지정합니다. 없으면 헬스체크 자체가 요청을 붙잡아 장애를 증폭시킵니다. 2회 임계값은 순간적 연결 끊김에 상태가 요동치는 것(flapping)을 막는 최소값입니다.
 
-> **구현은 동기(sync)입니다.** 기존 백엔드가 `pymysql` + SQLAlchemy 동기 `Session`/`create_engine` 구조라(async 드라이버 미사용), 아래는 최초 설계 시점의 async 예시가 아니라 **실제 `backend/app/db_failover.py` 골격**입니다. `asyncio.timeout` 대신 `ThreadPoolExecutor.submit(...).result(timeout=2)`로 하드 타임아웃을 건다 — Python 스레드는 강제 종료가 안 되므로 워커 수를 넉넉히(4개) 둬 프로브가 멈춰도 다음 헬스체크가 밀리지 않게 한다.
+> **구현은 동기(sync)입니다.** `pymysql` + SQLAlchemy 동기 세션 구조를 유지합니다. 워커 1개의 공유 프로브를 사용해 동시 요청이 같은 `Future` 결과를 기다리며, 진행 중인 프로브가 끝나기 전에는 새 프로브를 큐에 넣지 않습니다. 요청 대기는 2초로 제한하고 실제 MySQL 연결·읽기·쓰기에도 별도 네트워크 타임아웃을 적용합니다. 아래 코드는 흐름을 보여 주는 축약 예시이며 실제 상태 잠금과 임계값 처리는 `backend/app/db_failover.py`를 기준으로 합니다.
 
 ```python
 # backend/app/db_failover.py (실제 골격)
 
 _state = {"healthy": True, "checked_at": 0.0, "fail": 0, "ok": 0}
-_probe_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db-healthcheck")
+_probe_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="db-healthcheck")
+_probe_future = None  # 동시 요청이 공유
 
 def _probe() -> None:
     with primary_engine.connect() as conn:
@@ -208,11 +214,10 @@ def _probe() -> None:
 
 def primary_healthy() -> bool:
     now = time.monotonic()
-    if now - _state["checked_at"] < settings.failover_cache_seconds:
-        return _state["healthy"]
-    _state["checked_at"] = now
+    # 잠금 안에서 유효한 캐시 또는 진행 중인 _probe_future를 재사용한다.
+    future = shared_or_new_probe(now)
     try:
-        _probe_executor.submit(_probe).result(timeout=2)
+        future.result(timeout=2)
         _state["ok"] += 1; _state["fail"] = 0
         if _state["ok"] >= settings.failover_recover_threshold:
             _state["healthy"] = True
@@ -225,11 +230,10 @@ def primary_healthy() -> bool:
 
 def get_db():                      # 쓰기 전용
     if not primary_healthy():
-        raise HTTPException(
-            status_code=503,
-            detail="일시적으로 등록·수정 기능을 사용할 수 없습니다. 조회는 정상 이용 가능합니다.",
-            headers={"Retry-After": "60"},
-        )
+        detail = "등록·수정 기능을 사용할 수 없습니다."
+        if settings.oracle_ro_url:
+            detail += " 조회는 정상 이용 가능합니다."
+        raise HTTPException(status_code=503, detail=detail, headers={"Retry-After": "60"})
     database = SessionLocal()
     try:
         yield database
@@ -245,10 +249,13 @@ def get_read_db():                 # 조회 전용
         finally:
             database.close()
         return
-    yield from get_oracle_read_session()  # RO 계정, database_oracle.py
+    if settings.oracle_ro_url:
+        yield from get_oracle_read_session()  # RO 계정, database_oracle.py
+    else:
+        raise HTTPException(status_code=503, detail="조회 기능을 사용할 수 없습니다.")
 ```
 
-상태 확인용으로 `GET /api/v1/health/db`를 추가해 현재 라우팅 대상(`mysql` / `oracle`)과 마지막 동기화 성공 시각을 노출합니다(구현 완료). 검증(§10)과 발표 시연 모두에 필요합니다.
+상태 확인용으로 `GET /api/v1/health/db`를 추가해 현재 라우팅 대상(`mysql` / `oracle` / `unavailable`)과 마지막 동기화 성공 시각을 노출합니다(구현 완료). 검증(§10)과 발표 시연 모두에 필요합니다.
 
 ---
 
@@ -261,7 +268,7 @@ Retry-After: 60
 {"detail": "일시적으로 등록·수정 기능을 사용할 수 없습니다. 조회는 정상 이용 가능합니다."}
 ```
 
-"조회는 된다"를 반드시 포함합니다. 이 문구가 없으면 사용자가 서비스 전체 장애로 인식하고 이탈합니다. `docs/BACKEND-HANDOFF.md`에 동일 문구를 기재해 프론트가 그대로 노출하도록 합니다.
+Oracle RO가 설정된 환경에서는 "조회는 된다"를 포함합니다. Oracle이 설정되지 않아 읽기도 불가능하면 해당 문구를 사용하지 않고 조회·쓰기 모두 명확한 `503`을 반환합니다.
 
 ---
 
@@ -269,7 +276,7 @@ Retry-After: 60
 
 ### 8.1 테이블 순서 — 스키마 파일 순서를 그대로 사용
 
-`schema_oracle_V1.11.sql`의 STEP 1 `CREATE TABLE` 등장 순서가 이미 FK 의존 정순입니다(35개 FK 전수 대조로 확인). **삽입은 이 순서, 삭제는 역순**입니다. 별도 순서표를 관리하지 말고 스키마 파일을 단일 기준으로 삼습니다.
+`schema_oracle_V1.12.sql`의 FK 관계를 SQLAlchemy 메타데이터가 위상 정렬합니다. **삽입은 이 순서, 삭제는 역순**이며 별도 순서표를 관리하지 않습니다.
 
 ```
  1 users                    13 station_favorites
@@ -286,17 +293,17 @@ Retry-After: 60
 12 place_images
 ```
 
-※ `train_timetables`는 기본 제외(§3.4).
+현재는 `train_timetables`를 포함한 23개 테이블을 모두 동기화합니다.
 
 **동기화 제외 후보 (팀 판단)**: `auth_tokens`, `email_verifications`는 단기 인증 데이터라 백업 가치가 낮고 민감합니다. 다만 스키마의 명시 목적이 "원본과 대조·복구 가능한 1:1 보관"이므로 **기본은 포함**하고, 제외를 원하면 설정으로 뺄 수 있게 구현합니다.
 
 **증가 감시**: `line_view_logs`는 append-only 로그라 장기적으로 커집니다. 행 수가 수만 단위에 접근하면 `train_timetables`와 동일하게 주기 동기화에서 제외를 검토합니다.
 
-> **버그 발견 및 수정(2026-08-11, 실제 Oracle로 테스트 중 재현)**: `train_timetables.line_id`/`station_id`는 Oracle에서 `RESTRICT`(FK 절 생략)입니다(`schema_oracle_V1.11.sql:386-389`). Oracle에 `train_timetables`가 **한 번이라도 적재된 적이 있으면**, 이후 기본(제외) 동기화가 `DELETE FROM subway_lines`/`stations`를 시도하다 `ORA-02292`로 매번 실패했습니다 — 재적재 대상에서 빠진 `train_timetables` 행들이 여전히 그 부모를 참조하고 있어 RESTRICT가 삭제를 막았기 때문입니다. 트랜잭션 원자성 덕에 롤백은 깨끗하게 되어 데이터는 깨지지 않았습니다.
+> **과거 버그 기록(2026-08-11, 실제 Oracle로 테스트 중 재현)**: `train_timetables.line_id`/`station_id`는 Oracle에서 `RESTRICT`(FK 절 생략)입니다. Oracle에 `train_timetables`가 **한 번이라도 적재된 적이 있으면**, 이후 기본(제외) 동기화가 `DELETE FROM subway_lines`/`stations`를 시도하다 `ORA-02292`로 매번 실패했습니다 — 재적재 대상에서 빠진 `train_timetables` 행들이 여전히 그 부모를 참조하고 있어 RESTRICT가 삭제를 막았기 때문입니다. 트랜잭션 원자성 덕에 롤백은 깨끗하게 되어 데이터는 깨지지 않았습니다.
 >
 > **검토했다가 기각한 방향**: 마스터(수동 동기화)/운영(10분 주기) 두 그룹으로 나누고 `train_timetables`와 함께 `subway_lines`/`stations`/`places`/`place_stations`/`place_images`/`line_stations`를 통째로 마스터군으로 옮기는 안을 검토했으나 두 가지 문제로 기각했습니다. ① `places.created_by`가 `users`(운영군)를 `ON DELETE SET NULL`로 참조(FK #10)하는데, `places`를 마스터군으로 빼면 10분마다 도는 `DELETE FROM users`가 `places.created_by`를 조용히 NULL로 만들고 되돌릴 방법이 없습니다. ② `places`는 관리자 CRUD API(#42)로 실제 변경되는 테이블이라 수동 동기화로 빼면 삭제된 장소가 Oracle 폴백에서 되살아나 보이는, §3.4가 애초에 피하려던 버그가 재발합니다.
 >
-> **적용한 해결책(옵션 ②를 `subway_lines`/`stations` 두 테이블로만 좁힘)**: `UPSERT_ONLY_TABLES = {"subway_lines", "stations"}`(`scripts/sync_to_oracle.py`)를 두고, 이 두 테이블만 delete-all 대신 삽입/수정/원본에 없는 행만 삭제하는 upsert로 처리합니다(`_upsert_table()`). `train_timetables`를 전혀 건드리지 않으므로 RESTRICT가 발동하지 않고, 나머지 21개 테이블(`places` 포함)은 기존 delete-all/insert-all 그대로라 관리자 CRUD 반영과 삭제 전파(§3.4 핵심 취지)가 유지됩니다. 실제 Aiven MySQL + OCI Oracle로 재검증: 22개 테이블 전부 행 수 일치, 단위 테스트 2건 추가(총 134개 통과).
+> **당시 적용한 해결책:** `subway_lines`/`stations`만 UPSERT하고 시간표를 제외했다. **현재 해결책(2026-08-20)**은 V1.12 시간표 1,690건을 포함한 23개 테이블 전부를 같은 트랜잭션에서 delete-all/insert-all하는 방식이다. 제외 테이블과 UPSERT 분기가 없어 FK 부모만 별도로 처리하는 문제도 제거됐다.
 
 ### 8.2 원자성
 
@@ -363,9 +370,9 @@ UNION ALL SELECT 'review_tags.tag_name',   COUNT(*) FROM review_tags  WHERE tag_
 
 CHECK 제약이 걸린 컬럼(`role`, `category`, `day_type`, `direction`, `recruit_status` 등)은 `''`가 애초에 CHECK에서 걸리므로 점검 대상이 아닙니다.
 
-### 8.4 대용량 적재 (`train_timetables`)
+### 8.4 배치 적재 (`train_timetables`)
 
-약 95,000행을 넣을 때는 `executemany` 배치(예: 5,000행 단위)를 사용합니다. 적재 시간이 문제가 되면 `idx_timetables_lookup`을 drop → 적재 → 재생성하는 방식이 빠릅니다. 스키마 STEP 4 주석에도 같은 취지가 적혀 있습니다.
+V1.12 시간표 1,690건도 다른 테이블과 함께 기본 5,000행 단위 배치로 적재합니다.
 
 ### 8.5 IDENTITY 순번 재설정 — 1단계에서는 불필요
 
@@ -383,14 +390,13 @@ CHECK 제약이 걸린 컬럼(`role`, `category`, `day_type`, `direction`, `recr
 
 ```bash
 python -m scripts.sync_to_oracle                        # 기본 동기화
-python -m scripts.sync_to_oracle --include-timetables   # 시간표 포함
 python -m scripts.sync_to_oracle --verify               # 양쪽 행 수만 출력, 쓰기 없음
 python -m scripts.sync_to_oracle --dry-run              # 실행 계획만 출력
 ```
 
 ---
 
-## 9. Oracle 스키마 사전 확인 — **완료** (V1.11 실물 대조)
+## 9. Oracle 스키마 사전 확인 — **완료** (V1.12 기준)
 
 | # | 확인 항목 | 결과 | 비고 |
 |---|---|---|---|
@@ -432,13 +438,15 @@ SELECT COUNT(*) FROM user_tables;                          -- 23
 ### 10-1. 평시 동작
 
 ```bash
-python -m scripts.sync_to_oracle --include-timetables   # 최초 1회 전량
+python -m scripts.sync_to_oracle                        # 23개 테이블 전량
 python -m scripts.sync_to_oracle --verify               # 23개 테이블 행 수 일치 확인
 curl localhost:8000/api/v1/health/db                    # → {"routing":"mysql", ...}
 curl localhost:8000/api/v1/stations                     # 정상 200
 ```
 
 > **2026-08-11 실제 Aiven MySQL + OCI Oracle(mTLS) 실행 결과**: `--include-timetables`는 `train_timetables`(약 95,000행) 조회 중 `Lost connection to MySQL server during query`로 실패(클라우드 왕복 대량 조회 타임아웃으로 추정 — 로컬 DB였다면 문제되지 않았을 규모). `--include-timetables` 없이 기본 동기화는 처음엔 §8.1의 FK 버그로 실패했으나, `UPSERT_ONLY_TABLES` 수정 후 재실행하니 **성공** — `--verify`로 22개 테이블 전부 행 수 일치 확인(`동기화 완료: 22개 테이블, 총 634행`). `health/db`는 `{"routing":"mysql", ...}`, `GET /stations`은 `200`(193건)으로 정상.
+
+> **2026-08-20 코드 검증:** V1.12 전체 동기화 실행 계획은 23개 테이블로 확인했고 관련 단위 테스트와 전체 147개 테스트가 통과했다. 현재 환경에서는 실제 Aiven MySQL·OCI Oracle 접속 재검증을 수행하지 못했으므로 위 2026-08-11 실환경 결과와 구분한다.
 
 ### 10-2. MySQL 중단
 
@@ -490,9 +498,9 @@ MySQL에서 리뷰 1건을 삭제 → 동기화 실행 → MySQL 중단 → 해�
 
 ---
 
-## 11. 서버 배치 — 단일 머신 (확정)
+## 11. 초기 서버 배치안 — 단일 머신 (역사 기록)
 
-Oracle 인스턴스는 우선 **MySQL과 같은 머신**에 둡니다. 이에 따른 조건은 다음과 같습니다.
+아래는 관리형 Aiven MySQL·OCI Oracle을 사용하기 전에 검토했던 단일 머신 배치안입니다. 현재 배치 기준으로 사용하지 않습니다.
 
 - **엔진**: Oracle 19c. 23ai Free와 달리 무료 에디션 특유의 리소스 상한(RAM 2GB / 데이터 12GB 등)이 없으므로, 메모리·디스크 상한은 별도로 직접 설정해 MySQL 메모리를 잠식하지 않게 관리해야 함. 라이선스 조건(Standard/Enterprise Edition 여부)도 별도 확인 필요
 - **메모리 배분**: MySQL `innodb_buffer_pool_size` + Oracle 2GB + FastAPI가 물리 메모리를 넘지 않는지 사전 계산
@@ -503,11 +511,11 @@ Oracle 인스턴스는 우선 **MySQL과 같은 머신**에 둡니다. 이에 �
 
 ### 백업 — 이 구성에서 더 중요해짐
 
-단일 머신이므로 머신 전체 장애 시 MySQL과 Oracle이 함께 사라집니다. **`mysqldump`를 외부 물리 장소(외장 디스크·다른 PC·클라우드 스토리지)로 내보내는 것이 이중화보다 상위의 방어선**입니다. 최소 1일 1회 수행하고 절차를 `db/README.md`에 기록합니다.
+단일 머신 배치를 선택하는 경우 머신 전체 장애 시 MySQL과 Oracle이 함께 사라집니다. **`mysqldump`를 외부 물리 장소(외장 디스크·다른 PC·클라우드 스토리지)로 내보내는 것이 이중화보다 상위의 방어선**입니다.
 
 ### 나중에 분리할 때
 
-`.env`의 `METROTRIP_ORACLE_RO_URL` / `_SYNC_URL` 호스트만 변경하면 됩니다. 코드·스키마 변경 없음. 지금 단일 머신으로 시작하고 하드웨어 확보 시 이전합니다.
+배치를 변경할 때는 `.env`의 `METROTRIP_ORACLE_RO_URL` / `_SYNC_URL` 호스트와 wallet 설정을 변경합니다. 코드·스키마 변경은 필요하지 않습니다.
 
 ---
 
@@ -517,10 +525,10 @@ Oracle 인스턴스는 우선 **MySQL과 같은 머신**에 둡니다. 이에 �
 - [x] §9 항목 4·5 실환경 확인 — 2026-08-11, 실제 OCI Oracle 19c EE 접속 확인(§9 4번 충족). 캐릭터셋(AL32UTF8, 5번)은 직접 조회는 안 했으나 한글 데이터(역명 등) 적재·조회가 정상 동작해 사실상 충족으로 판단. 항목 3(빈 문자열)은 미확인 상태 유지
 - [ ] Oracle 계정 2개 생성, `metrotrip_ro`의 DML 거부 확인 (§10-6) — **보류.** 현재 `ADMIN` 단일 계정 사용 중(§4). 앱 레벨 방어(commit/flush 차단)는 2026-08-11 확인 완료, DB 계정 권한 방어는 계정 분리 후 확인 필요
 - [x] §8.3 타입 변환 3종 구현 (TIME 문자열화 / CLOB 바인딩 / 빈 문자열 사전 점검) — 코드 구현 및 단위 테스트(SQLite) 통과. CLOB은 SQLAlchemy Core의 `Text` 타입 바인딩에 위임해 별도 `setinputsizes` 호출 없이 처리. 2026-08-11 실제 Oracle 적재로 CLOB 컬럼(reviews.content 등) 정상 확인
-- [x] `sync_to_oracle.py` 전체 재적재 성공, `--verify` 23개 테이블 일치 — 2026-08-11 §8.1 FK 버그(`UPSERT_ONLY_TABLES`)로 수정 후 실제 Aiven MySQL + OCI Oracle로 재검증, `train_timetables` 제외 22개 테이블 전부 행 수 일치. `train_timetables` 포함 23번째는 대량 조회 네트워크 타임아웃으로 아직 미검증(§10-1 참고)
+- [ ] `sync_to_oracle.py` V1.12 전체 재적재와 `--verify` 23개 테이블 일치 — 코드·단위 테스트·dry-run은 확인, 실제 Aiven MySQL + OCI Oracle 재검증 필요
 - [x] 전체 GET 엔드포인트가 `get_read_db()` 사용 (라우터 grep으로 누락 확인) — 완료
 - [ ] §10 검증 8항목 전부 통과, 결과 PR 기록 — 2026-08-11 실제 Aiven MySQL + OCI Oracle로 재검증: **10-1·10-2·10-3·10-5·10-6(앱 레벨) 통과.** 10-4는 재기동 방식으로 간접 확인(연속 프로세스 내 전환은 미검증). 10-7(삭제 반영)은 실제 운영 데이터를 건드리는 테스트라 보류 — 진행 시 사용자 확인 필요
-- [x] `test_db_failover.py`, `test_sync_to_oracle.py` 통과 — §8.1 upsert 수정에 맞춘 회귀 테스트 2건 추가, 총 134개 전체 통과 확인
+- [x] `test_db_failover.py`, `test_sync_to_oracle.py`와 전체 자동화 테스트 통과 — 2026-08-20 기준 147개
 - [x] `backend/README.md`에 `--workers 1` 제약 명시 — 완료
 - [x] §5.3 문서 5건 링크 반영 — 완료
 
@@ -544,12 +552,11 @@ Oracle 인스턴스는 우선 **MySQL과 같은 머신**에 둡니다. 이에 �
 | 4 | `db_failover._state`(헬스체크 캐시/카운터)가 락 없이 여러 요청에서 동시에 읽고 쓰임 — FastAPI가 동기 의존성을 스레드풀에서 돌리므로 캐시 만료 직후 여러 스레드가 동시에 프로브를 쏘거나 fail/ok 카운트가 유실될 수 있음 | `app/db_failover.py` | `threading.Lock()`으로 상태 읽기/쓰기 구간을 감쌈 |
 | 5 | 헬스체크용 `_probe_executor`(스레드풀)가 앱 종료 시 정리되지 않아, MySQL이 완전히 다운이 아니라 응답 없이 걸려 있는 상황에서는 종료가 느려질 수 있음 | `app/db_failover.py`, `app/main.py` | `shutdown_probe_executor()` 추가, `main.py`의 `lifespan` 종료 시 호출 |
 
-**검증**: 단위 테스트 5건 추가(총 139개 통과) — 조회수 증가 커밋 실패 시나리오(community/reviews 각 1건), 동시 호출 시 프로브가 한 번만 실행되는지(db_failover 1건), 스케줄러가 wallet/SSL 파라미터를 실제로 넘기는지·중복 시작을 막는지(scheduler 2건). 실제 앱을 기동해 스케줄러의 즉시 실행 잡이 실 Aiven MySQL + OCI Oracle로 성공하는 것도 `var/sync_state.json` 타임스탬프로 확인했습니다(항목 2).
+**당시 검증(2026-08-11)**: 단위 테스트 5건을 추가해 당시 전체 139개가 통과했고, 실제 앱의 스케줄러가 Aiven MySQL + OCI Oracle로 성공하는 것도 확인했습니다. **2026-08-20**에는 공유 프로브·`unavailable` 라우팅·Oracle 시간 문자열·23개 테이블 전체 동기화 회귀를 포함해 전체 147개가 통과했습니다.
 
 **기록만 하고 고치지 않은 항목** (스타일/경미, 필요 시 별도 진행):
-- `UPSERT_ONLY_TABLES`가 `sync_exclude_tables`와 별개로 하드코딩돼 있어, 나중에 `line_view_logs`(§3.4에서 이미 제외 후보로 언급 — `subway_lines`를 RESTRICT로 참조) 등을 `sync_exclude_tables`에 추가하면 §8.1과 같은 `ORA-02292`가 조용히 재발할 수 있음. 근본적으로는 제외 대상 테이블이 참조하는 RESTRICT 부모를 FK 메타데이터에서 자동으로 골라 upsert 대상에 넣는 방식이 필요
-- `_upsert_table()`이 값이 바뀌지 않은 행도 매번 UPDATE함(테이블이 작아 실효는 미미)
-- `sync_to_oracle.py`의 행 조회·배치 삽입 로직이 `_upsert_table()`/`run_sync()`에 중복
+- ~~`UPSERT_ONLY_TABLES`와 제외 목록이 분리돼 FK 오류가 재발할 수 있음~~ — 2026-08-20 전체 23개 테이블 동기화로 해당 분기와 제외 목록을 제거해 해결
+- ~~`_upsert_table()`의 불필요한 UPDATE와 재적재 로직 중복~~ — 2026-08-20 UPSERT 경로 제거로 해결
 - `get_db()`/`get_read_db()`의 MySQL 세션 yield 블록이 동일하게 중복
 - `db_failover._state`가 타입 없는 dict — dataclass가 더 명확할 수 있음
 

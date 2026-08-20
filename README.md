@@ -5,7 +5,7 @@
 자가용 없이 이동하는 사용자가 역을 고르면 반경 1km 안의 장소를 지도에서 탐색할 수 있습니다. 선택한 역은 출발·경유·도착 순서로 일정에 쌓이며, 시간표가 있는 구간은 DB의 동일 열차 번호(`trainNo`)를 연결해 실제 운행 시각을 계산합니다.
 
 > - 기준 브랜치: `develop`
-> - 최종 확인: 2026-08-11
+> - 최종 확인: 2026-08-20
 > - 현재 데이터 범위: 수도권 1호선 100개 역, 천안·아산 장소 33개, 천안·아산 구간 8개 역 시간표
 
 ## 현재 구현 상태
@@ -17,7 +17,7 @@ MetroTrip은 더 이상 프론트엔드 단독 목업이 아닙니다. Next.js �
 | 지도 탐색 | 역 검색·선택, 카카오맵 이동, 반경·카테고리별 주변 장소, 장소 상세 |
 | 지하철 일정 | 지도/지하철 화면 전환, 출발·경유·도착역 선택, 현재 시각 이후 가장 가까운 실제 열차 계산 |
 | 인증·회원 | 이메일 인증 회원가입, 로그인, 토큰 갱신·로그아웃, 비밀번호 재설정, 프로필 수정·탈퇴 |
-| 즐겨찾기 | 역 즐겨찾기는 백엔드 저장, 장소 즐겨찾기는 현재 브라우저 로컬 저장 |
+| 즐겨찾기 | 역 즐겨찾기는 백엔드 저장. 장소 즐겨찾기는 현재 범위에서 제외 |
 | 여행 계획 | 일정 목록·작성·수정·삭제, 지도에서 순서 편집, 읽기 전용 공유 링크 |
 | 후기 | 목록·상세·작성·수정·삭제, 일정 연결, 로컬 미디어 업로드 |
 | 모집 | 모집글 CRUD, 참여 신청·취소, 승인·거절, 모집 마감 |
@@ -41,7 +41,6 @@ MetroTrip은 더 이상 프론트엔드 단독 목업이 아닙니다. Next.js �
 | `/discover` | 역·장소 지도 탐색, 시간표 조회, 지하철 일정 경로 편집 |
 | `/login` | 로그인·회원가입·비밀번호 재설정 |
 | `/plans` | 내 일정 목록과 상세 |
-| `/plans/deleted` | 삭제 일정 UI. 현재 백엔드 복원 API는 미지원 |
 | `/reviews` | 여행 후기 목록 |
 | `/reviews/new` | 일정과 연결한 후기 작성 |
 | `/reviews/[reviewId]` | 후기 상세 |
@@ -106,8 +105,8 @@ MetroTrip/
 │  ├─ tests/                  API·서비스·DB 장애 대응 테스트
 │  └─ Dockerfile
 ├─ db/
-│  ├─ schema/mysql/           MySQL V1.11 기준 스키마
-│  ├─ schema/oracle/          Oracle V1.11 대체 스키마
+│  ├─ schema/mysql/           MySQL V1.12 기준 스키마
+│  ├─ schema/oracle/          Oracle V1.12 대체 스키마
 │  ├─ seed/                   번호 순서 초기 데이터
 │  ├─ migrations/             스키마 변경 이력
 │  └─ erd/                    Mermaid ERD
@@ -156,7 +155,7 @@ git pull origin develop
 
 새 DB는 다음 순서로 적용합니다.
 
-1. `db/schema/mysql/schema_mysql_V1.11.sql`
+1. `db/schema/mysql/schema_mysql_V1.12.sql`
 2. `db/seed/seed_01_users.sql`
 3. `db/seed/seed_02_subway_lines.sql`
 4. `db/seed/seed_03_stations.sql`
@@ -283,7 +282,7 @@ npm run dev
 
 ## 데이터 현황
 
-현재 MySQL/Oracle V1.11 스키마는 23개 테이블로 구성됩니다.
+현재 MySQL/Oracle V1.12 스키마는 23개 테이블로 구성됩니다.
 
 | 데이터 | 건수 | 비고 |
 |---|---:|---|
@@ -328,7 +327,7 @@ pytest
 ruff check .
 ```
 
-백엔드 문서에 기록된 최신 자동화 테스트 기준은 139개입니다. 실제 동작 확인 없이 빌드나 타입 검사만으로 완료 처리하지 않습니다.
+백엔드 문서에 기록된 최신 자동화 테스트 기준은 147개입니다. 실제 동작 확인 없이 빌드나 타입 검사만으로 완료 처리하지 않습니다.
 
 ## 현재 제한 사항
 
@@ -338,11 +337,13 @@ ruff check .
 | 실시간 열차 위치 | 미지원. DB 정적 시간표 기반 |
 | 전체 수도권 노선 | 미지원. 현재 데이터는 1호선 두 방면 중심 |
 | 좌표·지도 경계 장소 검색 | 가장 가까운 역의 반경 1km API로 변환 |
+| 반경 선택 | UI는 500m·1km·2km·5km를 유지하지만 장소 결과는 최대 1km로 제한 |
 | 장소 단건 API | 같은 화면에서 불러온 장소 캐시 사용 |
-| 장소 즐겨찾기 | 브라우저 `localStorage` 사용 |
+| 장소 즐겨찾기 | 현재 범위에서 제외. UI·브라우저 저장·API 어댑터 없음 |
 | 도보 경로 | 직선거리 기반 로컬 추정 |
-| 일정 중간 경유역 | 브라우저 호환 메타데이터에 보조 저장 |
-| 삭제 일정 복원 | 백엔드 API 미지원 |
+| 일정 역 항목 | V1.12 `travel_plan_items`의 `STATION` 항목으로 저장 |
+| 일정 삭제 복원 | 현재 범위에서 제외. 삭제는 복원 없는 하드 삭제 |
+| 공유·모집 연결 일정 표시 | 읽기 전용 조회는 지원하지만 역 항목·원래 날짜 표시 정확도는 추가 개선 필요 |
 | 후기 좋아요·신고 | 백엔드 API 미지원 |
 | 모집 질문·신고 | 백엔드 API 미지원 |
 | 관리자 신고·감사·동기화 화면 | 일부 빈 응답 또는 `501` |
@@ -352,7 +353,7 @@ ruff check .
 
 ## Docker와 배포 상태
 
-`frontend/Dockerfile`과 `backend/Dockerfile`은 각각 Next.js 서버와 FastAPI 서버 이미지를 만듭니다. 저장소에는 두 컨테이너와 DB를 한 번에 실행하는 Compose 파일은 아직 없습니다.
+`frontend/Dockerfile`과 `backend/Dockerfile`은 각각 Next.js 서버와 FastAPI 서버 이미지를 만들고, 루트 `compose.yaml`은 Caddy·프론트엔드·백엔드를 함께 실행합니다. 실행 전 `deploy/docker/backend.env.example`을 실제 환경 파일로 복사하거나 `BACKEND_ENV_FILE`로 경로를 지정해야 합니다.
 
 `.github/workflows/deploy.yml`은 이전 Vite 정적 사이트의 `frontend/dist`를 GitHub Pages에 올리던 설정입니다. 현재 Next.js 16 서버 빌드는 `.next`를 생성하므로 이 워크플로와 기존 GitHub Pages 주소를 최신 배포본으로 간주하면 안 됩니다. 실제 배포 전에는 다음 중 하나로 배포 구성을 교체해야 합니다.
 
@@ -367,18 +368,18 @@ ruff check .
 | 문서 | 용도 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | Codex가 따르는 팀 공통 작업·Git·검증 규칙 |
-| [docs/HANDOFF.md](docs/HANDOFF.md) | 다른 PC에서 이어받을 현재 상태와 실행 시 주의점 |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | 개발 중 다른 PC로 옮길 때 사용했던 역사적 인수인계 기록 |
 | [docs/SPEC.md](docs/SPEC.md) | 프론트엔드 범위와 화면 동작 기준 |
 | [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | 전체 요구사항과 단계 구분 |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 브랜치·커밋·PR·파일 협업 규칙 |
 | [docs/GIT-GUIDE.md](docs/GIT-GUIDE.md) | Git이 익숙하지 않은 팀원을 위한 작업 흐름 |
 | [docs/CLAUDE-CODE-WORKFLOW.md](docs/CLAUDE-CODE-WORKFLOW.md) | Claude Code를 이용한 팀 작업 흐름과 예시 |
 | [docs/FRONTEND-API-INTEGRATION.md](docs/FRONTEND-API-INTEGRATION.md) | Next UI와 FastAPI 계약 변환·제한 사항 |
-| [docs/BACKEND-HANDOFF.md](docs/BACKEND-HANDOFF.md) | 백엔드 API 계약과 프론트 연동 지점 |
+| [docs/BACKEND-HANDOFF.md](docs/BACKEND-HANDOFF.md) | 개발 중 작성한 백엔드 연동 인수인계 기록 |
 | [docs/DB-FAILOVER.md](docs/DB-FAILOVER.md) | MySQL/Oracle 동기화와 장애 대응 설계 |
 | [backend/README.md](backend/README.md) | 백엔드 설치·실행·API·검사 안내 |
 | [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md) | 백엔드 계층별 책임과 의존 방향 |
-| [db/README.md](db/README.md) | DB V1.11 초기화·시드·인덱스·미결 사항 |
+| [db/README.md](db/README.md) | DB V1.12 초기화·시드·인덱스·미결 사항 |
 | [docs/WORKLOG.md](docs/WORKLOG.md) | 날짜별 작업 기록 |
 | [docs/PRESENTATION.md](docs/PRESENTATION.md) | 발표 구성과 데모 시나리오 |
 

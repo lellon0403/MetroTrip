@@ -1,7 +1,7 @@
 # MetroTrip Backend
 
 FastAPI 기반 MetroTrip REST API 서버입니다. 애플리케이션의 데이터 모델과 조회 로직은
-저장소의 데이터베이스 명세 V1.11을 기준으로 합니다.
+저장소의 데이터베이스 명세 V1.12를 기준으로 합니다.
 
 ## 기술 구성
 
@@ -13,7 +13,7 @@ FastAPI 기반 MetroTrip REST API 서버입니다. 애플리케이션의 데이�
 - Pytest
 - Ruff
 
-초기 구성에서는 Alembic을 사용하지 않습니다. 개발 데이터베이스는 저장소의 V1.11
+초기 구성에서는 Alembic을 사용하지 않습니다. 개발 데이터베이스는 저장소의 V1.12
 MySQL 스키마와 시드 SQL을 직접 적용하여 초기화합니다.
 
 ## 디렉터리
@@ -95,9 +95,9 @@ GET  /api/v1/stations/{station_id}/places
   인증 헤더가 없으면 `null`을 `line_view_logs`에 저장합니다. 잘못된 토큰은 `401`입니다.
 - 역 목록은 이름 검색, 노선 필터, 페이지네이션을 지원하고 좌표와 소속 노선을 함께
   반환합니다. 프론트에서 한 번에 보관하려면 `size=100`으로 조회할 수 있습니다.
-- 시간표는 V1.11의 `train_no`를 `trainNo`로 반환합니다. `arrivalTime`과
+- 시간표는 V1.12의 `train_no`를 `trainNo`로 반환합니다. `arrivalTime`과
   `departureTime`은 `24:00:00` 이후 값도 보존하기 위해 `HH:MM:SS` 문자열입니다.
-- 주변 장소는 V1.11의 `place_stations`에 연결된 반경 1km 이내 장소를 조회합니다.
+- 주변 장소는 V1.12의 `place_stations`에 연결된 장소를 조회하며, 프론트엔드가 계산한 거리로 최대 1km까지 결과를 제한합니다.
 
 ### 구현된 관리자 API
 
@@ -173,15 +173,15 @@ pytest
 ruff check .
 ```
 
-현재 전체 자동화 테스트 기준은 139개입니다.
+현재 전체 자동화 테스트 기준은 147개입니다.
 
 ## 데이터베이스
 
-프로젝트 루트에서 DB V1.11 MySQL 스키마를 적용합니다. 스키마가 `metrotrip`
+프로젝트 루트에서 DB V1.12 MySQL 스키마를 적용합니다. 스키마가 `metrotrip`
 데이터베이스를 생성하므로 데이터베이스명을 별도로 지정하지 않습니다.
 
 ```powershell
-Get-Content .\db\schema\mysql\schema_mysql_V1.11.sql -Raw |
+Get-Content .\db\schema\mysql\schema_mysql_V1.12.sql -Raw |
   mysql -u 사용자명 -p
 ```
 
@@ -189,4 +189,5 @@ Get-Content .\db\schema\mysql\schema_mysql_V1.11.sql -Raw |
 대체 스키마는 [DB README](../db/README.md)를 참고합니다.
 
 `Base.metadata.create_all()`은 테스트용 임시 DB에서만 사용하며 팀의 개발 DB 초기화에는
-사용하지 않습니다. DB와 애플리케이션의 UTC 통일은 아직 적용 전 검토사항입니다.
+사용하지 않습니다. V1.12의 일정 항목 FK·CHECK와 명시적 성능 인덱스는 ORM 메타데이터에도
+반영되어 회귀 테스트로 대조합니다. DB와 애플리케이션의 UTC 통일은 아직 적용 전 검토사항입니다.

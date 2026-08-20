@@ -2,8 +2,8 @@
 
 MetroTrip 서비스의 데이터베이스 스키마와 관련 산출물입니다.
 
-> **MVP 단계에서는 사용하지 않습니다.** 현재 발표용 MVP는 프론트엔드 단독으로 동작하며 백엔드가 없습니다.
-> 이 폴더는 백엔드 연동(P1) 대비 산출물이며, [요구사항 정의서 V1.4](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) 기준으로 작성했습니다.
+> 현재 서비스는 MySQL V1.12를 주 DB로 사용하고 Oracle V1.12를 장애 시 읽기 대체본으로 사용합니다.
+> 초기화는 baseline 스키마와 번호순 시드를 적용하며, 기존 DB는 마이그레이션 이력을 순서대로 적용합니다.
 
 ---
 
