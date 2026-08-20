@@ -492,17 +492,30 @@ function sortRecruitments(items: Json[], sort: string | null): Json[] {
 }
 
 function mapPublicPlan(source: Json, key: string) {
-  const today = dateOnly(new Date());
   const startId = source.startStationId ? String(source.startStationId) : null;
   const endId = source.endStationId ? String(source.endStationId) : null;
-  const placeItems = (source.items ?? []).map((item: Json, index: number) => ({ id: String(item.planItemId), itemType: "PLACE", stationId: item.stationId ? String(item.stationId) : null, placeId: item.placeId ? String(item.placeId) : null, routeSnapshot: null, note: item.placeName ?? item.memo ?? null, scheduledTime: item.visitTime ?? null, durationMinutes: null, position: index + 2 }));
+  const sourceItems = (source.items ?? []).map((item: Json) => {
+    const itemType = item.itemType === "STATION" ? "STATION" : "PLACE";
+    return {
+      id: String(item.planItemId),
+      itemType,
+      stationId: item.stationId ? String(item.stationId) : null,
+      placeId: item.placeId ? String(item.placeId) : null,
+      routeSnapshot: null,
+      note: itemType === "STATION" ? item.stationName ?? item.memo ?? null : item.placeName ?? item.memo ?? null,
+      scheduledTime: item.visitTime ?? null,
+      durationMinutes: null,
+    };
+  });
+  const hasStart = startId && sourceItems.some((item: Json) => item.itemType === "STATION" && item.stationId === startId);
+  const hasEnd = endId && sourceItems.some((item: Json) => item.itemType === "STATION" && item.stationId === endId);
   const items = [
-    { id: `${key}-start`, itemType: "STATION", stationId: startId, placeId: null, routeSnapshot: null, note: source.startStationName, scheduledTime: null, durationMinutes: null, position: 1 },
-    ...placeItems,
-    ...(endId && endId !== startId ? [{ id: `${key}-end`, itemType: "STATION", stationId: endId, placeId: null, routeSnapshot: null, note: source.endStationName, scheduledTime: null, durationMinutes: null, position: placeItems.length + 2 }] : []),
-  ];
+    ...(!hasStart && startId ? [{ id: `${key}-start`, itemType: "STATION", stationId: startId, placeId: null, routeSnapshot: null, note: source.startStationName, scheduledTime: null, durationMinutes: null }] : []),
+    ...sourceItems,
+    ...(!hasEnd && endId && endId !== startId ? [{ id: `${key}-end`, itemType: "STATION", stationId: endId, placeId: null, routeSnapshot: null, note: source.endStationName, scheduledTime: null, durationMinutes: null }] : []),
+  ].map((item, index) => ({ ...item, position: index + 1 }));
   const now = new Date().toISOString();
-  return { id: key, ownerId: "", title: source.planTitle, description: null, startDate: today, endDate: today, visibility: "UNLISTED", status: "ACTIVE", version: 1, days: [{ id: `${key}-day-1`, dayDate: today, title: "1일차", position: 1, items }], createdAt: now, updatedAt: now, readOnly: true };
+  return { id: key, ownerId: "", title: source.planTitle, description: null, startDate: "", endDate: "", visibility: "UNLISTED", status: "ACTIVE", version: 1, days: [{ id: `${key}-day-1`, dayDate: "", title: "1일차", position: 1, items }], createdAt: now, updatedAt: now, readOnly: true };
 }
 
 async function handleRecruitments(path: string, url: URL, request: Request, body: Json): Promise<Response | null> {
