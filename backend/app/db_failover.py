@@ -15,16 +15,15 @@ import json
 import threading
 import time
 from collections.abc import Generator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.config import BACKEND_DIR, get_settings
 from app.database import SessionLocal
-from app.database import engine as primary_engine
 from app.database_oracle import get_oracle_read_session
 
 settings = get_settings()
@@ -34,13 +33,22 @@ _PROBE_TIMEOUT_SECONDS = 2
 
 _state = {"healthy": True, "checked_at": float("-inf"), "fail": 0, "ok": 0}
 _state_lock = threading.Lock()
-_probe_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db-healthcheck")
+_probe_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="db-healthcheck")
+_probe_future: Future[None] | None = None
+_probe_outcome_recorded = False
+_probe_engine = create_engine(
+    settings.database_url,
+    connect_args=settings.mysql_probe_connect_args(),
+    pool_size=1,
+    max_overflow=0,
+    pool_pre_ping=False,
+)
 
 
 def _probe() -> None:
     """MySQL에 간단한 쿼리를 실행하여 연결 가능 여부를 확인한다."""
 
-    with primary_engine.connect() as conn:
+    with _probe_engine.connect() as conn:
         conn.execute(text("SELECT 1"))
 
 
@@ -52,41 +60,65 @@ def primary_healthy() -> bool:
     읽고 쓰면 캐시 판단이 깨지거나(중복 프로브) fail/ok 카운트가 유실될
     수 있어 락으로 감싼다.
     """
+    global _probe_future, _probe_outcome_recorded
+
     with _state_lock:
         now = time.monotonic()
-        if now - _state["checked_at"] < settings.failover_cache_seconds:
+        if _probe_future is not None and not _probe_outcome_recorded:
+            future = _probe_future
+        elif now - _state["checked_at"] < settings.failover_cache_seconds:
             return _state["healthy"]
-        _state["checked_at"] = now
+        else:
+            if _probe_future is not None:
+                if not _probe_future.done():
+                    _state["checked_at"] = now
+                    return _state["healthy"]
+                _probe_future = None
+                _probe_outcome_recorded = False
+            _state["checked_at"] = now
+            future = _probe_executor.submit(_probe)
+            _probe_future = future
     try:
-        _probe_executor.submit(_probe).result(timeout=_PROBE_TIMEOUT_SECONDS)
+        future.result(timeout=_PROBE_TIMEOUT_SECONDS)
         ok = True
     except Exception:
         ok = False
     with _state_lock:
-        if ok:
-            _state["ok"] += 1
-            _state["fail"] = 0
-            if _state["ok"] >= settings.failover_recover_threshold:
-                _state["healthy"] = True
-        else:
-            _state["fail"] += 1
-            _state["ok"] = 0
-            if _state["fail"] >= settings.failover_fail_threshold:
-                _state["healthy"] = False
+        if _probe_future is future and not _probe_outcome_recorded:
+            if ok:
+                _state["ok"] += 1
+                _state["fail"] = 0
+                if _state["ok"] >= settings.failover_recover_threshold:
+                    _state["healthy"] = True
+            else:
+                _state["fail"] += 1
+                _state["ok"] = 0
+                if _state["fail"] >= settings.failover_fail_threshold:
+                    _state["healthy"] = False
+            _probe_outcome_recorded = True
+        if _probe_future is future and future.done():
+            _probe_future = None
+            _probe_outcome_recorded = False
         return _state["healthy"]
 
 
 def shutdown_probe_executor() -> None:
     """앱 종료 시 헬스체크 스레드풀을 정리한다(main.py lifespan에서 호출)."""
     _probe_executor.shutdown(wait=False, cancel_futures=True)
+    _probe_engine.dispose()
 
 
 def get_db() -> Generator[Session, None, None]:
     """쓰기(POST/PATCH/DELETE)와 쓰기 직후 재조회용 세션."""
     if not primary_healthy():
+        detail = (
+            "일시적으로 등록·수정 기능을 사용할 수 없습니다. 조회는 정상 이용 가능합니다."
+            if settings.oracle_ro_url
+            else "일시적으로 데이터베이스 기능을 사용할 수 없습니다."
+        )
         raise HTTPException(
             status_code=503,
-            detail="일시적으로 등록·수정 기능을 사용할 수 없습니다. 조회는 정상 이용 가능합니다.",
+            detail=detail,
             headers={"Retry-After": "60"},
         )
     database = SessionLocal()
@@ -119,7 +151,9 @@ def get_read_db() -> Generator[Session, None, None]:
 def current_routing() -> str:
     """현재 읽기 요청이 향하는 데이터베이스 이름을 반환한다."""
 
-    return "mysql" if primary_healthy() else "oracle"
+    if primary_healthy():
+        return "mysql"
+    return "oracle" if settings.oracle_ro_url else "unavailable"
 
 
 def last_synced_at() -> str | None:

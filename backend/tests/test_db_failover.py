@@ -19,6 +19,8 @@ def _reset_failover_state():
     db_failover._state.update(
         {"healthy": True, "checked_at": float("-inf"), "fail": 0, "ok": 0}
     )
+    db_failover._probe_future = None
+    db_failover._probe_outcome_recorded = False
     db_failover.settings.failover_cache_seconds = 0
     db_failover.settings.failover_fail_threshold = 2
     db_failover.settings.failover_recover_threshold = 2
@@ -85,7 +87,13 @@ def test_primary_healthy_probes_once_under_concurrent_calls(monkeypatch):
 
     monkeypatch.setattr(db_failover, "_probe", slow_probe)
 
-    threads = [threading.Thread(target=db_failover.primary_healthy) for _ in range(5)]
+    results = []
+    threads = [
+        threading.Thread(
+            target=lambda: results.append(db_failover.primary_healthy())
+        )
+        for _ in range(5)
+    ]
     for t in threads:
         t.start()
     assert probe_started.wait(timeout=2)
@@ -94,15 +102,82 @@ def test_primary_healthy_probes_once_under_concurrent_calls(monkeypatch):
         t.join(timeout=2)
 
     assert call_count == 1
+    assert results == [True] * 5
+
+
+def test_concurrent_calls_share_failed_probe_result(monkeypatch):
+    """동시에 기다린 요청 모두 같은 실패 판정을 받아 Oracle 전환을 공유한다."""
+    import threading
+
+    db_failover.settings.failover_cache_seconds = 999
+    db_failover.settings.failover_fail_threshold = 1
+    probe_started = threading.Event()
+    release_probe = threading.Event()
+    results = []
+
+    def slow_failure():
+        probe_started.set()
+        release_probe.wait(timeout=2)
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(db_failover, "_probe", slow_failure)
+    threads = [
+        threading.Thread(
+            target=lambda: results.append(db_failover.primary_healthy())
+        )
+        for _ in range(5)
+    ]
+    for thread in threads:
+        thread.start()
+    assert probe_started.wait(timeout=2)
+    release_probe.set()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    assert results == [False] * 5
+
+
+def test_timed_out_probe_does_not_enqueue_another_probe(monkeypatch):
+    """타임아웃된 작업이 끝나기 전에는 스레드풀에 새 프로브를 쌓지 않는다."""
+    import threading
+
+    db_failover.settings.failover_cache_seconds = 0
+    db_failover.settings.failover_fail_threshold = 1
+    release_probe = threading.Event()
+    call_count = 0
+
+    def hanging_probe():
+        nonlocal call_count
+        call_count += 1
+        release_probe.wait(timeout=2)
+
+    monkeypatch.setattr(db_failover, "_probe", hanging_probe)
+    monkeypatch.setattr(db_failover, "_PROBE_TIMEOUT_SECONDS", 0.01)
+
+    assert db_failover.primary_healthy() is False
+    assert db_failover.primary_healthy() is False
+    assert call_count == 1
+    release_probe.set()
 
 
 def test_get_db_raises_503_when_unhealthy(monkeypatch):
     monkeypatch.setattr(db_failover, "primary_healthy", lambda: False)
+    db_failover.settings.oracle_ro_url = (
+        "oracle+oracledb://ro:pw@localhost/?service_name=x"
+    )
     with pytest.raises(HTTPException) as exc_info:
         next(db_failover.get_db())
     assert exc_info.value.status_code == 503
     assert exc_info.value.headers["Retry-After"] == "60"
     assert "조회는 정상 이용 가능합니다" in exc_info.value.detail
+
+
+def test_get_db_does_not_promise_reads_without_oracle(monkeypatch):
+    monkeypatch.setattr(db_failover, "primary_healthy", lambda: False)
+    db_failover.settings.oracle_ro_url = None
+    with pytest.raises(HTTPException) as exc_info:
+        next(db_failover.get_db())
+    assert "조회는 정상 이용 가능합니다" not in exc_info.value.detail
 
 
 def test_get_db_yields_mysql_session_when_healthy(monkeypatch):
@@ -140,11 +215,26 @@ def test_get_read_db_raises_503_when_oracle_not_configured(monkeypatch):
     assert exc_info.value.status_code == 503
 
 
-def test_current_routing_reports_mysql_or_oracle(monkeypatch):
+def test_auth_availability_checks_use_read_failover_dependency():
+    """이메일·닉네임 중복 확인 GET도 Oracle 읽기 폴백을 사용한다."""
+    from app.routers import auth as auth_router
+
+    for path in ("/auth/email-availability", "/auth/nickname-availability"):
+        route = next(item for item in auth_router.router.routes if item.path == path)
+        dependencies = {dependency.call for dependency in route.dependant.dependencies}
+        assert db_failover.get_read_db in dependencies
+
+
+def test_current_routing_reports_mysql_oracle_or_unavailable(monkeypatch):
     monkeypatch.setattr(db_failover, "primary_healthy", lambda: True)
     assert db_failover.current_routing() == "mysql"
     monkeypatch.setattr(db_failover, "primary_healthy", lambda: False)
+    db_failover.settings.oracle_ro_url = (
+        "oracle+oracledb://ro:pw@localhost/?service_name=x"
+    )
     assert db_failover.current_routing() == "oracle"
+    db_failover.settings.oracle_ro_url = None
+    assert db_failover.current_routing() == "unavailable"
 
 
 def test_last_synced_at_reads_state_file(tmp_path, monkeypatch):

@@ -7,7 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.db_failover import get_db
+from app.db_failover import get_db, get_read_db
 from app.routers.contract import ERROR_RESPONSES, CurrentUserId, bearer_scheme
 from app.schemas.auth import (
     AvailabilityResponse,
@@ -28,16 +28,17 @@ from app.services import auth
 
 router = APIRouter(prefix="/auth", tags=["인증"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
+ReadDatabaseSession = Annotated[Session, Depends(get_read_db)]
 BearerCredentials = Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)]
 
 
 @router.get("/email-availability", response_model=AvailabilityResponse, summary="이메일 중복 확인")
-def check_email_availability(email: str, db: DatabaseSession) -> AvailabilityResponse:
+def check_email_availability(email: str, db: ReadDatabaseSession) -> AvailabilityResponse:
     return AvailabilityResponse(available=auth.email_available(db, email))
 
 
 @router.get("/nickname-availability", response_model=AvailabilityResponse, summary="닉네임 중복 확인")
-def check_nickname_availability(nickname: str, db: DatabaseSession) -> AvailabilityResponse:
+def check_nickname_availability(nickname: str, db: ReadDatabaseSession) -> AvailabilityResponse:
     return AvailabilityResponse(available=auth.nickname_available(db, nickname))
 
 

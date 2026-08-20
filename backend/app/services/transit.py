@@ -88,10 +88,12 @@ def _require_stations(
         )
 
 
-def _format_timetable_time(value: time | timedelta | None) -> str | None:
+def _format_timetable_time(value: str | time | timedelta | None) -> str | None:
     """DB 시각을 24시 이후 값도 보존하는 HH:MM:SS 문자열로 변환한다."""
     if value is None:
         return None
+    if isinstance(value, str):
+        return value
     if isinstance(value, time):
         return value.strftime("%H:%M:%S")
 

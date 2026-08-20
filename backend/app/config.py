@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     failover_cache_seconds: float = 5.0
     failover_fail_threshold: int = 2
     failover_recover_threshold: int = 2
+    mysql_connect_timeout_seconds: int = Field(default=5, ge=1)
     sync_interval_minutes: int = 10
-    sync_exclude_tables: list[str] = Field(default_factory=list)
 
     def oracle_connect_args(self) -> dict[str, str]:
         """Autonomous DB 지갑(mTLS) 접속 파라미터. 지갑 미사용 시 빈 dict."""
@@ -69,6 +69,16 @@ class Settings(BaseSettings):
         if not self.ssl_ca_path:
             return {}
         return {"ssl": {"ca": self.ssl_ca_path}}
+
+    def mysql_probe_connect_args(self) -> dict[str, object]:
+        """헬스체크 전용 MySQL TLS와 네트워크 타임아웃을 반환한다."""
+        timeout = self.mysql_connect_timeout_seconds
+        return {
+            **self.mysql_connect_args(),
+            "connect_timeout": timeout,
+            "read_timeout": timeout,
+            "write_timeout": timeout,
+        }
 
 
 @lru_cache
