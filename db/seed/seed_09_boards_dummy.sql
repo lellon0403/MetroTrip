@@ -43,17 +43,17 @@ ALTER TABLE post_participants AUTO_INCREMENT = 1;
 -- 참조값 조회
 -- ---------------------------------------------------------------------
 -- 실제 가입 회원을 사용한다. 이메일로 조회하므로 user_id 가 달라져도 동작한다.
-SET @u1 = (SELECT user_id FROM users WHERE email = 'hon202@gmail.com');     -- hon
-SET @u2 = (SELECT user_id FROM users WHERE email = 'hon_12@gmail.com');     -- hon02  (ADMIN)
-SET @u3 = (SELECT user_id FROM users WHERE email = 'hon_123@gmail.com');    -- hon123
-SET @u4 = (SELECT user_id FROM users WHERE email = 'hon_1234@gmail.com');   -- hon1234
-SET @u5 = (SELECT user_id FROM users WHERE email = 'rladbwls@naver.com');   -- 유진   (ADMIN)
+SET @u1 = (SELECT user_id FROM users WHERE email = 'user001@test.com');
+SET @u2 = (SELECT user_id FROM users WHERE email = 'user002@test.com');
+SET @u3 = (SELECT user_id FROM users WHERE email = 'user003@test.com');
+SET @u4 = (SELECT user_id FROM users WHERE email = 'user004@test.com');
+SET @u5 = (SELECT user_id FROM users WHERE email = 'user005@test.com');
 
 -- 조회 실패 시 NULL 이 되어 FK 오류가 나므로 먼저 확인한다. 5 가 나와야 한다.
 SELECT COUNT(*) AS 참조회원수
 FROM users
-WHERE email IN ('hon202@gmail.com', 'hon_12@gmail.com', 'hon_123@gmail.com',
-                'hon_1234@gmail.com', 'rladbwls@naver.com');
+WHERE email IN ('user001@test.com', 'user002@test.com', 'user003@test.com',
+                'user004@test.com', 'user005@test.com');
 
 SET @st_seoul   = (SELECT station_id FROM stations WHERE station_name = '서울역');
 SET @st_cheonan = (SELECT station_id FROM stations WHERE station_name = '천안');
