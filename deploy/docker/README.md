@@ -7,7 +7,7 @@
 프로젝트 루트에서 Docker Hub에 로그인하고 카카오 JavaScript 키를 입력한다.
 
 ```powershell
-Set-Location "C:\Users\Jeon\git\MetroTrip"
+Set-Location "C:\path\to\MetroTrip"
 docker login --username jeonseho00
 $env:NEXT_PUBLIC_KAKAO_JS_KEY = Read-Host "카카오 JavaScript 키"
 ```
@@ -15,10 +15,11 @@ $env:NEXT_PUBLIC_KAKAO_JS_KEY = Read-Host "카카오 JavaScript 키"
 Linux AMD64 이미지를 빌드하고 Push한다.
 
 ```powershell
-docker build -t "jeonseho00/metrotrip-backend:main" .\backend
+docker build --platform linux/amd64 -t "jeonseho00/metrotrip-backend:main" .\backend
 docker push "jeonseho00/metrotrip-backend:main"
 
 docker build `
+  --platform linux/amd64 `
   --build-arg "NEXT_PUBLIC_KAKAO_JS_KEY=$env:NEXT_PUBLIC_KAKAO_JS_KEY" `
   -t "jeonseho00/metrotrip-frontend:main" `
   .\frontend

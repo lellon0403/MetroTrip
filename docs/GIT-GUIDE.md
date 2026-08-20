@@ -16,7 +16,7 @@ Git을 처음 쓰는 팀원을 기준으로 쓴 문서입니다. **개념보다 
 > **결론: 브랜치를 쓰면 같은 시간에 같은 프로젝트를 건드려도 서로 안 망가집니다.**
 
 ```
-main  ─────●────────────────●────  ← 항상 동작하는 버전
+develop ───●────────────────●────  ← 작업 통합 브랜치
             \              /
    내 브랜치  ●──●──●──────●        ← 내가 작업하는 곳 (남에게 영향 없음)
 ```
@@ -31,7 +31,7 @@ main  ─────●────────────────●─�
 | **commit (커밋)** | "여기까지 했다"고 기록을 남기는 것 | 게임 세이브 |
 | **branch (브랜치)** | 작업용 복사본 | 세이브 파일 슬롯 |
 | **push / pull** | 내 PC ↔ GitHub 로 올리기 / 받기 | 클라우드 업로드/다운로드 |
-| **PR (Pull Request)** | "내 작업을 main에 합쳐주세요" 요청 | 결재 올리기 |
+| **PR (Pull Request)** | "내 작업을 develop에 합쳐주세요" 요청 | 결재 올리기 |
 
 **기억할 것 하나**: 커밋은 **내 PC에만** 저장됩니다. `push` 를 해야 GitHub에 올라가고 팀원이 볼 수 있습니다.
 
@@ -73,8 +73,8 @@ cd MetroTrip
 
 ### 2-4. 환경변수 파일 만들기
 
-`frontend/.env`는 GitHub에 올라가지 않습니다(키 노출 방지). **각자 직접 만들어야 합니다.**
-팀에서 공유받은 카카오 키를 `frontend/.env` 파일로 저장하세요. 자세한 건 [README](../README.md) 참고.
+`frontend/.env.local`은 GitHub에 올라가지 않습니다(키 노출 방지). **각자 직접 만들어야 합니다.**
+팀에서 공유받은 카카오 키를 `frontend/.env.local` 파일로 저장하세요. 자세한 건 [README](../README.md) 참고.
 
 ---
 
@@ -85,7 +85,7 @@ cd MetroTrip
 ### ① 최신 코드 받기 (작업 시작 전 항상)
 
 ```bash
-git checkout main
+git checkout develop
 ```
 
 ```bash
@@ -113,7 +113,7 @@ git status
 ### ④ 커밋 (작게, 자주)
 
 ```bash
-git add .
+git add frontend/app/discover/page.tsx
 ```
 
 ```bash
@@ -143,14 +143,14 @@ git push
 3. 본문에 3가지 작성:
    - 무엇을 했는지
    - 어떻게 확인했는지 (브라우저 스크린샷)
-   - 관련 문서 (`docs/SPEC.md`의 어떤 항목인지)
+   - 관련 현재 문서나 이슈
 4. **Create pull request** 클릭
 5. 팀원 1명 리뷰 후 **Squash and merge** 로 병합
 
 ### ⑦ 병합 후 정리
 
 ```bash
-git checkout main
+git checkout develop
 ```
 
 ```bash
@@ -158,8 +158,10 @@ git pull
 ```
 
 ```bash
-git branch -d feat/fe-station-list
+git branch -D feat/fe-station-list
 ```
+
+> Squash merge 후에는 작업 브랜치 커밋이 `develop`의 직접 조상으로 남지 않아 `-d`가 거부될 수 있습니다. GitHub에서 병합 완료를 확인한 뒤에만 `-D`로 삭제하세요.
 
 ---
 
@@ -172,7 +174,7 @@ git branch -d feat/fe-station-list
 | 최신 코드 받기 | `git pull` |
 | 브랜치 새로 만들고 이동 | `git checkout -b 브랜치이름` |
 | 기존 브랜치로 이동 | `git checkout 브랜치이름` |
-| 변경사항 담기 | `git add .` |
+| 변경사항 담기 | `git add 변경한/파일/경로` |
 | 커밋 | `git commit -m "메시지"` |
 | 올리기 | `git push` |
 | 커밋 기록 보기 | `git log --oneline -10` |
@@ -203,7 +205,7 @@ const RADIUS = 500;
 2. 저장 후:
 
 ```bash
-git add .
+git add 충돌을/해결한/파일
 ```
 
 ```bash
@@ -223,13 +225,13 @@ git push
 
 Git은 **커밋만 했다면 거의 다 되돌릴 수 있습니다.** 당황하지 마세요.
 
-### 아직 커밋 안 한 변경을 전부 버리고 싶다
+### 아직 스테이징하지 않은 추적 파일 변경을 버리고 싶다
 
 ```bash
 git restore .
 ```
 
-> ⚠️ 되돌릴 수 없습니다. 정말 버릴 때만.
+> 이 명령은 스테이징한 변경이나 새로 만든 미추적 파일은 지우지 않습니다. 되돌릴 수 없으므로 대상 파일을 확인한 뒤 사용하세요.
 
 ### 방금 한 커밋 메시지를 잘못 썼다 (아직 push 전)
 
@@ -243,7 +245,7 @@ git commit --amend -m "올바른 메시지"
 git reset --soft HEAD~1
 ```
 
-### main에서 작업해버렸다 (브랜치 만드는 걸 깜빡함)
+### develop에서 작업해버렸다 (브랜치 만드는 걸 깜빡함)
 
 아직 커밋 전이라면 그냥 브랜치를 만들면 됩니다. 변경사항이 따라옵니다.
 
@@ -276,13 +278,13 @@ git push
 
 | 금지 | 이유 |
 |---|---|
-| `main`에 직접 push | 팀 전체가 깨질 수 있음. 반드시 브랜치 + PR |
+| `develop`·`main`에 직접 push | 팀 전체가 깨질 수 있음. 반드시 브랜치 + PR |
 | `git push --force` | **남의 커밋이 영구 삭제됩니다.** 쓰지 마세요 |
-| `frontend/.env` 커밋 | 카카오 API 키 노출. 이미 `.gitignore`에 있지만 `git add` 강제 금지 |
+| `frontend/.env.local` 커밋 | 카카오 API 키 노출. 이미 `.gitignore`에 있지만 `git add` 강제 금지 |
 | 확인 안 하고 커밋 | 브라우저에서 동작 확인 후 커밋 |
 | 남의 브랜치에 커밋 | 각자 브랜치에서 작업 |
 
-### 만약 `frontend/.env`나 키를 실수로 올렸다면
+### 만약 `frontend/.env.local`이나 키를 실수로 올렸다면
 
 1. **즉시 Discord에 공유** (숨기면 더 큰일 납니다)
 2. 카카오 개발자 콘솔에서 **키 재발급**
@@ -311,6 +313,6 @@ git push
 ## 9. 팀 규칙 요약 (이 4줄만 지키면 안 꼬입니다)
 
 1. 작업 전 **`git pull`**
-2. **브랜치 만들고** 작업 (main에서 직접 X)
+2. **브랜치 만들고** 작업 (`develop`·`main`에서 직접 X)
 3. 작업 끝나면 **push → PR**
 4. 헷갈리면 **멈추고 Discord에 물어보기** (혼자 해결하려다 사고가 커집니다)

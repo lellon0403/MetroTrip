@@ -44,16 +44,17 @@ Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V
 | 파일 | 테이블 | 건수 | 선행 |
 | --- | --- | --- | --- |
 | `seed_01_users.sql` | `users` | 5 | — |
-| `seed_02_subway_lines.sql` | `subway_lines` | 2 | — |
-| `seed_03_stations.sql` | `stations` | 100 | — |
-| `seed_04_line_stations.sql` | `line_stations` | 145 | 02, 03 |
-| `seed_05_places.sql` | `places` | 33 | 01 |
-| `seed_06_place_stations.sql` | `place_stations` | 33 | 03, 05 |
+| `seed_02_line1.sql` | `subway_lines` / `stations` / `line_stations` | 2 / 100 / 145 | — |
+| `seed_03_line4.sql` | `subway_lines` / `stations` / `line_stations` 추가 | 1 / 47 / 51 | 02 |
+| `seed_04_line2.sql` | `subway_lines` / `stations` / `line_stations` 추가 | 3 / 46 / 53 | 02, 03 |
+| `seed_05_places.sql` | `places` | 331 | 01 |
+| `seed_06_place_stations.sql` | `place_stations` | 331 | 02, 05 |
 | `seed_07_place_images.sql` | `place_images` | 29 | 05 |
-| `seed_08_train_timetables.sql` | `train_timetables` | 1,690 | 02, 03 |
+| `seed_08_train_timetables.sql` | `train_timetables` | 1,690 | 02 |
+| `seed_09_boards_dummy.sql` | 후기·모집 데모 데이터 | 후기 6 / 모집글 5 | 01, 02, 05 |
 
 각 파일 상단에 재적재용 `DELETE` 문이 주석으로 들어 있습니다.
-`seed_01_users.sql` 의 비밀번호는 전건 `test1234` 의 bcrypt 해시이며 테스트 전용입니다.
+`seed_01_users.sql` 의 비밀번호는 전건 `test1234` 의 scrypt 해시이며 테스트 전용입니다.
 
 **이미 만들어둔 DB 가 있는 경우**
 
@@ -67,7 +68,8 @@ Oracle 백업 DB를 별도로 구성하는 경우 `schema/oracle/schema_oracle_V
 
 `003` 은 여러 번 실행해도 안전합니다. 각 단계 앞에서 적용 여부를 확인해 이미 반영된 구간은
 건너뛰므로, 중간에 실패해 일부만 적용된 DB 에도 그대로 쓸 수 있습니다.
-Oracle 백업 DB 는 `003__alter_plan_items_oracle.sql` 을 사용합니다.
+저장소에는 별도 Oracle `003` 마이그레이션이 없으며, 새 Oracle 읽기 대체본은
+`schema/oracle/schema_oracle_V1.12.sql` 기준으로 초기화합니다.
 
 ### 실행 결과 확인
 
@@ -124,10 +126,9 @@ WHERE constraint_schema = 'metrotrip';
 예외는 관리자 권한으로 작성한 데이터입니다. `places.created_by` 와 `notices.admin_id` 는
 `SET NULL` 로 두어, 관리자 계정이 사라져도 장소·공지는 서비스에 남습니다.
 
-**모집 글 삭제 시 알림**
+**모집 글 삭제 시 참여 신청 처리**
 `post_participants` 는 `board_posts` 에 CASCADE 로 묶여 있어, 작성자가 탈퇴하면 참여 신청 내역이
-DB 레벨에서 조용히 삭제됩니다. FK CASCADE 는 애플리케이션을 거치지 않으므로,
-**탈퇴 처리 직전에 참여자 목록을 읽어 취소 알림을 보내야** 합니다. 삭제 후에는 조회할 방법이 없습니다.
+DB 레벨에서 함께 삭제됩니다. 현재 삭제 흐름은 별도의 참여자 알림을 생성하지 않습니다.
 
 **마스터 테이블 FK 정책**
 `subway_lines` `stations` `places` 를 참조하는 FK 는 `ON DELETE RESTRICT` 로 통일했습니다.
@@ -145,9 +146,9 @@ CHECK 조건에 넣지 못하게 막습니다(Error 3823).
 역명은 부역명(괄호)을 제외한 정식 역명으로 저장합니다. `신창(순천향대)` 이 아니라 `신창` 입니다.
 
 **노선 분기 처리**
-1호선처럼 물리적으로 갈라지는 노선은 갈래별로 `line_id` 를 나눕니다.
-현재 `1호선 (인천)` 과 `1호선 (신창)` 두 건이며, 공유 구간인 연천~구로 45개 역은
-`stations` 에 1행만 존재하고 `line_stations` 에 두 번 매핑됩니다.
+물리적으로 갈라지는 노선은 갈래별로 `line_id` 를 나눕니다. 현재 1호선은 인천·신창 2개,
+2호선은 본선·성수지선·신정지선 3개 구간이고, 분기 없는 4호선은 1개 구간입니다.
+공유역은 `stations`에 1행만 두고 각 구간의 `line_stations`에 중복 매핑합니다.
 `station_order` 는 노선 안에서의 순서(상행 기점 기준)이며, 방향은 정렬 순서로 표현합니다.
 
 ```sql
@@ -286,17 +287,16 @@ UNIQUE 제약도 인덱스 역할을 겸합니다. 예를 들어 `uk_line_statio
 
 ---
 
-### 필수 — 3건
+### 현재 적용 — 3건
 
 없으면 실제로 느려지거나, 나중에 만들면 비싸지는 것들입니다.
 
 ```sql
--- 역별 배차표 조회. train_timetables 는 현재 가장 큰 테이블
--- 등호 조건 3개 뒤에 정렬 컬럼을 두는 배치. 순서를 바꾸면 인덱스를 타지 않는다
+-- 역별 배차표의 station_id/day_type/direction 필터
 CREATE INDEX idx_timetables_lookup
   ON train_timetables (station_id, day_type, direction, arrival_time);
 
--- 역명 검색. 서비스의 첫 관문이고 노선 추가에 따라 계속 늘어남
+-- 역명 정확·앞 일치 검색. 현재 중간 일치 검색은 이 인덱스를 사용하지 못한다
 CREATE INDEX idx_stations_name ON stations (station_name);
 
 -- 노선 조회 로그. 조회 1회당 1행씩 쌓여 가장 빨리 커진다
@@ -401,35 +401,19 @@ ORDER BY table_name, index_name;
 
 | 테이블 | 건수 | 출처 |
 | --- | --- | --- |
-| `subway_lines` | 2 | 1호선 인천 방면 / 신창 방면 |
-| `stations` | 100 | 국가철도공단 주소데이터 · 전국도시철도역사정보 표준데이터 |
-| `line_stations` | 145 | 공유 구간 45개 역은 두 노선에 중복 매핑 |
-| `places` | 33 | 한국관광공사 TourAPI (천안·아산) |
-| `place_stations` | 33 | 역-장소 거리 기준 매핑 |
-| `place_images` | 29 | TourAPI 대표 이미지. 원본에 이미지 없는 4건 제외 |
+| `subway_lines` | 6 | 1호선 2구간 / 2호선 3구간 / 4호선 1구간 |
+| `stations` | 193 | 국가철도공단 주소데이터 · 전국도시철도역사정보 표준데이터 |
+| `line_stations` | 249 | 노선 구간별 공유역 중복 매핑 포함 |
+| `places` | 331 | TourAPI 33건 + 카카오 로컬 API 298건 |
+| `place_stations` | 331 | 역-장소 거리 기준 매핑 |
+| `place_images` | 29 | TourAPI 33건 중 대표 이미지가 있는 장소 |
 | `train_timetables` | 1,690 | 국가철도공단 열차 시간표 (기준일자 20260225) |
 
 시간표 원본에는 기준일자가 다른 6개 스냅샷이 누적되어 있습니다.
 **유효종료가 비어 있는 현행 스냅샷 1개만 적재**해야 하며, 전부 넣으면 동일 열차가 최대 6번 조회됩니다.
 
 시간표 커버리지는 천안·아산 구간 8개 역(천안·성환·두정·봉명·쌍용·아산·배방·온양온천)입니다.
-나머지 92개 역은 시간표가 없습니다.
-
----
-
-## 미결 사항
-
-다음 항목은 아직 확정되지 않았습니다.
-
-- **게시판 요구사항 ID** — `board_posts` `post_participants` 의 근거가 `MB-신규` 로 되어 있습니다.
-  요구사항 정의서를 V1.4 로 올려 정식 ID 를 부여한 뒤 명세서에 반영해야 합니다.
-- **`places.content_id`** — TourAPI 콘텐츠 ID 를 저장할 컬럼이 없어, 재수집·갱신 시 원본과
-  대조할 수 없습니다. 현재는 `seed_05_places.sql` 주석으로만 남아 있어 두 번 실행하면 중복 생성됩니다.
-- **급행 열차 구분** — 원본 시간표에 `서울급행` 14건이 있으나 담을 컬럼이 없어
-  일반 열차와 동일하게 적재했습니다.
-- **테이블·컬럼 이름** — 인원 모집 전용으로 좁혔지만 `board_posts` / `post_id` 이름은 유지했습니다.
-  백엔드가 이미 이 이름으로 구현 중이라 변경 범위가 크기 때문입니다. 의미상으로는
-  `recruit_posts` 가 맞으므로 P1 이후 재검토 대상입니다.
+나머지 185개 역은 시간표가 없습니다.
 
 ---
 
@@ -448,6 +432,8 @@ ORDER BY table_name, index_name;
 | 데이터베이스 명세서 V1.12 | 팀 공유 드라이브 |
 | 요구사항 정의서 V1.3 | [Google Sheets](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit) |
 | ERD | `erd/ERD_V1.12.mmd` |
-| 백엔드 연동 지점 | [docs/BACKEND-HANDOFF.md](../docs/BACKEND-HANDOFF.md) |
+| 백엔드 실행·구조 | [backend/README.md](../backend/README.md) |
+| DB 장애 전환 | [docs/DB-FAILOVER.md](../docs/DB-FAILOVER.md) |
+| 완료 전 백엔드 인수인계 기록 | [docs/BACKEND-HANDOFF.md](../docs/BACKEND-HANDOFF.md) |
 
 담당: 김유진

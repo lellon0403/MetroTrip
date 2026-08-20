@@ -6,7 +6,7 @@
 
 > - 기준 브랜치: `develop`
 > - 최종 확인: 2026-08-20
-> - 현재 데이터 범위: 수도권 1호선 100개 역, 천안·아산 장소 33개, 천안·아산 구간 8개 역 시간표
+> - 현재 데이터 범위: 수도권 1·2·4호선 6개 구간 193개 역, 천안·아산 장소 331개, 8개 역 시간표
 
 ## 현재 구현 상태
 
@@ -14,7 +14,7 @@ MetroTrip은 더 이상 프론트엔드 단독 목업이 아닙니다. Next.js �
 
 | 영역 | 현재 상태 |
 |---|---|
-| 지도 탐색 | 역 검색·선택, 카카오맵 이동, 반경·카테고리별 주변 장소, 장소 상세 |
+| 지도 탐색 | 최초 탕정역 선택(조회 실패 시 첫 역), 역 검색·선택, 카카오맵 이동, 반경·카테고리별 주변 장소, 장소 상세 |
 | 지하철 일정 | 지도/지하철 화면 전환, 출발·경유·도착역 선택, 현재 시각 이후 가장 가까운 실제 열차 계산 |
 | 인증·회원 | 이메일 인증 회원가입, 로그인, 토큰 갱신·로그아웃, 비밀번호 재설정, 프로필 수정·탈퇴 |
 | 즐겨찾기 | 역 즐겨찾기는 백엔드 저장. 장소 즐겨찾기는 현재 범위에서 제외 |
@@ -30,7 +30,7 @@ MetroTrip은 더 이상 프론트엔드 단독 목업이 아닙니다. Next.js �
 - 출발역과 도착역의 공식 시간표 API 응답에서 같은 `trainNo`가 있는 열차만 연결합니다.
 - 현재 시각 이후 가장 먼저 출발하는 열차를 선택합니다.
 - 시간표가 없는 구간은 역당 시간이나 평균값으로 임의 추정하지 않습니다.
-- 현재 시간표는 100개 역 중 천안·성환·두정·봉명·쌍용·아산·배방·온양온천 8개 역에만 있습니다.
+- 현재 시간표는 193개 역 중 천안·성환·두정·봉명·쌍용·아산·배방·온양온천 8개 역에만 있습니다.
 - 백엔드가 실행되지 않으면 역 목록도 표시되지 않습니다. 화면의 `역 다시 불러오기`보다 먼저 `http://localhost:8000/health`를 확인하세요.
 
 ## 화면 경로
@@ -111,7 +111,8 @@ MetroTrip/
 │  ├─ migrations/             스키마 변경 이력
 │  └─ erd/                    Mermaid ERD
 ├─ docs/                      요구사항·인수인계·협업·DB 이중화 문서
-└─ .github/workflows/         기존 GitHub Pages 워크플로
+├─ deploy/                    Docker Compose/Caddy와 Kubernetes 배포 파일
+└─ .github/workflows/         CI, Docker 이미지 배포, 레거시 Pages 워크플로
 ```
 
 일반적인 요청 흐름은 다음과 같습니다.
@@ -157,13 +158,14 @@ git pull origin develop
 
 1. `db/schema/mysql/schema_mysql_V1.12.sql`
 2. `db/seed/seed_01_users.sql`
-3. `db/seed/seed_02_subway_lines.sql`
-4. `db/seed/seed_03_stations.sql`
-5. `db/seed/seed_04_line_stations.sql`
+3. `db/seed/seed_02_line1.sql`
+4. `db/seed/seed_03_line4.sql`
+5. `db/seed/seed_04_line2.sql`
 6. `db/seed/seed_05_places.sql`
 7. `db/seed/seed_06_place_stations.sql`
 8. `db/seed/seed_07_place_images.sql`
 9. `db/seed/seed_08_train_timetables.sql`
+10. 선택: `db/seed/seed_09_boards_dummy.sql`
 
 스키마 파일이 `metrotrip` 데이터베이스를 생성합니다. 기존 DB를 갱신할 때는 스키마를 다시 실행하지 말고 `db/migrations/`를 번호 순서대로 적용합니다. 자세한 내용은 [DB README](db/README.md)를 참고하세요.
 
@@ -287,11 +289,11 @@ npm run dev
 | 데이터 | 건수 | 비고 |
 |---|---:|---|
 | 사용자 시드 | 5 | 테스트 계정 |
-| 지하철 노선 | 2 | 1호선 인천 방면·신창 방면 |
-| 역 | 100 | 수도권 1호선 범위 |
-| 노선-역 매핑 | 145 | 공유 구간 중복 포함 |
-| 장소 | 33 | 한국관광공사 TourAPI 천안·아산 데이터 |
-| 장소 이미지 | 29 | 대표 이미지가 없는 4건 제외 |
+| 지하철 노선 구간 | 6 | 1호선 2개·2호선 3개·4호선 1개 |
+| 역 | 193 | 수도권 1·2·4호선 범위 |
+| 노선-역 매핑 | 249 | 공유역 중복 포함 |
+| 장소 | 331 | TourAPI 33건 + 카카오 로컬 API 298건 |
+| 장소 이미지 | 29 | TourAPI 33건 중 대표 이미지가 있는 장소 |
 | 열차 시간표 | 1,690 | 국가철도공단, 기준일자 2026-02-25 |
 
 시간표 커버리지는 8개 역뿐이므로 다른 역을 포함한 경로는 계산되지 않는 것이 현재 정책상 정상입니다. 데이터가 없는 결과를 추정값으로 꾸미지 않습니다.
@@ -305,7 +307,7 @@ npm run dev
 - APScheduler가 MySQL 데이터를 Oracle로 주기 동기화합니다.
 - Oracle 설정이 없으면 로컬에서는 스케줄러와 폴백을 사용하지 않고 MySQL만 사용합니다.
 
-상세 설계, 실제 Aiven MySQL·OCI Oracle 검증 결과와 남은 운영 과제는 [DB 장애 대응 문서](docs/DB-FAILOVER.md)를 참고하세요.
+상세 설계와 실제 Aiven MySQL·OCI Oracle 검증 상태는 [DB 장애 대응 문서](docs/DB-FAILOVER.md)를 참고하세요.
 
 ## 검사
 
@@ -335,7 +337,7 @@ ruff check .
 |---|---|
 | 시간표 없는 역 | 계산 불가를 표시하며 임의 추정하지 않음 |
 | 실시간 열차 위치 | 미지원. DB 정적 시간표 기반 |
-| 전체 수도권 노선 | 미지원. 현재 데이터는 1호선 두 방면 중심 |
+| 전체 수도권 노선 | 미지원. 현재 데이터는 1·2·4호선 6개 구간 |
 | 좌표·지도 경계 장소 검색 | 가장 가까운 역의 반경 1km API로 변환 |
 | 반경 선택 | UI는 500m·1km·2km·5km를 유지하지만 장소 결과는 최대 1km로 제한 |
 | 장소 단건 API | 같은 화면에서 불러온 장소 캐시 사용 |
@@ -343,11 +345,9 @@ ruff check .
 | 도보 경로 | 직선거리 기반 로컬 추정 |
 | 일정 역 항목 | V1.12 `travel_plan_items`의 `STATION` 항목으로 저장 |
 | 일정 삭제 복원 | 현재 범위에서 제외. 삭제는 복원 없는 하드 삭제 |
-| 공유·모집 연결 일정 표시 | 읽기 전용 조회는 지원하지만 역 항목·원래 날짜 표시 정확도는 추가 개선 필요 |
 | 후기 좋아요·신고 | 백엔드 API 미지원 |
 | 모집 질문·신고 | 백엔드 API 미지원 |
 | 관리자 신고·감사·동기화 화면 | 일부 빈 응답 또는 `501` |
-| 후기 미디어 물리 파일 정리 | 관리자 삭제 시 아직 미지원 |
 
 미지원 기능은 성공한 것처럼 표시하지 않고 `NOT_SUPPORTED_BY_CURRENT_BACKEND` 오류를 반환합니다. 프론트와 현재 FastAPI의 계약 차이는 [프론트 API 연동 현황](docs/FRONTEND-API-INTEGRATION.md)에 정리되어 있습니다.
 
@@ -355,13 +355,11 @@ ruff check .
 
 `frontend/Dockerfile`과 `backend/Dockerfile`은 각각 Next.js 서버와 FastAPI 서버 이미지를 만들고, 루트 `compose.yaml`은 Caddy·프론트엔드·백엔드를 함께 실행합니다. 실행 전 `deploy/docker/backend.env.example`을 실제 환경 파일로 복사하거나 `BACKEND_ENV_FILE`로 경로를 지정해야 합니다.
 
-`.github/workflows/deploy.yml`은 이전 Vite 정적 사이트의 `frontend/dist`를 GitHub Pages에 올리던 설정입니다. 현재 Next.js 16 서버 빌드는 `.next`를 생성하므로 이 워크플로와 기존 GitHub Pages 주소를 최신 배포본으로 간주하면 안 됩니다. 실제 배포 전에는 다음 중 하나로 배포 구성을 교체해야 합니다.
+`main` 배포는 `.github/workflows/cd-main.yml`에서 Linux AMD64 이미지를 Docker Hub에 게시합니다. NCP 서버는 [Docker Compose 수동 배포 안내](deploy/docker/README.md)에 따라 이미지를 pull하고 Caddy가 80/443과 TLS를 담당합니다. Kubernetes 매니페스트는 [Kubernetes 배포 안내](deploy/k8s/README.md)를 참고합니다.
 
-- Next.js를 지원하는 서버형 플랫폼에 프론트 배포
-- `frontend/Dockerfile`과 `backend/Dockerfile`을 사용하는 컨테이너 배포
-- 모든 동적 기능을 대체할 별도 정적 export 구조 설계
+`.github/workflows/deploy.yml`은 이전 Vite 정적 사이트용 수동 GitHub Pages 워크플로이므로 현재 Next.js 배포 경로로 사용하지 않습니다.
 
-배포 환경에서는 `API_INTERNAL_BASE_URL`, `NEXT_PUBLIC_KAKAO_JS_KEY`, `METROTRIP_PUBLIC_FRONTEND_URL`, CORS와 DB 비밀값을 배포 플랫폼의 Secret으로 주입합니다.
+`cd-main.yml`은 `API_INTERNAL_BASE_URL`과 `NEXT_PUBLIC_KAKAO_JS_KEY`를 프론트 이미지 빌드에 전달하고, 백엔드 CORS·공개 URL·DB 비밀값은 서버의 `deploy/docker/backend.env`에서 주입합니다.
 
 ## 문서 안내
 
@@ -369,8 +367,8 @@ ruff check .
 |---|---|
 | [AGENTS.md](AGENTS.md) | Codex가 따르는 팀 공통 작업·Git·검증 규칙 |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | 개발 중 다른 PC로 옮길 때 사용했던 역사적 인수인계 기록 |
-| [docs/SPEC.md](docs/SPEC.md) | 프론트엔드 범위와 화면 동작 기준 |
-| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | 전체 요구사항과 단계 구분 |
+| [docs/SPEC.md](docs/SPEC.md) | 초기 프론트엔드 MVP 범위 역사 자료 |
+| [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) | 초기 요구사항·단계 계획 역사 자료 |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | 브랜치·커밋·PR·파일 협업 규칙 |
 | [docs/GIT-GUIDE.md](docs/GIT-GUIDE.md) | Git이 익숙하지 않은 팀원을 위한 작업 흐름 |
 | [docs/CLAUDE-CODE-WORKFLOW.md](docs/CLAUDE-CODE-WORKFLOW.md) | Claude Code를 이용한 팀 작업 흐름과 예시 |
@@ -379,9 +377,9 @@ ruff check .
 | [docs/DB-FAILOVER.md](docs/DB-FAILOVER.md) | MySQL/Oracle 동기화와 장애 대응 설계 |
 | [backend/README.md](backend/README.md) | 백엔드 설치·실행·API·검사 안내 |
 | [backend/ARCHITECTURE.md](backend/ARCHITECTURE.md) | 백엔드 계층별 책임과 의존 방향 |
-| [db/README.md](db/README.md) | DB V1.12 초기화·시드·인덱스·미결 사항 |
-| [docs/WORKLOG.md](docs/WORKLOG.md) | 날짜별 작업 기록 |
-| [docs/PRESENTATION.md](docs/PRESENTATION.md) | 발표 구성과 데모 시나리오 |
+| [db/README.md](db/README.md) | DB V1.12 초기화·시드·인덱스 안내 |
+| [docs/WORKLOG.md](docs/WORKLOG.md) | 개발 중 날짜별 작업 역사 기록 |
+| [docs/PRESENTATION.md](docs/PRESENTATION.md) | 개발 중 발표 구성·데모 역사 자료 |
 
 원본 기획 문서: [요구사항 정의서](https://docs.google.com/spreadsheets/d/1VoXGmwvz8NwPQYi8wy_9lcEH0s8k9UKr7djuU2-z6Ss/edit?gid=0#gid=0) · [프로젝트 계획서](https://docs.google.com/document/d/1MlQHFs3MgN9aMbEL9d6cPHoQJKAHHlsZg-pmBKghsd4/edit?tab=t.0)
 

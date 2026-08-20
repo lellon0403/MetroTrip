@@ -9,7 +9,7 @@
 MetroTrip — 지하철 역을 선택하면 반경 1km 내 장소를 지도에 표시하는 웹 앱.
 프론트엔드 / 백엔드 / DB를 각각 다른 팀원이 담당하며, 여러 PC에서 동시에 작업합니다.
 
-- 전체 요구사항과 단계 구분: `docs/REQUIREMENTS.md`
+- 현재 기능·실행 개요: `README.md`
 - 협업 규칙: `docs/CONVENTIONS.md`
 
 ## 작업 시작 전
@@ -18,8 +18,9 @@ MetroTrip — 지하철 역을 선택하면 반경 1km 내 장소를 지도에 �
 
 | 파트 | 참조 문서 |
 |---|---|
-| 프론트엔드 | `docs/SPEC.md` (MVP 범위, 기술 스택, 구현 순서) |
-| 백엔드 / DB | `docs/BACKEND-HANDOFF.md` (프론트와의 연동 지점) |
+| 프론트엔드 | `README.md`, `docs/FRONTEND-API-INTEGRATION.md` |
+| 백엔드 | `backend/README.md`, `backend/ARCHITECTURE.md` |
+| DB | `db/README.md`, `docs/DB-FAILOVER.md` |
 
 > 파트별 규칙이 이 파일과 다르면 **파트 문서가 우선**입니다.
 > 단, 아래 Git 규칙은 파트와 무관하게 모두 적용됩니다.
@@ -28,10 +29,10 @@ MetroTrip — 지하철 역을 선택하면 반경 1km 내 장소를 지도에 �
 
 팀원 대부분이 Git에 익숙하지 않습니다. **git 작업은 사용자가 명시적으로 요청할 때만** 수행하세요.
 
-- **`main`에 직접 커밋/푸시하지 않습니다.** 작업 전 브랜치를 만듭니다.
+- **`develop`과 `main`에 직접 커밋/푸시하지 않습니다.** `develop`에서 작업 브랜치를 만듭니다.
 - 브랜치 이름: `<타입>/<범위>-<내용>`
   - 타입: `feat` / `fix` / `refactor` / `docs` / `chore`
-  - 범위: `fe`(프론트) / `be`(백엔드) / `db` / `infra`
+  - 범위: `fe`(프론트) / `be`(백엔드) / `db` / `deploy` / `docs`
   - 예: `feat/be-station-api`, `fix/fe-marker-duplicate`
 - 커밋 메시지는 한글, `타입: 요약` 형식 (예: `feat: 역 목록 컴포넌트 추가`)
 - 커밋은 작게, 자주. 여러 기능을 한 커밋에 몰지 않습니다.
@@ -40,7 +41,7 @@ MetroTrip — 지하철 역을 선택하면 반경 1km 내 장소를 지도에 �
 
 ### 세션 시작 시
 
-작업을 시작하기 전에 **`git fetch` 후 현재 브랜치가 `origin/main`보다 뒤처져 있는지 확인**하고,
+작업을 시작하기 전에 **`git fetch` 후 현재 브랜치가 `origin/develop`보다 뒤처져 있는지 확인**하고,
 뒤처져 있으면 사용자에게 알리세요. (여러 PC에서 동시에 작업하므로 자주 발생합니다)
 
 ### 작업이 끝났을 때
@@ -67,15 +68,15 @@ MetroTrip — 지하철 역을 선택하면 반경 1km 내 장소를 지도에 �
 
 | 문서 | 내용 |
 |---|---|
-| `docs/HANDOFF.md` | **다른 PC에서 이어받을 때 필요한 현재 상태** — 작업 재개 시 먼저 읽을 것 |
-| `docs/REQUIREMENTS.md` | 전체 요구사항 P0/P1/P2 |
+| `README.md` | 현재 기능·실행·배포 개요 |
+| `backend/README.md`, `db/README.md` | 현재 백엔드·DB 실행과 운영 기준 |
+| `docs/FRONTEND-API-INTEGRATION.md` | 현재 프론트엔드 API 연동 상태 |
 | `docs/CONVENTIONS.md` | 협업 규칙 |
 | `docs/GIT-GUIDE.md` | Git 사용법 (팀원용) |
 | `docs/CLAUDE-CODE-WORKFLOW.md` | Claude Code 사용법 (팀원용) |
-| `docs/SPEC.md` | 프론트엔드 MVP 범위 |
-| `docs/BACKEND-HANDOFF.md` | 프론트 ↔ 백엔드 연동 지점 |
-| `docs/WORKLOG.md` | 작업 기록 — 세션 끝날 때 갱신 제안 |
-| `docs/PRESENTATION.md` | 발표 구성 |
+| `docs/HANDOFF.md`, `docs/BACKEND-HANDOFF.md` | 완료 전 인수인계 역사 자료 |
+| `docs/SPEC.md`, `docs/REQUIREMENTS.md` | 초기 MVP 범위·단계 계획 역사 자료 |
+| `docs/WORKLOG.md`, `docs/PRESENTATION.md` | 개발 기록·발표 구성 역사 자료 |
 
 ## 응답 언어
 

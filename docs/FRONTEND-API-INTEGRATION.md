@@ -1,11 +1,10 @@
 # 프론트엔드 API 연동 현황
 
 최종 갱신: 2026-08-20
-작업 브랜치: `chore/fe-project-finalization`
 
 ## 구조
 
-`experiment/codex-implementation`의 Next.js UI를 루트 `frontend/`로 이식했다. 새 UI가 기대하는 계약과 현재 FastAPI 계약이 다르므로 다음 두 파일에서 연결한다.
+Next.js UI가 기대하는 계약과 현재 FastAPI 계약이 다르므로 다음 파일에서 연결한다.
 
 - `frontend/src/lib/api.ts`: OpenAPI 클라이언트, Access Token 헤더
 - `frontend/src/lib/legacyApiAdapter.ts`: 경로·요청·응답 변환
@@ -19,7 +18,7 @@ Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 
 - 인증: 이메일 인증 회원가입, 로그인, Refresh Token 회전, 로그아웃, 비밀번호 재설정
 - 회원: 프로필 조회, 현재 비밀번호 재인증 후 닉네임 수정·회원 탈퇴
 - 역/노선: 목록, 검색, 상세, 시간표
-- 장소: 역 기준 반경 1km 장소 목록과 캐시된 장소 상세 표시
+- 장소: 역에 연결된 장소 목록을 받고 프론트엔드 계산 거리로 최대 1km까지 표시
 - 일정: 목록, 상세, 작성, 수정, 삭제
 - 모집: 목록, 상세, 작성, 수정, 삭제, 신청·취소·승인·거절·마감
 - 후기: 목록, 상세, 작성, 수정, 삭제, 로컬 미디어 업로드
@@ -27,6 +26,7 @@ Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 
 - 공유 일정: 읽기 전용 조회
 
 모집 목록 정렬은 어댑터가 최대 100건을 조회한 뒤 최신순·인기순·마감임박순으로 정렬하고 화면 요청 개수만 반환한다.
+`/discover`의 지도·지하철 화면은 처음 탕정역을 조회해 선택하고, 탕정역 조회에 실패하면 기본 역 목록의 첫 항목을 사용한다.
 
 ### 지하철 일정 경로
 
@@ -49,7 +49,6 @@ Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 
 | 삭제 일정 복원 | 현재 범위에서 제외. 복원 화면·어댑터 계약 제거 | 향후 필요 시 soft delete·복원 API |
 | 후기 좋아요·신고 | 501 미지원 | 좋아요·신고 API |
 | 모집 질문 댓글·신고 | 501 미지원 | 댓글·신고 API |
-| 모집 연결 일정 조회 | 읽기 전용 연결은 지원. 현재 변환기가 역 항목과 원래 날짜를 완전히 보존하지 못함 | 공개 일정 응답과 화면 계약 정합성 개선 |
 | 공유 일정 복제 | 501 미지원 | 복제 API |
 | 관리자 신고·감사·동기화 | 빈 목록 또는 501 | 관리자 운영 API |
 
@@ -60,7 +59,7 @@ Next.js 서버 컴포넌트인 홈과 후기 목록/상세는 현재 FastAPI를 
 권장 이름:
 
 ```text
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 NEXT_PUBLIC_KAKAO_JS_KEY=카카오_JavaScript_키
 ```
 
@@ -68,8 +67,7 @@ NEXT_PUBLIC_KAKAO_JS_KEY=카카오_JavaScript_키
 
 ## 검증 기록
 
-- `npm.cmd run typecheck`: 통과
-- `npm.cmd run lint`: 통과
-- `npm.cmd run build`: 통과
-- 브라우저: 홈, `/discover`, `/reviews` 서버 렌더링과 오류 상태 확인
-- 실제 DB API 통합: Codex 샌드박스가 `backend/.env`를 읽지 못해 일반 PowerShell에서 백엔드를 실행한 뒤 추가 확인 필요
+- `npm run typecheck`, `npm run lint`, `npm run build`: 통과
+- 프론트엔드 Docker 이미지 빌드와 mock API 브라우저 검증: 통과
+- 백엔드 `pytest` 147개와 `ruff check .`: 통과
+- 실제 Aiven MySQL·OCI Oracle 최신 재검증 상태는 [DB 장애 전환 문서](DB-FAILOVER.md)를 참고
