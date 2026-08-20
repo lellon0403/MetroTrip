@@ -664,14 +664,14 @@ export default function DiscoverPage() {
   }
 
   async function deleteCurrentPlan() {
-    if (!plannerPlan || plannerReadOnly || !window.confirm(`'${plannerPlan.title}' 일정을 삭제할까요? 3일 동안 삭제된 일정에서 복원할 수 있습니다.`)) return;
+    if (!plannerPlan || plannerReadOnly || !window.confirm(`'${plannerPlan.title}' 일정을 삭제할까요?`)) return;
     setPlannerPending(true);
     const { response } = await api.DELETE("/api/v1/plans/{plan_id}", { params: { path: { plan_id: plannerPlan.id } } });
     if (response.ok) {
       setPlannerPlan(null);
       setPlannerDirty(false);
       setFocusMode(false);
-      setNotice("일정을 삭제했습니다. 3일 안에 삭제된 일정에서 복원할 수 있습니다.");
+      setNotice("일정을 삭제했습니다.");
     } else setError("일정을 삭제하지 못했습니다.");
     setPlannerPending(false);
   }

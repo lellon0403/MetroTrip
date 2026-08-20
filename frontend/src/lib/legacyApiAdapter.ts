@@ -434,9 +434,6 @@ async function handlePlans(path: string, url: URL, request: Request, body: Json)
     savePlanMetadata(metadata);
     return json(mapLegacyPlan(result.data, metadata[String(result.data.planId)]), 201);
   }
-  if (path === "/api/v1/plans/deleted" && request.method === "GET") return json(page([]));
-  const restore = path.match(/^\/api\/v1\/plans\/([^/]+)\/restore$/);
-  if (restore) return unsupported("삭제 일정 복원");
   const detail = path.match(/^\/api\/v1\/plans\/([^/]+)$/);
   if (detail && request.method === "GET") {
     const result = await forward(`/api/v1/plans/${detail[1]}`, request);

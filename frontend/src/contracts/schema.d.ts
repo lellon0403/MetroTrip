@@ -314,23 +314,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/plans/deleted": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Deleted Plans */
-        get: operations["listDeletedPlans"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/plans/{plan_id}": {
         parameters: {
             query?: never;
@@ -345,23 +328,6 @@ export interface paths {
         post?: never;
         /** Delete Plan */
         delete: operations["deletePlan"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/plans/{plan_id}/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore Deleted Plan */
-        post: operations["restoreDeletedPlan"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1149,49 +1115,6 @@ export interface components {
             status: string;
             /** Message */
             message: string;
-        };
-        /** DeletedPlanPage */
-        DeletedPlanPage: {
-            /** Items */
-            items: components["schemas"]["DeletedPlanSummary"][];
-        };
-        /** DeletedPlanSummary */
-        DeletedPlanSummary: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Title */
-            title: string;
-            /**
-             * Startdate
-             * Format: date
-             */
-            startDate: string;
-            /**
-             * Enddate
-             * Format: date
-             */
-            endDate: string;
-            status: components["schemas"]["PlanStatus"];
-            /** Version */
-            version: number;
-            /**
-             * Updatedat
-             * Format: date-time
-             */
-            updatedAt: string;
-            /**
-             * Deletedat
-             * Format: date-time
-             */
-            deletedAt: string;
-            /**
-             * Expiresat
-             * Format: date-time
-             */
-            expiresAt: string;
         };
         /** Departure */
         Departure: {
@@ -3228,26 +3151,6 @@ export interface operations {
             };
         };
     };
-    listDeletedPlans: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeletedPlanPage"];
-                };
-            };
-        };
-    };
     getPlan: {
         parameters: {
             query?: never;
@@ -3333,37 +3236,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    restoreDeletedPlan: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlanView"];
-                };
             };
             /** @description Validation Error */
             422: {
